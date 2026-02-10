@@ -1,0 +1,157 @@
+{
+  "generated_at": "2026-02-02T23:52:28.904881",
+  "version": "1.0",
+  "year": 2025,
+  "total_seasons": 4,
+  "times_per_day": 4,
+  "seasons": {
+    "autumn": {
+      "name": "autumn",
+      "files": [
+        {
+          "date": "2025-03-20",
+          "time": "0800",
+          "time_label": "Morning",
+          "path": "data/autumn/2025-03-20_0800.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        },
+        {
+          "date": "2025-03-20",
+          "time": "1400",
+          "time_label": "Midday",
+          "path": "data/autumn/2025-03-20_1400.geojson",
+          "features": 619,
+          "file_size_mb": 1.68
+        },
+        {
+          "date": "2025-03-20",
+          "time": "1700",
+          "time_label": "Afternoon",
+          "path": "data/autumn/2025-03-20_1700.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        },
+        {
+          "date": "2025-03-20",
+          "time": "1900",
+          "time_label": "Evening",
+          "path": "data/autumn/2025-03-20_1900.geojson",
+          "features": 619,
+          "file_size_mb": 1.68
+        }
+      ]
+    },
+    "spring": {
+      "name": "spring",
+      "files": [
+        {
+          "date": "2025-09-22",
+          "time": "0800",
+          "time_label": "Morning",
+          "path": "data/spring/2025-09-22_0800.geojson",
+          "features": 619,
+          "file_size_mb": 1.68
+        },
+        {
+          "date": "2025-09-22",
+          "time": "1400",
+          "time_label": "Midday",
+          "path": "data/spring/2025-09-22_1400.geojson",
+          "features": 619,
+          "file_size_mb": 1.68
+        },
+        {
+          "date": "2025-09-22",
+          "time": "1700",
+          "time_label": "Afternoon",
+          "path": "data/spring/2025-09-22_1700.geojson",
+          "features": 619,
+          "file_size_mb": 1.68
+        },
+        {
+          "date": "2025-09-22",
+          "time": "1900",
+          "time_label": "Evening",
+          "path": "data/spring/2025-09-22_1900.geojson",
+          "features": 619,
+          "file_size_mb": 1.68
+        }
+      ]
+    },
+    "summer": {
+      "name": "summer",
+      "files": [
+        {
+          "date": "2024-12-21",
+          "time": "0800",
+          "time_label": "Morning",
+          "path": "data/summer/2024-12-21_0800.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        },
+        {
+          "date": "2024-12-21",
+          "time": "1400",
+          "time_label": "Midday",
+          "path": "data/summer/2024-12-21_1400.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        },
+        {
+          "date": "2024-12-21",
+          "time": "1700",
+          "time_label": "Afternoon",
+          "path": "data/summer/2024-12-21_1700.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        },
+        {
+          "date": "2024-12-21",
+          "time": "1900",
+          "time_label": "Evening",
+          "path": "data/summer/2024-12-21_1900.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        }
+      ]
+    },
+    "winter": {
+      "name": "winter",
+      "files": [
+        {
+          "date": "2025-06-21",
+          "time": "0800",
+          "time_label": "Morning",
+          "path": "data/winter/2025-06-21_0800.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        },
+        {
+          "date": "2025-06-21",
+          "time": "1400",
+          "time_label": "Midday",
+          "path": "data/winter/2025-06-21_1400.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        },
+        {
+          "date": "2025-06-21",
+          "time": "1700",
+          "time_label": "Afternoon",
+          "path": "data/winter/2025-06-21_1700.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        },
+        {
+          "date": "2025-06-21",
+          "time": "1900",
+          "time_label": "Evening",
+          "path": "data/winter/2025-06-21_1900.geojson",
+          "features": 619,
+          "file_size_mb": 1.69
+        }
+      ]
+    }
+  }
+}

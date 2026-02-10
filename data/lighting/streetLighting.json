@@ -1,0 +1,126 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "1",
+        "title": "Short Market Street Lighting",
+        "description": "Located near the Mission for Inner City's HQ, this installation provides essential ambiance and visibility for this busy culinary corridor.",
+        "image": "/shortMark.jpeg"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            18.418320988380742,
+            -33.92109093521274
+          ],
+          [
+            18.4189491933777,
+            -33.921520742442766
+          ]
+        ],
+        "type": "LineString"
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "2",
+        "title": "Church Street Lighting",
+        "description": "Revitalizing a previously dimly lit route to support artisanal market vendors and increase pedestrian footfall.",
+        "image": "/church.jpeg"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            18.41929783001484,
+            -33.923406285124074
+          ],
+          [
+            18.418661560801127,
+            -33.92293745330608
+          ]
+        ],
+        "type": "LineString"
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "3",
+        "title": "Bree Street Gallery Lighting",
+        "description": "Accent lighting designed to highlight the gallery façade and secure the public walkway.",
+        "image": "/breeGallery.jpeg"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            18.41790187401307,
+            -33.92105094587844
+          ],
+          [
+            18.417973003394195,
+            -33.921104597054466
+          ],
+          [
+            18.417845837496316,
+            -33.92122116363464
+          ],
+          [
+            18.417774177073852,
+            -33.921167988399
+          ],
+          [
+            18.417901797931165,
+            -33.921051185788876
+          ]
+        ],
+        "type": "LineString"
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "4",
+        "title": "Long Street Lighting",
+        "description": "Promoting safety and visibility along the city's busiest nightlife artery.",
+        "image": "/long.jpeg"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            18.416143306869742,
+            -33.925200050384234
+          ],
+          [
+            18.415960403961208,
+            -33.92536585316424]
+        ],
+        "type": "LineString"
+      }
+    },
+     {
+      "type": "Feature",
+      "properties": {
+        "id": "5",
+        "title": "St Georges Mall Lighting",
+        "description": "Enhancing the pedestrian walkway to support local street vendors and spotlight the Mission's Kiosk of Curiosities.",
+        "image": "/stGeorges.jpeg"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            18.42198971061768,
+            -33.9220413621816
+          ],
+          [
+            18.42153749037854,
+            -33.92246807268426
+          ]
+        ],
+        "type": "LineString"
+      }
+    }
+  ]
+}
