@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Map, { Source, Layer, Popup } from 'react-map-gl'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { isBusinessOpen } from '../../utils/timeUtils'
 import './ExplorerMap.css'
@@ -22,11 +23,19 @@ const ExplorerMap = ({
   cyclingData,
   lightingSegments,
   lightingProjects,
+  temperatureData,
+  shadeData,
+  season,
+  greeneryAndSkyview,
+  treeCanopyData,
+  parksData,
   visibleLayers,
   onMapLoad,
   opinionSource,
   amenitiesFilters,
-  categoriesFilters
+  categoriesFilters,
+  selectedSegment,
+  onSegmentSelect
 }) => {
   const mapRef = useRef()
   const [viewState, setViewState] = useState({
@@ -65,6 +74,11 @@ const ExplorerMap = ({
   const handleMapClick = (event) => {
     const feature = event.features?.[0]
     if (feature) {
+      // For temperature dashboard, set selected segment for bottom panel
+      if (dashboardMode === 'temperature' && feature.source === 'temperature-segments') {
+        onSegmentSelect?.(feature.properties)
+      }
+      
       setSelectedFeature(feature)
       setPopupInfo({
         longitude: event.lngLat.lng,
@@ -99,7 +113,11 @@ const ExplorerMap = ({
           'network-layer',
           'pedestrian-layer',
           'cycling-layer',
-          'lighting-segments-layer'
+          'lighting-segments-layer',
+          'temperature-segments-layer',
+          'greenery-skyview-layer',
+          'tree-canopy-layer',
+          'parks-nearby-layer'
         ]}
         onClick={handleMapClick}
       >
@@ -616,6 +634,124 @@ const ExplorerMap = ({
           </>
         )}
         
+        {/* Temperature Dashboard Layers */}
+        {dashboardMode === 'temperature' && (
+          <>
+            {/* Surface Temperature Layer */}
+            {visibleLayers.temperatureSegments && temperatureData && (
+              <Source
+                id="temperature-segments"
+                type="geojson"
+                data={temperatureData}
+              >
+                <Layer
+                  id="temperature-segments-layer"
+                  type="line"
+                  paint={{
+                    'line-color': [
+                      'case',
+                      ['has', 'temp_percentile'],
+                      [
+                        'step',
+                        ['get', 'temp_percentile'],
+                        '#3b82f6',  // Coolest 20% (0-20%)
+                        20, '#10b981',  // Cool (20-40%)
+                        40, '#fbbf24',  // Average (40-60%)
+                        60, '#f59e0b',  // Warm (60-80%)
+                        80, '#ef4444'   // Hottest 20% (80-100%)
+                      ],
+                      '#4b5563'
+                    ],
+                    'line-width': 5,
+                    'line-opacity': 0.9
+                  }}
+                />
+              </Source>
+            )}
+          </>
+        )}
+        
+        {/* Greenery Dashboard Layers */}
+        {dashboardMode === 'greenery' && (
+          <>
+            {/* Greenery & Sky View Factor Layer */}
+            {visibleLayers.greenerySegments && greeneryAndSkyview && (
+              <Source
+                id="greenery-skyview-segments"
+                type="geojson"
+                data={greeneryAndSkyview}
+              >
+                <Layer
+                  id="greenery-skyview-layer"
+                  type="line"
+                  paint={{
+                    'line-color': [
+                      'case',
+                      ['==', ['get', 'vegetation_index'], null],
+                      '#4b5563',
+                      [
+                        'step',
+                        ['get', 'vegetation_index'],
+                        '#8b4513',  // No Vegetation: <0.1
+                        0.1, '#d4b896',  // Sparse: 0.1-0.3
+                        0.3, '#bde69c',  // Moderate: 0.3-0.5
+                        0.5, '#6ab04c',  // Dense: 0.5-0.7
+                        0.7, '#2d7a2e'   // Very Dense: >0.7
+                      ]
+                    ],
+                    'line-width': 5,
+                    'line-opacity': 0.9
+                  }}
+                />
+              </Source>
+            )}
+            
+            {/* Tree Canopy Layer */}
+            {visibleLayers.treeCanopy && treeCanopyData && (
+              <Source
+                id="tree-canopy"
+                type="geojson"
+                data={treeCanopyData}
+              >
+                <Layer
+                  id="tree-canopy-layer"
+                  type="fill"
+                  paint={{
+                    'fill-color': '#2d7a2e',
+                    'fill-opacity': 0.6
+                  }}
+                />
+              </Source>
+            )}
+            
+            {/* Parks Nearby Layer */}
+            {visibleLayers.parksNearby && parksData && (
+              <Source
+                id="parks-nearby"
+                type="geojson"
+                data={parksData}
+              >
+                <Layer
+                  id="parks-nearby-layer"
+                  type="fill"
+                  paint={{
+                    'fill-color': '#10b981',
+                    'fill-opacity': 0.4
+                  }}
+                />
+                <Layer
+                  id="parks-nearby-outline"
+                  type="line"
+                  paint={{
+                    'line-color': '#059669',
+                    'line-width': 2
+                  }}
+                />
+              </Source>
+            )}
+          </>
+        )}
+        
         {/* Popup */}
         {popupInfo && (
           <Popup
@@ -758,6 +894,135 @@ const ExplorerMap = ({
                       <p><strong>Mean Lux:</strong> {popupInfo.feature.properties.mean_lux.toFixed(2)}</p>
                       <p><strong>Min Lux:</strong> {popupInfo.feature.properties.min_lux?.toFixed(2)}</p>
                       <p><strong>Max Lux:</strong> {popupInfo.feature.properties.max_lux?.toFixed(2)}</p>
+                    </>
+                  )}
+                </>
+              )}
+              
+              {dashboardMode === 'temperature' && (() => {
+                const props = popupInfo.feature.properties
+                const streetName = props.street_name || 'Street Segment'
+                
+                // Prepare chart data from all seasons
+                const chartData = []
+                const seasons = ['summer', 'autumn', 'winter', 'spring']
+                const seasonColors = {
+                  summer: '#ef4444',
+                  autumn: '#f59e0b',
+                  winter: '#3b82f6',
+                  spring: '#10b981'
+                }
+                
+                seasons.forEach(s => {
+                  const seasonData = props[`${s}_temperatures`]
+                  if (seasonData && Array.isArray(seasonData)) {
+                    seasonData.forEach(reading => {
+                      if (reading && reading.temperature_mean !== null) {
+                        chartData.push({
+                          date: reading.date,
+                          timestamp: reading.timestamp,
+                          season: s,
+                          temperature: reading.temperature_mean,
+                          displayDate: new Date(reading.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                        })
+                      }
+                    })
+                  }
+                })
+                
+                // Sort by timestamp
+                chartData.sort((a, b) => a.timestamp - b.timestamp)
+                
+                // Group by season for chart lines
+                const seasonGroups = {}
+                seasons.forEach(s => {
+                  seasonGroups[s] = chartData.filter(d => d.season === s)
+                })
+                
+                return (
+                  <>
+                    <h3>{streetName}</h3>
+                    {chartData.length > 0 && (
+                      <>
+                        <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginTop: '1rem' }}>
+                          {seasons.map(s => {
+                            const data = seasonGroups[s]
+                            if (data.length === 0) return null
+                            return (
+                              <div key={s} style={{ width: '100%', height: '200px' }}>
+                                <h4 style={{ margin: '0 0 0.5rem 0', color: seasonColors[s], fontSize: '0.875rem', textTransform: 'capitalize' }}>
+                                  {s}
+                                </h4>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#2a3f2d" />
+                                    <XAxis 
+                                      dataKey="displayDate" 
+                                      stroke="#a5d6a7" 
+                                      tick={{ fontSize: 9 }}
+                                      interval="preserveStartEnd"
+                                    />
+                                    <YAxis 
+                                      stroke="#a5d6a7" 
+                                      tick={{ fontSize: 9 }}
+                                      domain={['dataMin - 2', 'dataMax + 2']}
+                                    />
+                                    <Tooltip 
+                                      contentStyle={{ 
+                                        backgroundColor: '#1a1f1d', 
+                                        border: '1px solid #2a3f2d',
+                                        borderRadius: '4px',
+                                        fontSize: '11px'
+                                      }}
+                                      labelStyle={{ color: '#e8f5e9' }}
+                                    />
+                                    <Line 
+                                      type="monotone" 
+                                      dataKey="temperature" 
+                                      stroke={seasonColors[s]} 
+                                      dot={{ r: 2 }}
+                                      strokeWidth={2}
+                                      connectNulls
+                                    />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <p style={{ fontSize: '0.75rem', marginTop: '0.5rem', color: '#a5d6a7' }}>
+                          <strong>Data points:</strong> {chartData.length} readings from Landsat satellites
+                        </p>
+                      </>
+                    )}
+                  </>
+                )
+              })()}
+              
+              {dashboardMode === 'greenery' && (
+                <>
+                  <h3>Greenery Analysis</h3>
+                  {popupInfo.feature.properties.vegetation_index !== null && popupInfo.feature.properties.vegetation_index !== undefined && (
+                    <p><strong>Vegetation Index:</strong> {popupInfo.feature.properties.vegetation_index.toFixed(3)}</p>
+                  )}
+                  {popupInfo.feature.properties.sky_view_factor !== null && popupInfo.feature.properties.sky_view_factor !== undefined && (
+                    <p><strong>Sky View Factor:</strong> {popupInfo.feature.properties.sky_view_factor.toFixed(3)}</p>
+                  )}
+                  {popupInfo.feature.properties.shade_coverage_pct !== null && popupInfo.feature.properties.shade_coverage_pct !== undefined && (
+                    <p><strong>Shade Coverage:</strong> {popupInfo.feature.properties.shade_coverage_pct.toFixed(1)}%</p>
+                  )}
+                  {popupInfo.feature.properties.surface_temp_celsius !== null && popupInfo.feature.properties.surface_temp_celsius !== undefined && (
+                    <p><strong>Surface Temp:</strong> {popupInfo.feature.properties.surface_temp_celsius.toFixed(1)}°C</p>
+                  )}
+                  {popupInfo.feature.properties.PARK_NAME && (
+                    <>
+                      <p><strong>Park Name:</strong> {popupInfo.feature.properties.PARK_NAME}</p>
+                      {popupInfo.feature.properties.SUB_AREA && (
+                        <p><strong>Area:</strong> {popupInfo.feature.properties.SUB_AREA} ha</p>
+                      )}
+                      {popupInfo.feature.properties.PLAY_EQPM && (
+                        <p><strong>Play Equipment:</strong> {popupInfo.feature.properties.PLAY_EQPM}</p>
+                      )}
                     </>
                   )}
                 </>

@@ -1,0 +1,397 @@
+.temperature-analytics {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1a1f1d;
+  color: #e8f5e9;
+}
+
+.analytics-header {
+  padding: 1.5rem 1rem;
+  border-bottom: 1px solid #2a3f2d;
+}
+
+.analytics-header h2 {
+  color: #e8f5e9;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+}
+
+.header-subtitle {
+  color: #a5d6a7;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.time-controls {
+  padding: 1rem;
+  background: #0a0f0d;
+  border-bottom: 1px solid #2a3f2d;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.control-group label {
+  color: #a5d6a7;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.control-group select {
+  background: #1a1f1d;
+  border: 1px solid #2a3f2d;
+  color: #e8f5e9;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.control-group select:focus {
+  outline: none;
+  border-color: #4caf50;
+}
+
+.stats-container {
+  padding: 1rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.stats-container h3 {
+  color: #e8f5e9;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.75rem 0;
+}
+
+.stats-container h3:first-child {
+  margin-top: 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.stat-card {
+  background: #0a0f0d;
+  border: 1px solid #2a3f2d;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-label {
+  color: #a5d6a7;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  color: #e8f5e9;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: #0a0f0d;
+  border: 1px solid #2a3f2d;
+  border-radius: 0.375rem;
+}
+
+.metric-label {
+  color: #a5d6a7;
+  font-size: 0.875rem;
+}
+
+.metric-value {
+  color: #e8f5e9;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.distribution-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #2a3f2d;
+}
+
+.distribution-section h4 {
+  color: #e8f5e9;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.category-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.category-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 0.25rem;
+}
+
+.category-label {
+  color: #e8f5e9;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.category-stats {
+  color: #a5d6a7;
+  font-size: 0.75rem;
+}
+
+.bar-container {
+  background: #0a0f0d;
+  border: 1px solid #2a3f2d;
+  border-radius: 0.375rem;
+  height: 2rem;
+  overflow: hidden;
+  width: 100%;
+  position: relative;
+}
+
+.bar {
+  height: 100%;
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  padding-left: 0.75rem;
+}
+
+.bar-text {
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  z-index: 1;
+}
+
+
+.bar {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.bar.temp-cool {
+  background: #3b82f6;
+}
+
+.bar.temp-comfortable {
+  background: #10b981;
+}
+
+.bar.temp-warm {
+  background: #f59e0b;
+}
+
+.bar.temp-average {
+  background: #fbbf24;
+}
+
+.bar.temp-hot {
+  background: #ef4444;
+}
+
+.bar.temp-very-hot {
+  background: #991b1b;
+}
+
+.info-box {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #0a0f0d;
+  border: 1px solid #2a3f2d;
+  border-radius: 0.5rem;
+}
+
+.info-box h4 {
+  color: #4caf50;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.info-box p {
+  color: #a5d6a7;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.category-count {
+  color: #e8f5e9;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.comfort-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #2a3f2d;
+}
+
+.comfort-section h4 {
+  color: #e8f5e9;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.comfort-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.comfort-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: #0a0f0d;
+  border: 1px solid #2a3f2d;
+  border-radius: 0.375rem;
+}
+
+.comfort-label {
+  color: #a5d6a7;
+  font-size: 0.875rem;
+}
+
+.comfort-count {
+  color: #e8f5e9;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.layer-controls {
+  padding: 1rem;
+  border-top: 1px solid #2a3f2d;
+  background: #0a0f0d;
+}
+
+.layer-controls h4 {
+  color: #e8f5e9;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.layer-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  transition: background 0.2s;
+}
+
+.layer-toggle:hover {
+  background: #1a1f1d;
+}
+
+.layer-toggle input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.layer-toggle span {
+  color: #e8f5e9;
+  font-size: 0.875rem;
+}
+
+.legend-section {
+  padding: 1rem;
+  border-top: 1px solid #2a3f2d;
+  background: #0a0f0d;
+}
+
+.legend-section h4 {
+  color: #e8f5e9;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-color {
+  width: 1.5rem;
+  height: 1rem;
+  border-radius: 0.25rem;
+  border: 1px solid #2a3f2d;
+}
+
+.legend-item span {
+  color: #a5d6a7;
+  font-size: 0.75rem;
+}

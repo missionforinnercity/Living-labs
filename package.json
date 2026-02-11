@@ -10,19 +10,20 @@
     "preprocess": "node scripts/preprocess.js"
   },
   "dependencies": {
+    "@turf/turf": "^6.5.0",
     "mapbox-gl": "^3.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-map-gl": "^7.1.7",
-    "supercluster": "^8.0.1",
-    "@turf/turf": "^6.5.0"
+    "recharts": "^3.7.0",
+    "supercluster": "^8.0.1"
   },
   "devDependencies": {
     "@types/react": "^18.2.56",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.1.4",
-    "proj4": "^2.9.2",
-    "csv-parse": "^5.5.3"
+    "csv-parse": "^5.5.3",
+    "proj4": "^2.20.2",
+    "vite": "^5.1.4"
   }
 }

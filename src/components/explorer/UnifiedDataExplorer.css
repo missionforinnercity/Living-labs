@@ -66,7 +66,7 @@
 }
 
 .explorer-sidebar {
-  width: 380px;
+  width: 420px;
   background: #1a1f1d;
   border-right: 1px solid #2a3f2d;
   overflow-y: auto;
@@ -77,6 +77,93 @@
 .explorer-map-container {
   flex: 1;
   position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Bottom panel for seasonal charts */
+.bottom-panel {
+  background: #1a1f1d;
+  border-top: 2px solid #2a3f2d;
+  height: 320px;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.bottom-panel.closing {
+  animation: slideDown 0.3s ease-out forwards;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2a3f2d;
+}
+
+.panel-header h3 {
+  color: #e8f5e9;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: #a5d6a7;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: #2a3f2d;
+  color: #e8f5e9;
+}
+
+.charts-container {
+  flex: 1;
+  padding: 1rem;
+  overflow: auto;
+}
+
+#seasonal-charts-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  height: 100%;
 }
 
 /* Custom scrollbar for sidebar */
