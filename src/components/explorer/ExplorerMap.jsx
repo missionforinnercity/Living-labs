@@ -394,15 +394,76 @@ const ExplorerMap = ({
                 type: 'FeatureCollection',
                 features: businessesData.features.filter(f => {
                   const primaryType = f.properties.primaryType || ''
-                  if (categoriesFilters.restaurant && primaryType.includes('restaurant')) return true
-                  if (categoriesFilters.cafe && primaryType.includes('cafe')) return true
-                  if (categoriesFilters.art_gallery && primaryType.includes('art_gallery')) return true
-                  if (categoriesFilters.bar && (primaryType.includes('bar') || primaryType.includes('night_club'))) return true
-                  if (categoriesFilters.store && (primaryType.includes('store') || primaryType.includes('shop'))) return true
-                  if (categoriesFilters.lodging && primaryType.includes('lodging')) return true
-                  return !hasActiveFilters
+                  // Check if this business's primaryType matches any selected category filter
+                  return categoriesFilters[primaryType] === true
                 })
               } : businessesData
+              
+              // Category color mapping matching the UI groups
+              const getCategoryColor = (primaryType) => {
+                // Food & Dining - Orange
+                if (['african_restaurant', 'american_restaurant', 'asian_restaurant', 'bakery', 'bar', 'bar_and_grill',
+                     'barbecue_restaurant', 'breakfast_restaurant', 'buffet_restaurant', 'cafe', 'cafeteria',
+                     'chinese_restaurant', 'coffee_shop', 'fast_food_restaurant', 'food_court', 'hamburger_restaurant',
+                     'indian_restaurant', 'italian_restaurant', 'japanese_restaurant', 'korean_restaurant', 'meal_takeaway',
+                     'mediterranean_restaurant', 'mexican_restaurant', 'night_club', 'pizza_restaurant', 'ramen_restaurant',
+                     'restaurant', 'seafood_restaurant', 'sushi_restaurant', 'thai_restaurant', 'vegan_restaurant', 'wine_bar'].includes(primaryType)) {
+                  return '#ff6b35'
+                }
+                // Shopping - Pink/Rose
+                if (['auto_parts_store', 'bicycle_store', 'book_store', 'cell_phone_store', 'clothing_store', 'convenience_store',
+                     'department_store', 'discount_store', 'drugstore', 'electronics_store', 'florist', 'furniture_store',
+                     'gift_shop', 'grocery_store', 'hardware_store', 'home_goods_store', 'home_improvement_store',
+                     'jewelry_store', 'liquor_store', 'market', 'pet_store', 'shoe_store', 'shopping_mall',
+                     'sporting_goods_store', 'store', 'supermarket'].includes(primaryType)) {
+                  return '#c44569'
+                }
+                // Lodging - Blue
+                if (['bed_and_breakfast', 'hostel', 'hotel', 'lodging', 'motel'].includes(primaryType)) {
+                  return '#4a90e2'
+                }
+                // Culture & Entertainment - Magenta
+                if (['art_gallery', 'community_center', 'convention_center', 'cultural_center', 'event_venue',
+                     'movie_theater', 'museum', 'performing_arts_theater', 'visitor_center'].includes(primaryType)) {
+                  return '#e056fd'
+                }
+                // Religious Buildings - Gold
+                if (['church', 'mosque', 'place_of_worship', 'synagogue'].includes(primaryType)) {
+                  return '#f7b731'
+                }
+                // Health & Wellness - Green
+                if (['beauty_salon', 'dental_clinic', 'dentist', 'doctor', 'fitness_center', 'gym', 'hair_salon',
+                     'health', 'hospital', 'medical_lab', 'pharmacy', 'physiotherapist', 'spa'].includes(primaryType)) {
+                  return '#5cd65c'
+                }
+                // Education - Teal
+                if (['library', 'preschool', 'school', 'secondary_school', 'university'].includes(primaryType)) {
+                  return '#0fb9b1'
+                }
+                // Financial Services - Emerald
+                if (['accounting', 'atm', 'bank', 'finance', 'insurance_agency', 'real_estate_agency'].includes(primaryType)) {
+                  return '#20bf6b'
+                }
+                // Transportation - Gray
+                if (['bus_station', 'car_dealer', 'car_rental', 'car_repair', 'car_wash',
+                     'electric_vehicle_charging_station', 'gas_station', 'parking'].includes(primaryType)) {
+                  return '#778ca3'
+                }
+                // Recreation & Sports - Amber
+                if (['athletic_field', 'park', 'sports_club', 'sports_complex', 'swimming_pool', 'yoga_studio'].includes(primaryType)) {
+                  return '#fa8231'
+                }
+                // Public Services - Indigo
+                if (['city_hall', 'courthouse', 'embassy', 'lawyer', 'local_government_office', 'police', 'post_office'].includes(primaryType)) {
+                  return '#4b7bec'
+                }
+                // Tourist Attractions - Cyan
+                if (['tourist_attraction'].includes(primaryType)) {
+                  return '#45aaf2'
+                }
+                // Default
+                return '#9ca3af'
+              }
               
               return (
                 <Source
@@ -414,21 +475,74 @@ const ExplorerMap = ({
                     id="businesses-categories-layer"
                     type="circle"
                     paint={{
-                      'circle-radius': 6,
+                      'circle-radius': 7,
                       'circle-color': [
-                        'match',
-                        ['get', 'primaryType'],
-                        'restaurant', '#ef4444',
-                        'cafe', '#f59e0b',
-                        'bar', '#8b5cf6',
-                        'art_gallery', '#ec4899',
-                        'store', '#3b82f6',
-                        'lodging', '#14b8a6',
-                        '#4caf50'
+                        'case',
+                        ['has', 'primaryType'],
+                        [
+                          'let',
+                          'type', ['get', 'primaryType'],
+                          [
+                            'match',
+                            ['var', 'type'],
+                            // Food & Dining - Orange
+                            ['african_restaurant', 'american_restaurant', 'asian_restaurant', 'bakery', 'bar', 'bar_and_grill',
+                             'barbecue_restaurant', 'breakfast_restaurant', 'buffet_restaurant', 'cafe', 'cafeteria',
+                             'chinese_restaurant', 'coffee_shop', 'fast_food_restaurant', 'food_court', 'hamburger_restaurant',
+                             'indian_restaurant', 'italian_restaurant', 'japanese_restaurant', 'korean_restaurant', 'meal_takeaway',
+                             'mediterranean_restaurant', 'mexican_restaurant', 'night_club', 'pizza_restaurant', 'ramen_restaurant',
+                             'restaurant', 'seafood_restaurant', 'sushi_restaurant', 'thai_restaurant', 'vegan_restaurant', 'wine_bar'],
+                            '#ff6b35',
+                            // Shopping - Pink/Rose
+                            ['auto_parts_store', 'bicycle_store', 'book_store', 'cell_phone_store', 'clothing_store', 'convenience_store',
+                             'department_store', 'discount_store', 'drugstore', 'electronics_store', 'florist', 'furniture_store',
+                             'gift_shop', 'grocery_store', 'hardware_store', 'home_goods_store', 'home_improvement_store',
+                             'jewelry_store', 'liquor_store', 'market', 'pet_store', 'shoe_store', 'shopping_mall',
+                             'sporting_goods_store', 'store', 'supermarket'],
+                            '#c44569',
+                            // Lodging - Blue
+                            ['bed_and_breakfast', 'hostel', 'hotel', 'lodging', 'motel'],
+                            '#4a90e2',
+                            // Culture & Entertainment - Magenta
+                            ['art_gallery', 'community_center', 'convention_center', 'cultural_center', 'event_venue',
+                             'movie_theater', 'museum', 'performing_arts_theater', 'visitor_center'],
+                            '#e056fd',
+                            // Religious Buildings - Gold
+                            ['church', 'mosque', 'place_of_worship', 'synagogue'],
+                            '#f7b731',
+                            // Health & Wellness - Green
+                            ['beauty_salon', 'dental_clinic', 'dentist', 'doctor', 'fitness_center', 'gym', 'hair_salon',
+                             'health', 'hospital', 'medical_lab', 'pharmacy', 'physiotherapist', 'spa'],
+                            '#5cd65c',
+                            // Education - Teal
+                            ['library', 'preschool', 'school', 'secondary_school', 'university'],
+                            '#0fb9b1',
+                            // Financial Services - Emerald
+                            ['accounting', 'atm', 'bank', 'finance', 'insurance_agency', 'real_estate_agency'],
+                            '#20bf6b',
+                            // Transportation - Gray
+                            ['bus_station', 'car_dealer', 'car_rental', 'car_repair', 'car_wash',
+                             'electric_vehicle_charging_station', 'gas_station', 'parking'],
+                            '#778ca3',
+                            // Recreation & Sports - Amber
+                            ['athletic_field', 'park', 'sports_club', 'sports_complex', 'swimming_pool', 'yoga_studio'],
+                            '#fa8231',
+                            // Public Services - Indigo
+                            ['city_hall', 'courthouse', 'embassy', 'lawyer', 'local_government_office', 'police', 'post_office'],
+                            '#4b7bec',
+                            // Tourist Attractions - Cyan
+                            ['tourist_attraction'],
+                            '#45aaf2',
+                            // Default
+                            '#9ca3af'
+                          ]
+                        ],
+                        '#9ca3af'
                       ],
-                      'circle-opacity': 0.8,
-                      'circle-stroke-width': 1,
-                      'circle-stroke-color': '#ffffff'
+                      'circle-opacity': 0.85,
+                      'circle-stroke-width': 2,
+                      'circle-stroke-color': '#ffffff',
+                      'circle-stroke-opacity': 0.8
                     }}
                   />
                 </Source>
@@ -493,23 +607,34 @@ const ExplorerMap = ({
                       'interpolate',
                       ['linear'],
                       ['coalesce', ['get', 'total_trip_count'], 0],
-                      0, '#dbeafe',
-                      50, '#93c5fd',
-                      100, '#60a5fa',
-                      200, '#3b82f6',
-                      400, '#2563eb',
-                      800, '#1d4ed8',
-                      1500, '#1e40af'
+                      0, '#e0f2fe',      // Very light sky blue
+                      30, '#7dd3fc',     // Light cyan
+                      75, '#38bdf8',     // Bright sky blue
+                      150, '#0ea5e9',    // Vibrant blue
+                      300, '#0284c7',    // Deep sky blue
+                      600, '#0369a1',    // Ocean blue
+                      1000, '#075985',   // Dark blue
+                      1500, '#0c4a6e'    // Deep navy
                     ],
                     'line-width': [
                       'interpolate',
                       ['linear'],
-                      ['zoom'],
-                      13, 2,
-                      16, 4,
-                      18, 6
+                      ['coalesce', ['get', 'total_trip_count'], 0],
+                      0, 2,
+                      100, 3,
+                      300, 5,
+                      600, 7,
+                      1500, 10
                     ],
-                    'line-opacity': 0.8
+                    'line-opacity': [
+                      'interpolate',
+                      ['linear'],
+                      ['coalesce', ['get', 'total_trip_count'], 0],
+                      0, 0.4,
+                      100, 0.7,
+                      600, 0.9,
+                      1500, 0.95
+                    ]
                   }}
                 />
               </Source>
@@ -530,23 +655,34 @@ const ExplorerMap = ({
                   'interpolate',
                   ['linear'],
                   ['coalesce', ['get', 'total_trip_count'], 0],
-                  0, '#d1fae5',
-                  50, '#6ee7b7',
-                  100, '#34d399',
-                  200, '#10b981',
-                  400, '#059669',
-                  800, '#047857',
-                  1500, '#065f46'
+                  0, '#dcfce7',      // Very light green
+                  30, '#86efac',     // Light mint
+                  75, '#4ade80',     // Bright green
+                  150, '#22c55e',    // Vibrant green
+                  300, '#16a34a',    // Forest green
+                  600, '#15803d',    // Deep green
+                  1000, '#166534',   // Dark forest
+                  1500, '#14532d'    // Deep emerald
                 ],
                 'line-width': [
                   'interpolate',
                   ['linear'],
-                  ['zoom'],
-                  13, 2,
-                  16, 4,
-                  18, 6
+                  ['coalesce', ['get', 'total_trip_count'], 0],
+                  0, 2,
+                  100, 3,
+                  300, 5,
+                  600, 7,
+                  1500, 10
                 ],
-                'line-opacity': 0.8
+                'line-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'total_trip_count'], 0],
+                  0, 0.4,
+                  100, 0.7,
+                  600, 0.9,
+                  1500, 0.95
+                ]
               }}
             />
           </Source>
@@ -580,23 +716,33 @@ const ExplorerMap = ({
                         'interpolate',
                         ['linear'],
                         ['coalesce', ['get', config.field], 0],
-                        config.scale[0], '#fef3c7',
-                        config.scale[1], '#fde047',
-                        config.scale[2], '#facc15',
-                        config.scale[3], '#eab308',
-                        config.scale[4], '#ca8a04',
-                        config.scale[5], '#a16207',
-                        config.scale[6], '#854d0e'
+                        config.scale[0], '#fef9c3',    // Very light yellow
+                        config.scale[1], '#fef08a',    // Light yellow
+                        config.scale[2], '#fde047',    // Bright yellow
+                        config.scale[3], '#facc15',    // Golden yellow
+                        config.scale[4], '#f59e0b',    // Vibrant amber
+                        config.scale[5], '#ea580c',    // Bright orange
+                        config.scale[6], '#dc2626'     // Vibrant red (hottest)
                       ],
                       'line-width': [
                         'interpolate',
                         ['linear'],
-                        ['zoom'],
-                        13, 2,
-                        16, 4,
-                        18, 6
+                        ['coalesce', ['get', config.field], 0],
+                        config.scale[0], 2,
+                        config.scale[2], 3,
+                        config.scale[4], 5,
+                        config.scale[5], 7,
+                        config.scale[6], 10
                       ],
-                      'line-opacity': 0.8
+                      'line-opacity': [
+                        'interpolate',
+                        ['linear'],
+                        ['coalesce', ['get', config.field], 0],
+                        config.scale[0], 0.5,
+                        config.scale[3], 0.75,
+                        config.scale[5], 0.9,
+                        config.scale[6], 0.95
+                      ]
                     }}
                   />
                 </Source>

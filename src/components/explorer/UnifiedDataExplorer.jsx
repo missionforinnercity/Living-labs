@@ -130,15 +130,9 @@ const UnifiedDataExplorer = () => {
     liveMusic: false
   })
   
-  // Categories filters state
-  const [categoriesFilters, setCategoriesFilters] = useState({
-    restaurant: false,
-    cafe: false,
-    art_gallery: false,
-    bar: false,
-    store: false,
-    lodging: false
-  })
+  // Categories filters state - hierarchical structure
+  const [categoriesFilters, setCategoriesFilters] = useState({})
+  const [expandedGroups, setExpandedGroups] = useState({})
   
   // Walkability dashboard state
   const [walkabilityMode, setWalkabilityMode] = useState('pedestrian') // 'pedestrian', 'cycling', 'network'
@@ -676,6 +670,8 @@ const UnifiedDataExplorer = () => {
               onAmenitiesFiltersChange={setAmenitiesFilters}
               categoriesFilters={categoriesFilters}
               onCategoriesFiltersChange={setCategoriesFilters}
+              expandedGroups={expandedGroups}
+              onExpandedGroupsChange={setExpandedGroups}
               hideLayerControls={true}
             />
           )}
