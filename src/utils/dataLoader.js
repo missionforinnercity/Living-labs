@@ -124,12 +124,18 @@ export const colorScales = {
       [2000, '#084594']
     ],
     trip_count: [
-      [0, '#fff5f0'],
-      [50, '#fee0d2'],
-      [100, '#fcbba1'],
-      [200, '#fc9272'],
-      [300, '#fb6a4a'],
-      [400, '#de2d26']
+      [0, '#08519c'],      // Deep blue - even minimal routes are visible
+      [5, '#3182bd'],      // Bright blue
+      [10, '#6baed6'],     // Sky blue - P50 for pedestrian  
+      [20, '#9ecae1'],     // Light blue
+      [30, '#fee391'],     // Bright yellow - P50 for cycling
+      [50, '#fec44f'],     // Gold
+      [75, '#fe9929'],     // Orange - P90 for pedestrian
+      [100, '#ec7014'],    // Deep orange - P75 for cycling
+      [150, '#cc4c02'],    // Orange-red
+      [200, '#d62828'],    // Bright red
+      [350, '#9d0208'],    // Deep red - P90 for cycling
+      [500, '#6a040f']     // Very dark red - extremely busy
     ]
   }
 }

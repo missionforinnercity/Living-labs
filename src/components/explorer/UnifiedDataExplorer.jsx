@@ -140,6 +140,7 @@ const UnifiedDataExplorer = () => {
   const [networkData, setNetworkData] = useState(null)
   const [pedestrianData, setPedestrianData] = useState(null)
   const [cyclingData, setCyclingData] = useState(null)
+  const [selectedRouteSegment, setSelectedRouteSegment] = useState(null)
   
   // Lighting dashboard state
   const [lightingSegments, setLightingSegments] = useState(null)
@@ -288,13 +289,55 @@ const UnifiedDataExplorer = () => {
             return r.json()
           })
         ])
-        
+
+        // Calculate percentiles for pedestrian data
+        if (pedestrian.features) {
+          const tripCounts = pedestrian.features.map(f => f.properties.total_trip_count || 0)
+          const sortedCounts = [...tripCounts].sort((a, b) => a - b)
+          const minCount = sortedCounts[0]
+          const maxCount = sortedCounts[sortedCounts.length - 1]
+
+          pedestrian.features = pedestrian.features.map(feature => {
+            const percentile = (maxCount === minCount)
+              ? 50
+              : ((feature.properties.total_trip_count - minCount) / (maxCount - minCount)) * 100
+            return {
+              ...feature,
+              properties: {
+                ...feature.properties,
+                trip_percentile: percentile
+              }
+            }
+          })
+        }
+
+        // Calculate percentiles for cycling data
+        if (cycling.features) {
+          const tripCounts = cycling.features.map(f => f.properties.total_trip_count || 0)
+          const sortedCounts = [...tripCounts].sort((a, b) => a - b)
+          const minCount = sortedCounts[0]
+          const maxCount = sortedCounts[sortedCounts.length - 1]
+
+          cycling.features = cycling.features.map(feature => {
+            const percentile = (maxCount === minCount)
+              ? 50
+              : ((feature.properties.total_trip_count - minCount) / (maxCount - minCount)) * 100
+            return {
+              ...feature,
+              properties: {
+                ...feature.properties,
+                trip_percentile: percentile
+              }
+            }
+          })
+        }
+
         console.log('Walkability data loaded:', {
           network: network.features?.length,
           pedestrian: pedestrian.features?.length,
           cycling: cycling.features?.length
         })
-        
+
         setNetworkData(network)
         setPedestrianData(pedestrian)
         setCyclingData(cycling)
@@ -465,6 +508,15 @@ const UnifiedDataExplorer = () => {
       loadGreeneryData()
     }
   }, [dashboardMode, season, timeOfDay, lockedLayers])
+  
+  // Listen for clear segment selection event
+  useEffect(() => {
+    const handleClearSelection = () => {
+      setSelectedRouteSegment(null)
+    }
+    window.addEventListener('clearSegmentSelection', handleClearSelection)
+    return () => window.removeEventListener('clearSegmentSelection', handleClearSelection)
+  }, [])
   
   // Select a layer category - this is the main interaction
   const selectCategory = (categoryId) => {
@@ -697,6 +749,7 @@ const UnifiedDataExplorer = () => {
               cyclingData={cyclingData}
               networkData={networkData}
               hideLayerControls={true}
+              selectedSegment={selectedRouteSegment}
             />
           )}
           
@@ -758,7 +811,20 @@ const UnifiedDataExplorer = () => {
             categoriesFilters={categoriesFilters}
             selectedSegment={selectedSegment}
             onSegmentSelect={setSelectedSegment}
+            onRouteSegmentClick={(segment, mode) => {
+              setSelectedRouteSegment(segment)
+              if (mode !== walkabilityMode) {
+                setWalkabilityMode(mode)
+              }
+            }}
           />
+          
+          {/* Listen for clear segment selection event */}
+          {React.useEffect(() => {
+            const handleClear = () => setSelectedRouteSegment(null)
+            window.addEventListener('clearSegmentSelection', handleClear)
+            return () => window.removeEventListener('clearSegmentSelection', handleClear)
+          }, [])}
           
           {/* Bottom panel for temperature seasonal charts */}
           {dashboardMode === 'temperature' && selectedSegment && (

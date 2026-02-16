@@ -1179,8 +1179,12 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
           )}
           {activeLayers.walkability && (
             <div className="legend-item">
-              <span className="legend-color" style={{background: 'linear-gradient(to right, #f7fbff, #084594)'}}></span>
-              <span>{walkabilityMode === 'network' ? 'Network Centrality' : walkabilityMode === 'pedestrian' ? 'Pedestrian Activity' : 'Cycling Activity'}</span>
+              <span className="legend-color" style={{
+                background: walkabilityMode === 'network' 
+                  ? 'linear-gradient(to right, #f7fbff, #084594)' 
+                  : 'linear-gradient(to right, #08519c, #6baed6, #fee391, #ec7014, #d62828, #6a040f)'
+              }}></span>
+              <span style={{fontSize: '11px'}}>{walkabilityMode === 'network' ? 'Network Centrality' : walkabilityMode === 'pedestrian' ? 'Pedestrian: Blue (Low) → Yellow → Red (High)' : 'Cycling: Blue (Low) → Yellow → Red (High)'}</span>
             </div>
           )}
           {activeLayers.business && (

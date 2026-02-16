@@ -3,6 +3,7 @@ import Map, { Source, Layer, Popup } from 'react-map-gl'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { isBusinessOpen } from '../../utils/timeUtils'
+import { colorScales } from '../../utils/dataLoader'
 import './ExplorerMap.css'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || ''
@@ -37,7 +38,8 @@ const ExplorerMap = ({
   amenitiesFilters,
   categoriesFilters,
   selectedSegment,
-  onSegmentSelect
+  onSegmentSelect,
+  onRouteSegmentClick
 }) => {
   const mapRef = useRef()
   
@@ -122,6 +124,12 @@ const ExplorerMap = ({
         onSegmentSelect?.(feature.properties)
       }
       
+      // For walkability dashboard, set selected route segment (no popup)
+      if (dashboardMode === 'walkability' && (feature.source === 'pedestrian-routes' || feature.source === 'cycling-routes')) {
+        onRouteSegmentClick?.(feature.properties, feature.source === 'pedestrian-routes' ? 'pedestrian' : 'cycling')
+        return // Don't show popup for route segments
+      }
+      
       setSelectedFeature(feature)
       setPopupInfo({
         longitude: event.lngLat.lng,
@@ -156,6 +164,8 @@ const ExplorerMap = ({
           'network-layer',
           'pedestrian-layer',
           'cycling-layer',
+          'pedestrian-routes-layer',
+          'cycling-routes-layer',
           'lighting-segments-layer',
           'temperature-segments-layer',
           'greenery-skyview-layer',
@@ -630,7 +640,7 @@ const ExplorerMap = ({
             )}
         
         {/* Walkability Layers */}
-        {/* Pedestrian Routes */}
+        {/* Pedestrian Routes - Gradient based on trip count */}
         {shouldRenderCategory('pedestrianRoutes') && pedestrianData && (
               <Source
                 id="pedestrian-routes"
@@ -645,40 +655,36 @@ const ExplorerMap = ({
                       'interpolate',
                       ['linear'],
                       ['coalesce', ['get', 'total_trip_count'], 0],
-                      0, '#e0f2fe',      // Very light sky blue
-                      30, '#7dd3fc',     // Light cyan
-                      75, '#38bdf8',     // Bright sky blue
-                      150, '#0ea5e9',    // Vibrant blue
-                      300, '#0284c7',    // Deep sky blue
-                      600, '#0369a1',    // Ocean blue
-                      1000, '#075985',   // Dark blue
-                      1500, '#0c4a6e'    // Deep navy
+                      0, '#08519c',
+                      5, '#3182bd',
+                      10, '#6baed6',
+                      20, '#9ecae1',
+                      30, '#fee391',
+                      50, '#fec44f',
+                      75, '#fe9929',
+                      100, '#ec7014',
+                      150, '#cc4c02',
+                      200, '#d62828',
+                      350, '#9d0208',
+                      500, '#6a040f'
                     ],
                     'line-width': [
                       'interpolate',
                       ['linear'],
                       ['coalesce', ['get', 'total_trip_count'], 0],
                       0, 2,
-                      100, 3,
-                      300, 5,
-                      600, 7,
-                      1500, 10
+                      50, 4,
+                      100, 5,
+                      200, 6,
+                      400, 8
                     ],
-                    'line-opacity': [
-                      'interpolate',
-                      ['linear'],
-                      ['coalesce', ['get', 'total_trip_count'], 0],
-                      0, 0.4,
-                      100, 0.7,
-                      600, 0.9,
-                      1500, 0.95
-                    ]
+                    'line-opacity': 0.85
                   }}
                 />
               </Source>
             )}
         
-        {/* Cycling Routes */}
+        {/* Cycling Routes - Gradient based on trip count */}
         {shouldRenderCategory('cyclingRoutes') && cyclingData && (
           <Source
             id="cycling-routes"
@@ -693,34 +699,30 @@ const ExplorerMap = ({
                   'interpolate',
                   ['linear'],
                   ['coalesce', ['get', 'total_trip_count'], 0],
-                  0, '#dcfce7',      // Very light green
-                  30, '#86efac',     // Light mint
-                  75, '#4ade80',     // Bright green
-                  150, '#22c55e',    // Vibrant green
-                  300, '#16a34a',    // Forest green
-                  600, '#15803d',    // Deep green
-                  1000, '#166534',   // Dark forest
-                  1500, '#14532d'    // Deep emerald
+                  0, '#08519c',
+                  5, '#3182bd',
+                  10, '#6baed6',
+                  20, '#9ecae1',
+                  30, '#fee391',
+                  50, '#fec44f',
+                  75, '#fe9929',
+                  100, '#ec7014',
+                  150, '#cc4c02',
+                  200, '#d62828',
+                  350, '#9d0208',
+                  500, '#6a040f'
                 ],
                 'line-width': [
                   'interpolate',
                   ['linear'],
                   ['coalesce', ['get', 'total_trip_count'], 0],
                   0, 2,
-                  100, 3,
-                  300, 5,
-                  600, 7,
-                  1500, 10
+                  100, 4,
+                  200, 5,
+                  400, 6,
+                  800, 8
                 ],
-                'line-opacity': [
-                  'interpolate',
-                  ['linear'],
-                  ['coalesce', ['get', 'total_trip_count'], 0],
-                  0, 0.4,
-                  100, 0.7,
-                  600, 0.9,
-                  1500, 0.95
-                ]
+                'line-opacity': 0.85
               }}
             />
           </Source>
@@ -740,6 +742,26 @@ const ExplorerMap = ({
               
               const config = metricConfig[networkMetric] || metricConfig.betweenness_800
               
+              // Color schemes based on metric type
+              const getColorScheme = (metric) => {
+                // Movement potential (betweenness) - Fire colors
+                if (metric.includes('betweenness') && !metric.includes('beta')) {
+                  return ['#1e3a8a', '#3b82f6', '#fbbf24', '#f97316', '#dc2626', '#991b1b', '#7f1d1d']
+                }
+                // Integration (beta betweenness) - Emerald to gold
+                else if (metric.includes('beta')) {
+                  return ['#064e3b', '#059669', '#10b981', '#34d399', '#fbbf24', '#f59e0b', '#ea580c']
+                }
+                // Accessibility (harmonic) - Purple to green
+                else if (metric.includes('harmonic')) {
+                  return ['#581c87', '#7c3aed', '#a855f7', '#c084fc', '#10b981', '#34d399', '#6ee7b7']
+                }
+                // Default
+                return ['#fef9c3', '#fef08a', '#fde047', '#facc15', '#f59e0b', '#ea580c', '#dc2626']
+              }
+              
+              const colors = getColorScheme(networkMetric)
+              
               return (
                 <Source
                   id="network-betweenness"
@@ -754,13 +776,13 @@ const ExplorerMap = ({
                         'interpolate',
                         ['linear'],
                         ['coalesce', ['get', config.field], 0],
-                        config.scale[0], '#fef9c3',    // Very light yellow
-                        config.scale[1], '#fef08a',    // Light yellow
-                        config.scale[2], '#fde047',    // Bright yellow
-                        config.scale[3], '#facc15',    // Golden yellow
-                        config.scale[4], '#f59e0b',    // Vibrant amber
-                        config.scale[5], '#ea580c',    // Bright orange
-                        config.scale[6], '#dc2626'     // Vibrant red (hottest)
+                        config.scale[0], colors[0],
+                        config.scale[1], colors[1],
+                        config.scale[2], colors[2],
+                        config.scale[3], colors[3],
+                        config.scale[4], colors[4],
+                        config.scale[5], colors[5],
+                        config.scale[6], colors[6]
                       ],
                       'line-width': [
                         'interpolate',
@@ -776,8 +798,8 @@ const ExplorerMap = ({
                         'interpolate',
                         ['linear'],
                         ['coalesce', ['get', config.field], 0],
-                        config.scale[0], 0.5,
-                        config.scale[3], 0.75,
+                        config.scale[0], 0.6,
+                        config.scale[3], 0.8,
                         config.scale[5], 0.9,
                         config.scale[6], 0.95
                       ]
