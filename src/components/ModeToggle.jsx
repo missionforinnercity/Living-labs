@@ -8,14 +8,12 @@ const ModeToggle = ({ mode, onModeChange }) => {
         className={`mode-button ${mode === 'narrative' ? 'active' : ''}`}
         onClick={() => onModeChange('narrative')}
       >
-        <span className="icon">📖</span>
         Narrative Tours
       </button>
       <button
         className={`mode-button ${mode === 'explorer' ? 'active' : ''}`}
         onClick={() => onModeChange('explorer')}
       >
-        <span className="icon">🔍</span>
         Data Explorer
       </button>
     </div>

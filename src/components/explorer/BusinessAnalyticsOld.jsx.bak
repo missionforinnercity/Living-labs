@@ -6,13 +6,13 @@ import { calculateMetricStatistics } from '../../utils/networkUtils'
 import './BusinessAnalytics.css'
 
 const BUSINESS_MODES = [
-  { id: 'liveliness', label: 'Business Liveliness', icon: '🏪' },
-  { id: 'opinions', label: 'Public Opinions', icon: '💬' },
-  { id: 'ratings', label: 'Review Ratings', icon: '⭐' },
-  { id: 'amenities', label: 'Amenities', icon: '🎯' },
-  { id: 'categories', label: 'Categories', icon: '📊' },
-  { id: 'network', label: 'Network Analysis', icon: '🔗' },
-  { id: 'property', label: 'Property Sales', icon: '🏢' }
+  { id: 'liveliness', label: 'Business Liveliness' },
+  { id: 'opinions', label: 'Public Opinions' },
+  { id: 'ratings', label: 'Review Ratings' },
+  { id: 'amenities', label: 'Amenities' },
+  { id: 'categories', label: 'Categories' },
+  { id: 'network', label: 'Network Analysis' },
+  { id: 'property', label: 'Property Sales' }
 ]
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']

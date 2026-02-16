@@ -2,17 +2,17 @@ import React from 'react'
 import './TemporalControls.css'
 
 const SEASONS = [
-  { id: 'summer', label: 'Summer', icon: '☀️' },
-  { id: 'autumn', label: 'Autumn', icon: '🍂' },
-  { id: 'winter', label: 'Winter', icon: '❄️' },
-  { id: 'spring', label: 'Spring', icon: '🌸' }
+  { id: 'summer', label: 'Summer' },
+  { id: 'autumn', label: 'Autumn' },
+  { id: 'winter', label: 'Winter' },
+  { id: 'spring', label: 'Spring' }
 ]
 
 const TIMES_OF_DAY = [
-  { id: '0800', label: '8 AM', icon: '🌅' },
-  { id: '1400', label: '2 PM', icon: '☀️' },
-  { id: '1700', label: '5 PM', icon: '🌆' },
-  { id: '1900', label: '7 PM', icon: '🌃' }
+  { id: '0800', label: '8 AM' },
+  { id: '1400', label: '2 PM' },
+  { id: '1700', label: '5 PM' },
+  { id: '1900', label: '7 PM' }
 ]
 
 const TemporalControls = ({ state, onChange, mode }) => {
@@ -33,7 +33,7 @@ const TemporalControls = ({ state, onChange, mode }) => {
 
   return (
     <div className="temporal-controls">
-      <h2>⏰ Temporal Controls</h2>
+      <h2>Temporal Controls</h2>
       
       <div className="control-group">
         <label className="control-label">Season</label>
@@ -45,7 +45,6 @@ const TemporalControls = ({ state, onChange, mode }) => {
               onClick={() => handleSeasonChange(season.id)}
               title={season.label}
             >
-              <span className="season-icon">{season.icon}</span>
               <span className="season-label">{season.label}</span>
             </button>
           ))}
@@ -61,7 +60,6 @@ const TemporalControls = ({ state, onChange, mode }) => {
               className={`time-button ${state.timeOfDay === time.id ? 'active' : ''}`}
               onClick={() => handleTimeChange(time.id)}
             >
-              <span className="time-icon">{time.icon}</span>
               <span className="time-label">{time.label}</span>
             </button>
           ))}
@@ -71,7 +69,6 @@ const TemporalControls = ({ state, onChange, mode }) => {
       <div className="control-group">
         <label className="control-label">
           Hour: {state.hour}:00
-          {state.hour >= 18 || state.hour <= 6 ? ' 🌙' : ' ☀️'}
         </label>
         <input
           type="range"

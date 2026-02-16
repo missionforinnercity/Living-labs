@@ -218,7 +218,7 @@ const networkInsights = calculateNetworkInsights()
             <>
               <div className="selected-segment-header">
                 <h4>Selected Route Segment</h4>
-                <button className="clear-selection-btn" onClick={() => window.dispatchEvent(new CustomEvent('clearSegmentSelection'))}>Clear ✕</button>
+                <button className="clear-selection-btn" onClick={() => window.dispatchEvent(new CustomEvent('clearSegmentSelection'))}>Clear</button>
               </div>
               <div className="stats-summary highlight">
                 <div className="stat-item">
@@ -320,7 +320,7 @@ const networkInsights = calculateNetworkInsights()
             <>
               <div className="selected-segment-header">
                 <h4>Selected Route Segment</h4>
-                <button className="clear-selection-btn" onClick={() => window.dispatchEvent(new CustomEvent('clearSegmentSelection'))}>Clear ✕</button>
+                <button className="clear-selection-btn" onClick={() => window.dispatchEvent(new CustomEvent('clearSegmentSelection'))}>Clear</button>
               </div>
               <div className="stats-summary highlight">
                 <div className="stat-item">

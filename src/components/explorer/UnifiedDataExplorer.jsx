@@ -73,35 +73,35 @@ const transformGeoJSON = (geojson, sourceCRS, targetCRS) => {
 }
 
 const DASHBOARD_MODES = [
-  { id: 'business', label: 'Business Analytics', icon: '🏪' },
-  { id: 'walkability', label: 'Walkability & Cycling', icon: '🚶' },
-  { id: 'lighting', label: 'Street Lighting', icon: '💡' },
-  { id: 'temperature', label: 'Surface Temperature', icon: '🌡️' },
-  { id: 'greenery', label: 'Greenery', icon: '🌳' }
+  { id: 'business', label: 'Business Analytics' },
+  { id: 'walkability', label: 'Walkability & Cycling' },
+  { id: 'lighting', label: 'Street Lighting' },
+  { id: 'temperature', label: 'Surface Temperature' },
+  { id: 'greenery', label: 'Greenery' }
 ]
 
 // All available layer categories - these are what users click to view
 const LAYER_CATEGORIES = [
   // Business layers
-  { id: 'businessLiveliness', label: 'Business Liveliness', dashboard: 'business', icon: '🏪', dataKey: 'businesses' },
-  { id: 'vendorOpinions', label: 'Vendor Opinions', dashboard: 'business', icon: '💬', dataKey: 'streetStalls' },
-  { id: 'businessRatings', label: 'Business Ratings', dashboard: 'business', icon: '⭐', dataKey: 'businesses' },
-  { id: 'amenities', label: 'Amenities', dashboard: 'business', icon: '🏷️', dataKey: 'businesses' },
-  { id: 'businessCategories', label: 'Business Categories', dashboard: 'business', icon: '📊', dataKey: 'businesses' },
-  { id: 'propertySales', label: 'Property Sales', dashboard: 'business', icon: '🏠', dataKey: 'properties' },
+  { id: 'businessLiveliness', label: 'Business Liveliness', dashboard: 'business', dataKey: 'businesses' },
+  { id: 'vendorOpinions', label: 'Vendor Opinions', dashboard: 'business', dataKey: 'streetStalls' },
+  { id: 'businessRatings', label: 'Business Ratings', dashboard: 'business', dataKey: 'businesses' },
+  { id: 'amenities', label: 'Amenities', dashboard: 'business', dataKey: 'businesses' },
+  { id: 'businessCategories', label: 'Business Categories', dashboard: 'business', dataKey: 'businesses' },
+  { id: 'propertySales', label: 'Property Sales', dashboard: 'business', dataKey: 'properties' },
   // Walkability layers
-  { id: 'pedestrianRoutes', label: 'Pedestrian Routes', dashboard: 'walkability', icon: '🚶', dataKey: 'pedestrianActivity' },
-  { id: 'cyclingRoutes', label: 'Cycling Routes', dashboard: 'walkability', icon: '🚴', dataKey: 'cyclingActivity' },
-  { id: 'networkAnalysis', label: 'Network Analysis', dashboard: 'walkability', icon: '🔗', dataKey: 'network' },
+  { id: 'pedestrianRoutes', label: 'Pedestrian Routes', dashboard: 'walkability', dataKey: 'pedestrianActivity' },
+  { id: 'cyclingRoutes', label: 'Cycling Routes', dashboard: 'walkability', dataKey: 'cyclingActivity' },
+  { id: 'networkAnalysis', label: 'Network Analysis', dashboard: 'walkability', dataKey: 'network' },
   // Lighting layers
-  { id: 'streetLighting', label: 'Street Lighting', dashboard: 'lighting', icon: '💡', dataKey: 'lightingSegments' },
-  { id: 'lightingProjects', label: 'Municipal Street Lights', dashboard: 'lighting', icon: '🔧', dataKey: 'lightingProjects' },
+  { id: 'streetLighting', label: 'Street Lighting', dashboard: 'lighting', dataKey: 'lightingSegments' },
+  { id: 'lightingProjects', label: 'Municipal Street Lights', dashboard: 'lighting', dataKey: 'lightingProjects' },
   // Temperature layers
-  { id: 'surfaceTemperature', label: 'Surface Temperature', dashboard: 'temperature', icon: '🌡️', dataKey: 'temperatureSegments' },
+  { id: 'surfaceTemperature', label: 'Surface Temperature', dashboard: 'temperature', dataKey: 'temperatureSegments' },
   // Greenery layers
-  { id: 'greeneryIndex', label: 'Greenery Index', dashboard: 'greenery', icon: '🌿', dataKey: 'greenerySegments' },
-  { id: 'treeCanopy', label: 'Tree Canopy', dashboard: 'greenery', icon: '🌳', dataKey: 'treeCanopy' },
-  { id: 'parksNearby', label: 'Parks Nearby', dashboard: 'greenery', icon: '🏞️', dataKey: 'parksNearby' }
+  { id: 'greeneryIndex', label: 'Greenery Index', dashboard: 'greenery', dataKey: 'greenerySegments' },
+  { id: 'treeCanopy', label: 'Tree Canopy', dashboard: 'greenery', dataKey: 'treeCanopy' },
+  { id: 'parksNearby', label: 'Parks Nearby', dashboard: 'greenery', dataKey: 'parksNearby' }
 ]
 
 const UnifiedDataExplorer = () => {
@@ -565,7 +565,6 @@ const UnifiedDataExplorer = () => {
       return [...lockedItems, {
         id: categoryId,
         label: category.label,
-        icon: category.icon,
         dataKey: category.dataKey,
         dashboard: category.dashboard,
         locked: false

@@ -61,12 +61,12 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
       map.current.on('load', () => {
         if (!isCleanedUp) {
           setMapLoaded(true)
-          console.log('✅ Map loaded successfully')
+          console.log('Map loaded successfully')
         }
       })
 
       map.current.on('error', (e) => {
-        console.error('❌ Map error:', e.error)
+        console.error('Map error:', e.error)
         console.error('Error details:', {
           message: e.error?.message,
           status: e.error?.status,
@@ -77,7 +77,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
       // Timeout check
       setTimeout(() => {
         if (map.current && !isCleanedUp && !map.current.loaded()) {
-          console.warn('⚠️ Map still loading after 10 seconds...')
+          console.warn('Map still loading after 10 seconds...')
           console.log('Map loaded status:', map.current.loaded())
           console.log('Map style loaded:', map.current.isStyleLoaded())
         }
@@ -89,7 +89,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
       // Add scale control
       map.current.addControl(new mapboxgl.ScaleControl(), 'bottom-left')
     } catch (error) {
-      console.error('❌ Error initializing map:', error)
+      console.error('Error initializing map:', error)
     }
 
     return () => {
@@ -189,7 +189,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
           map.current.getCanvas().style.cursor = ''
         })
 
-        console.log(`✅ Loaded shade data: ${temporalState.season} ${temporalState.timeOfDay}`)
+        console.log(`Loaded shade data: ${temporalState.season} ${temporalState.timeOfDay}`)
         setIsLoadingLayer(null)
       } catch (error) {
         console.error('Error loading shade data:', error)
@@ -321,7 +321,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 8px;">
-                <h3 style="margin: 0 0 8px 0; font-size: 14px;">💡 Lighting Quality</h3>
+                <h3 style="margin: 0 0 8px 0; font-size: 14px;">Lighting Quality</h3>
                 <div style="font-size: 12px;">
                   <strong>Street:</strong> ${props.STR_NAME || 'N/A'}<br/>
                   <strong>Mean Lux:</strong> ${parseFloat(props.mean_lux || 0).toFixed(1)}<br/>
@@ -341,7 +341,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 8px;">
-                <h3 style="margin: 0 0 8px 0; font-size: 14px;">🔦 Street Light</h3>
+                <h3 style="margin: 0 0 8px 0; font-size: 14px;">Street Light</h3>
                 <div style="font-size: 12px;">
                   <strong>ID:</strong> ${props.Light_ID || props.OBJECTID || 'N/A'}<br/>
                   <strong>Wattage:</strong> ${props.Wattage || 'N/A'}W<br/>
@@ -361,7 +361,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 12px; max-width: 300px;">
-                <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #9c27b0;">🎨 ${props.title || 'Lighting Project'}</h3>
+                <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #9c27b0;">${props.title || 'Lighting Project'}</h3>
                 <p style="font-size: 12px; margin: 0; line-height: 1.5;">${props.description || 'Infrastructure enhancement project'}</p>
               </div>
             `)
@@ -378,7 +378,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
           })
         })
 
-        console.log('✅ Loaded lighting data')
+        console.log('Loaded lighting data')
         setIsLoadingLayer(null)
       } catch (error) {
         console.error('Error loading lighting data:', error)
@@ -463,7 +463,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div style="padding: 8px;">
-                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">🚶 Network Centrality</h3>
+                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">Network Centrality</h3>
                   <div style="font-size: 12px;">
                     <strong>Betweenness (400m):</strong> ${parseFloat(props.cc_betweenness_400 || 0).toFixed(1)}<br/>
                     <strong>Density:</strong> ${parseFloat(props.cc_density_400 || 0).toFixed(1)}<br/>
@@ -514,7 +514,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div style="padding: 8px;">
-                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">🚶 Pedestrian Activity</h3>
+                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">Pedestrian Activity</h3>
                   <div style="font-size: 12px;">
                     <strong>Total Trips:</strong> ${props.total_trip_count || 0}<br/>
                     <strong>Forward:</strong> ${props.forward_trip_count || 0}<br/>
@@ -567,7 +567,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div style="padding: 8px;">
-                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">🚴 Cycling Activity</h3>
+                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">Cycling Activity</h3>
                   <div style="font-size: 12px;">
                     <strong>Total Trips:</strong> ${props.total_trip_count || 0}<br/>
                     <strong>E-Bikes:</strong> ${props.ebike_ride_count || 0}<br/>
@@ -592,7 +592,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
           })
         })
 
-        console.log(`✅ Loaded walkability data: ${walkabilityMode} mode`)
+        console.log(`Loaded walkability data: ${walkabilityMode} mode`)
         setIsLoadingLayer(null)
       } catch (error) {
         console.error('Error loading walkability data:', error)
@@ -627,7 +627,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
     const loadBusiness = async () => {
       try {
         setIsLoadingLayer('business')
-        console.log('📍 Loading business data (POI, properties, stalls, surveys)...')
+        console.log('Loading business data (POI, properties, stalls, surveys)...')
         // Use cached data if already loaded
         const data = businessData || await loadBusinessData()
         if (!businessData) setBusinessData(data)
@@ -765,7 +765,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
         map.current.on('click', 'business-poi-points', (e) => {
           const props = e.features[0].properties
           const rating = parseFloat(props.rating || 0)
-          const stars = '⭐'.repeat(Math.round(rating))
+          const stars = '★'.repeat(Math.round(rating))
           
           new mapboxgl.Popup()
             .setLngLat(e.lngLat)
@@ -777,7 +777,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
                   ${props.primaryTypeDisplayName || props.primaryType || 'Business'}<br/>
                   ${props.editorialSummary || ''}
                 </div>
-                ${props.outdoorSeating === 'true' ? '<div style="margin-top: 6px; color: #4caf50; font-size: 11px;">☕ Outdoor Seating Available</div>' : ''}
+                ${props.outdoorSeating === 'true' ? '<div style="margin-top: 6px; color: #4caf50; font-size: 11px;">Outdoor Seating Available</div>' : ''}
               </div>
             `)
             .addTo(map.current)
@@ -790,7 +790,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 10px;">
-                <h3 style="margin: 0 0 6px 0; font-size: 14px;">🏢 ${props.address || 'Property'}</h3>
+                <h3 style="margin: 0 0 6px 0; font-size: 14px;">${props.address || 'Property'}</h3>
                 <div style="font-size: 12px;">
                   <strong>Category:</strong> ${props.property_category || 'N/A'}<br/>
                   <strong>Units:</strong> ${props.property_count || 0}<br/>
@@ -830,7 +830,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
           })
         })
 
-        console.log('✅ Loaded business data')
+        console.log('Loaded business data')
         setIsLoadingLayer(null)
       } catch (error) {
         console.error('Error loading business data:', error)
@@ -847,7 +847,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
 
     const applyNarrativeScoring = async () => {
       try {
-        console.log(`🎯 Applying narrative scoring for: ${selectedTour}`)
+        console.log(`Applying narrative scoring for: ${selectedTour}`)
         
         // Load necessary data
         const [lightingDataset, walkabilityDataset, businessDataset, shadeDataset] = await Promise.all([
@@ -955,7 +955,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
             .setHTML(`
               <div style="padding: 12px; min-width: 250px;">
                 <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #1a9850;">
-                  🎯 ${selectedTour.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Score
+                  ${selectedTour.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Score
                 </h3>
                 <div style="margin-bottom: 8px;">
                   <div style="background: linear-gradient(to right, #d73027, #f39c12, #1a9850); height: 8px; border-radius: 4px; margin-bottom: 4px;"></div>
@@ -989,7 +989,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
           map.current.getCanvas().style.cursor = ''
         })
 
-        console.log(`✅ Narrative scoring applied. Used layers: ${usedLayers.join(', ')}`)
+        console.log(`Narrative scoring applied. Used layers: ${usedLayers.join(', ')}`)
 
       } catch (error) {
         console.error('Error applying narrative scoring:', error)
@@ -1079,18 +1079,18 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
               onChange={(e) => setPOIFilter(e.target.value)}
             >
               <option value="all">All POI ({businessData?.poi?.features?.length || 0})</option>
-              <option value="restaurant">🍽️ Restaurants</option>
-              <option value="cafe">☕ Cafes & Coffee Shops</option>
-              <option value="bar">🍺 Bars & Pubs</option>
-              <option value="hotel">🏨 Hotels & Lodging</option>
-              <option value="store">🛍️ Stores & Shopping</option>
-              <option value="gallery">🎨 Art Galleries</option>
-              <option value="museum">🏛️ Museums</option>
-              <option value="park">🌳 Parks & Recreation</option>
-              <option value="outdoor">🌿 Outdoor Seating</option>
+              <option value="restaurant">Restaurants</option>
+              <option value="cafe">Cafes & Coffee Shops</option>
+              <option value="bar">Bars & Pubs</option>
+              <option value="hotel">Hotels & Lodging</option>
+              <option value="store">Stores & Shopping</option>
+              <option value="gallery">Art Galleries</option>
+              <option value="museum">Museums</option>
+              <option value="park">Parks & Recreation</option>
+              <option value="outdoor">Outdoor Seating</option>
             </select>
             <div style={{fontSize: '11px', marginTop: '4px', color: '#666'}}>
-              {poiFilter === 'outdoor' && '✓ Shows POI with outdoor seating'}
+              {poiFilter === 'outdoor' && 'Shows POI with outdoor seating'}
             </div>
           </div>
         </div>
@@ -1099,7 +1099,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
       {/* Narrative Tour Data Sources Info */}
       {mapLoaded && mode === 'narrative' && selectedTour && (
         <div className="narrative-info-panel">
-          <h4>📊 Data Layers Combined</h4>
+          <h4>Data Layers Combined</h4>
           <p style={{fontSize: '12px', marginBottom: '8px'}}>
             Street segments scored using:
           </p>
@@ -1146,7 +1146,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
             )}
           </ul>
           <div style={{marginTop: '8px', padding: '6px', background: '#f0f9ff', borderRadius: '4px', fontSize: '10px'}}>
-            💡 Click any street segment to see its score breakdown
+            Click any street segment to see its score breakdown
           </div>
         </div>
       )}

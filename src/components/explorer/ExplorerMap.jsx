@@ -1005,7 +1005,7 @@ const ExplorerMap = ({
                       )}
                       {popupInfo.feature.properties.currentlyOpen !== undefined && (
                         <p style={{ marginTop: '0.5rem', color: popupInfo.feature.properties.currentlyOpen ? '#4caf50' : '#ef4444' }}>
-                          <strong>{popupInfo.feature.properties.currentlyOpen ? '🟢 Open Now' : '🔴 Closed'}</strong>
+                          <strong>{popupInfo.feature.properties.currentlyOpen ? 'Open Now' : 'Closed'}</strong>
                         </p>
                       )}
                     </>
@@ -1019,7 +1019,7 @@ const ExplorerMap = ({
                         <p><strong>Main Challenge:</strong> {popupInfo.feature.properties.stake_big_change}</p>
                       )}
                       {popupInfo.feature.properties.stake_consent === 'yes' && (
-                        <p style={{ fontSize: '0.75rem', color: '#4caf50' }}>✓ Consented to interview</p>
+                        <p style={{ fontSize: '0.75rem', color: '#4caf50' }}>Consented to interview</p>
                       )}
                     </>
                   )}
@@ -1029,7 +1029,7 @@ const ExplorerMap = ({
                     <>
                       <h3>{getBusinessName(popupInfo.feature.properties)}</h3>
                       {popupInfo.feature.properties.rating && (
-                        <p><strong>Rating:</strong> {popupInfo.feature.properties.rating} ⭐</p>
+                        <p><strong>Rating:</strong> {popupInfo.feature.properties.rating}</p>
                       )}
                       {popupInfo.feature.properties.userRatingCount && (
                         <p><strong>Reviews:</strong> {popupInfo.feature.properties.userRatingCount}</p>
@@ -1051,37 +1051,37 @@ const ExplorerMap = ({
                         <strong>Amenities:</strong>
                         <div style={{ marginTop: '0.25rem' }}>
                           {/* Dining Options */}
-                          {isAmenityTrue(popupInfo.feature.properties.dineIn) && <p style={{ margin: '0.25rem 0' }}>🍽️ Dine-in</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.takeout) && <p style={{ margin: '0.25rem 0' }}>🥡 Takeout</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.delivery) && <p style={{ margin: '0.25rem 0' }}>🚚 Delivery</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.curbsidePickup) && <p style={{ margin: '0.25rem 0' }}>🚗 Curbside Pickup</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.reservable) && <p style={{ margin: '0.25rem 0' }}>📅 Reservations</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.dineIn) && <p style={{ margin: '0.25rem 0' }}>Dine-in</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.takeout) && <p style={{ margin: '0.25rem 0' }}>Takeout</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.delivery) && <p style={{ margin: '0.25rem 0' }}>Delivery</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.curbsidePickup) && <p style={{ margin: '0.25rem 0' }}>Curbside Pickup</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.reservable) && <p style={{ margin: '0.25rem 0' }}>Reservations</p>}
                           
                           {/* Food & Beverage */}
-                          {isAmenityTrue(popupInfo.feature.properties.servesBreakfast) && <p style={{ margin: '0.25rem 0' }}>🌅 Breakfast</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.servesBrunch) && <p style={{ margin: '0.25rem 0' }}>🥐 Brunch</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.servesLunch) && <p style={{ margin: '0.25rem 0' }}>🥗 Lunch</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.servesDinner) && <p style={{ margin: '0.25rem 0' }}>🍝 Dinner</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.servesCoffee) && <p style={{ margin: '0.25rem 0' }}>☕ Coffee</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.servesBeer) && <p style={{ margin: '0.25rem 0' }}>🍺 Beer</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.servesWine) && <p style={{ margin: '0.25rem 0' }}>🍷 Wine</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.servesCocktails) && <p style={{ margin: '0.25rem 0' }}>🍹 Cocktails</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.servesDessert) && <p style={{ margin: '0.25rem 0' }}>🍰 Desserts</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.servesVegetarianFood) && <p style={{ margin: '0.25rem 0' }}>🥗 Vegetarian Options</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesBreakfast) && <p style={{ margin: '0.25rem 0' }}>Breakfast</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesBrunch) && <p style={{ margin: '0.25rem 0' }}>Brunch</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesLunch) && <p style={{ margin: '0.25rem 0' }}>Lunch</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesDinner) && <p style={{ margin: '0.25rem 0' }}>Dinner</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesCoffee) && <p style={{ margin: '0.25rem 0' }}>Coffee</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesBeer) && <p style={{ margin: '0.25rem 0' }}>Beer</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesWine) && <p style={{ margin: '0.25rem 0' }}>Wine</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesCocktails) && <p style={{ margin: '0.25rem 0' }}>Cocktails</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesDessert) && <p style={{ margin: '0.25rem 0' }}>Desserts</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesVegetarianFood) && <p style={{ margin: '0.25rem 0' }}>Vegetarian Options</p>}
                           
                           {/* Ambiance & Features */}
-                          {isAmenityTrue(popupInfo.feature.properties.outdoorSeating) && <p style={{ margin: '0.25rem 0' }}>🌳 Outdoor Seating</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.liveMusic) && <p style={{ margin: '0.25rem 0' }}>🎵 Live Music</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.allowsDogs) && <p style={{ margin: '0.25rem 0' }}>🐕 Dog Friendly</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.outdoorSeating) && <p style={{ margin: '0.25rem 0' }}>Outdoor Seating</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.liveMusic) && <p style={{ margin: '0.25rem 0' }}>Live Music</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.allowsDogs) && <p style={{ margin: '0.25rem 0' }}>Dog Friendly</p>}
                           
                           {/* Family & Groups */}
-                          {isAmenityTrue(popupInfo.feature.properties.goodForChildren) && <p style={{ margin: '0.25rem 0' }}>👶 Kid Friendly</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.menuForChildren) && <p style={{ margin: '0.25rem 0' }}>🍼 Kids Menu</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.goodForGroups) && <p style={{ margin: '0.25rem 0' }}>👥 Good for Groups</p>}
-                          {isAmenityTrue(popupInfo.feature.properties.goodForWatchingSports) && <p style={{ margin: '0.25rem 0' }}>⚽ Sports Viewing</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.goodForChildren) && <p style={{ margin: '0.25rem 0' }}>Kid Friendly</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.menuForChildren) && <p style={{ margin: '0.25rem 0' }}>Kids Menu</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.goodForGroups) && <p style={{ margin: '0.25rem 0' }}>Good for Groups</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.goodForWatchingSports) && <p style={{ margin: '0.25rem 0' }}>Sports Viewing</p>}
                           
                           {/* Facilities */}
-                          {isAmenityTrue(popupInfo.feature.properties.restroom) && <p style={{ margin: '0.25rem 0' }}>🚻 Restroom</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.restroom) && <p style={{ margin: '0.25rem 0' }}>Restroom</p>}
                           
                           {/* Accessibility */}
                           {(() => {
@@ -1089,10 +1089,10 @@ const ExplorerMap = ({
                             if (accessibility && typeof accessibility === 'object') {
                               return (
                                 <>
-                                  {accessibility.wheelchairAccessibleEntrance && <p style={{ margin: '0.25rem 0' }}>♿ Wheelchair Accessible Entrance</p>}
-                                  {accessibility.wheelchairAccessibleParking && <p style={{ margin: '0.25rem 0' }}>🅿️ Accessible Parking</p>}
-                                  {accessibility.wheelchairAccessibleRestroom && <p style={{ margin: '0.25rem 0' }}>♿ Accessible Restroom</p>}
-                                  {accessibility.wheelchairAccessibleSeating && <p style={{ margin: '0.25rem 0' }}>♿ Accessible Seating</p>}
+                                  {accessibility.wheelchairAccessibleEntrance && <p style={{ margin: '0.25rem 0' }}>Wheelchair Accessible Entrance</p>}
+                                  {accessibility.wheelchairAccessibleParking && <p style={{ margin: '0.25rem 0' }}>Accessible Parking</p>}
+                                  {accessibility.wheelchairAccessibleRestroom && <p style={{ margin: '0.25rem 0' }}>Accessible Restroom</p>}
+                                  {accessibility.wheelchairAccessibleSeating && <p style={{ margin: '0.25rem 0' }}>Accessible Seating</p>}
                                 </>
                               );
                             }
@@ -1105,10 +1105,10 @@ const ExplorerMap = ({
                             if (payment && typeof payment === 'object') {
                               return (
                                 <>
-                                  {payment.acceptsCreditCards && <p style={{ margin: '0.25rem 0' }}>💳 Credit Cards</p>}
-                                  {payment.acceptsDebitCards && <p style={{ margin: '0.25rem 0' }}>💳 Debit Cards</p>}
-                                  {payment.acceptsNfc && <p style={{ margin: '0.25rem 0' }}>📱 Contactless Payment</p>}
-                                  {payment.acceptsCashOnly && <p style={{ margin: '0.25rem 0' }}>💵 Cash Only</p>}
+                                  {payment.acceptsCreditCards && <p style={{ margin: '0.25rem 0' }}>Credit Cards</p>}
+                                  {payment.acceptsDebitCards && <p style={{ margin: '0.25rem 0' }}>Debit Cards</p>}
+                                  {payment.acceptsNfc && <p style={{ margin: '0.25rem 0' }}>Contactless Payment</p>}
+                                  {payment.acceptsCashOnly && <p style={{ margin: '0.25rem 0' }}>Cash Only</p>}
                                 </>
                               );
                             }
@@ -1143,7 +1143,7 @@ const ExplorerMap = ({
                         <p><strong>Category:</strong> {popupInfo.feature.properties.primaryType.replace(/_/g, ' ')}</p>
                       )}
                       {popupInfo.feature.properties.rating && (
-                        <p><strong>Rating:</strong> {popupInfo.feature.properties.rating} ⭐</p>
+                        <p><strong>Rating:</strong> {popupInfo.feature.properties.rating}</p>
                       )}
                     </>
                   )}
