@@ -24,15 +24,26 @@ const WalkabilityAnalytics = ({
   onWalkabilityModeChange,
   networkMetric,
   onNetworkMetricChange,
+  transitView,
+  onTransitViewChange,
   pedestrianData,
   cyclingData,
   networkData,
+  transitData,
   hideLayerControls = false,
   selectedSegment = null
 }) => {
   const [stats, setStats] = useState(null)
   const [insightView, setInsightView] = useState('movement')
   const [scaleToggle, setScaleToggle] = useState('400') // '400' or '800'
+  const [localTransitView, setLocalTransitView] = useState(transitView || 'combined')
+  
+  // Sync local transit view with prop
+  useEffect(() => {
+    if (transitView) {
+      setLocalTransitView(transitView)
+    }
+  }, [transitView])
   
   // Calculate statistics based on current mode
   useEffect(() => {
@@ -84,8 +95,20 @@ const WalkabilityAnalytics = ({
           ? Math.min(...values.filter(v => v > 0)).toFixed(3)
           : Math.round(Math.min(...values.filter(v => v > 0)))
       })
+    } else if (walkabilityMode === 'transit' && transitData?.features) {
+      const features = transitData.features
+      const busTimes = features.map(f => f.properties.walk_time_bus || 0).filter(t => t > 0)
+      const trainTimes = features.map(f => f.properties.walk_time_train || 0).filter(t => t > 0)
+      
+      setStats({
+        totalSegments: features.length,
+        avgBusTime: busTimes.length > 0 ? (busTimes.reduce((sum, v) => sum + v, 0) / busTimes.length).toFixed(1) : 0,
+        maxBusTime: busTimes.length > 0 ? Math.max(...busTimes).toFixed(1) : 0,
+        avgTrainTime: trainTimes.length > 0 ? (trainTimes.reduce((sum, v) => sum + v, 0) / trainTimes.length).toFixed(1) : 0,
+        maxTrainTime: trainTimes.length > 0 ? Math.max(...trainTimes).toFixed(1) : 0
+      })
     }
-  }, [walkabilityMode, pedestrianData, cyclingData, networkData, networkMetric])
+  }, [walkabilityMode, pedestrianData, cyclingData, networkData, transitData, networkMetric])
   
 // Helper function to calculate network insights
 const calculateNetworkInsights = () => {
@@ -202,6 +225,17 @@ const networkInsights = calculateNetworkInsights()
             onChange={(e) => onWalkabilityModeChange(e.target.value)}
           />
           <span className="radio-label">Network Analysis</span>
+        </label>
+        
+        <label className="mode-radio">
+          <input
+            type="radio"
+            name="walkability-mode"
+            value="transit"
+            checked={walkabilityMode === 'transit'}
+            onChange={(e) => onWalkabilityModeChange(e.target.value)}
+          />
+          <span className="radio-label">Transit Accessibility</span>
         </label>
       </div>
       )}
@@ -655,6 +689,134 @@ const networkInsights = calculateNetworkInsights()
             <div className="quick-stat-row">
               <span className="quick-stat-label">Current Metric:</span>
               <span className="quick-stat-value">{stats?.metricName || 'N/A'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Transit Accessibility Mode */}
+      {walkabilityMode === 'transit' && (
+        <div className="analytics-content">
+          <h3>Transit Accessibility</h3>
+          <p className="section-description">
+            Walking accessibility from train station and MyCiti bus stops. Lower times (green) indicate better transit access.
+          </p>
+
+          {/* Transit View Toggle */}
+          <div className="transit-view-toggle">
+            <button 
+              className={`toggle-btn ${(transitView || localTransitView) === 'combined' ? 'active' : ''}`}
+              onClick={() => {
+                setLocalTransitView('combined')
+                onTransitViewChange?.('combined')
+              }}
+            >
+              Combined View
+            </button>
+            <button 
+              className={`toggle-btn ${(transitView || localTransitView) === 'bus' ? 'active' : ''}`}
+              onClick={() => {
+                setLocalTransitView('bus')
+                onTransitViewChange?.('bus')
+              }}
+            >
+              Bus Stops Only
+            </button>
+            <button 
+              className={`toggle-btn ${(transitView || localTransitView) === 'train' ? 'active' : ''}`}
+              onClick={() => {
+                setLocalTransitView('train')
+                onTransitViewChange?.('train')
+              }}
+            >
+              Train Station Only
+            </button>
+          </div>
+
+          <div className="quick-stats">
+            <div className="stat-item">
+              <span className="stat-value">{stats?.totalSegments || 0}</span>
+              <span className="stat-label">Road Segments</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">{stats?.avgBusTime || 0} min</span>
+              <span className="stat-label">Avg Bus Stop Distance</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">{stats?.avgTrainTime || 0} min</span>
+              <span className="stat-label">Avg Train Station Distance</span>
+            </div>
+          </div>
+
+          {selectedSegment ? (
+            <>
+              <div className="selected-segment-header">
+                <h4>Selected Street Segment</h4>
+                <button className="clear-selection-btn" onClick={() => window.dispatchEvent(new CustomEvent('clearSegmentSelection'))}>Clear</button>
+              </div>
+              <div className="selected-segment-info">
+                {selectedSegment.STR_NAME && (
+                  <div className="segment-name">
+                    <strong>{selectedSegment.STR_NAME}</strong>
+                  </div>
+                )}
+                <div className="transit-times">
+                  <div className="transit-time-card bus-card">
+                    <div className="transit-icon">Bus</div>
+                    <div className="time-value">{(selectedSegment.walk_time_bus || 0).toFixed(1)}</div>
+                    <div className="time-label">minutes walk</div>
+                    <div className="accessibility-rating" style={{color: selectedSegment.walk_time_bus < 5 ? '#34d399' : selectedSegment.walk_time_bus < 10 ? '#fbbf24' : '#f97316'}}>
+                      {selectedSegment.walk_time_bus < 5 ? 'Excellent Access' : selectedSegment.walk_time_bus < 10 ? 'Good Access' : 'Limited Access'}
+                    </div>
+                  </div>
+                  <div className="transit-time-card train-card">
+                    <div className="transit-icon">Train</div>
+                    <div className="time-value">{(selectedSegment.walk_time_train || 0).toFixed(1)}</div>
+                    <div className="time-label">minutes walk</div>
+                    <div className="accessibility-rating" style={{color: selectedSegment.walk_time_train < 5 ? '#34d399' : selectedSegment.walk_time_train < 10 ? '#fbbf24' : '#f97316'}}>
+                      {selectedSegment.walk_time_train < 5 ? 'Excellent Access' : selectedSegment.walk_time_train < 10 ? 'Good Access' : 'Limited Access'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <hr style={{borderColor: '#2a3f2d', margin: '1rem 0'}} />
+            </>
+          ) : null}
+
+          <div className="transit-details">
+            <div className="transit-detail-card">
+              <h4>MyCiti Bus Stops</h4>
+              <div className="detail-row">
+                <span className="detail-label">Average Walking Time:</span>
+                <span className="detail-value">{stats?.avgBusTime || 0} mins</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Maximum Walking Time:</span>
+                <span className="detail-value">{stats?.maxBusTime || 0} mins</span>
+              </div>
+            </div>
+
+            <div className="transit-detail-card">
+              <h4>Train Station</h4>
+              <div className="detail-row">
+                <span className="detail-label">Average Walking Time:</span>
+                <span className="detail-value">{stats?.avgTrainTime || 0} mins</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Maximum Walking Time:</span>
+                <span className="detail-value">{stats?.maxTrainTime || 0} mins</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="transit-legend">
+            <h4>Walking Time Legend</h4>
+            <div className="legend-description">Streets are colored by walking time to nearest transit point</div>
+            <div className="gradient-bar-new transit-gradient"></div>
+            <div className="gradient-labels-new">
+              <span>0 min (Excellent)</span>
+              <span>5 min (Good)</span>
+              <span>10+ min (Limited)</span>
             </div>
           </div>
         </div>

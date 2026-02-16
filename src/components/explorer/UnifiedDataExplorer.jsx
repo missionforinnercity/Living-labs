@@ -93,6 +93,7 @@ const LAYER_CATEGORIES = [
   { id: 'pedestrianRoutes', label: 'Pedestrian Routes', dashboard: 'walkability', dataKey: 'pedestrianActivity' },
   { id: 'cyclingRoutes', label: 'Cycling Routes', dashboard: 'walkability', dataKey: 'cyclingActivity' },
   { id: 'networkAnalysis', label: 'Network Analysis', dashboard: 'walkability', dataKey: 'network' },
+  { id: 'transitAccessibility', label: 'Transit Accessibility', dashboard: 'walkability', dataKey: 'transitData' },
   // Lighting layers
   { id: 'streetLighting', label: 'Street Lighting', dashboard: 'lighting', dataKey: 'lightingSegments' },
   { id: 'lightingProjects', label: 'Municipal Street Lights', dashboard: 'lighting', dataKey: 'lightingProjects' },
@@ -135,11 +136,13 @@ const UnifiedDataExplorer = () => {
   const [expandedGroups, setExpandedGroups] = useState({})
   
   // Walkability dashboard state
-  const [walkabilityMode, setWalkabilityMode] = useState('pedestrian') // 'pedestrian', 'cycling', 'network'
+  const [walkabilityMode, setWalkabilityMode] = useState('pedestrian') // 'pedestrian', 'cycling', 'network', 'transit'
   const [networkMetric, setNetworkMetric] = useState('betweenness_800') // betweenness metric to display
+  const [transitView, setTransitView] = useState('combined') // 'combined', 'bus', 'train'
   const [networkData, setNetworkData] = useState(null)
   const [pedestrianData, setPedestrianData] = useState(null)
   const [cyclingData, setCyclingData] = useState(null)
+  const [transitData, setTransitData] = useState(null)
   const [selectedRouteSegment, setSelectedRouteSegment] = useState(null)
   
   // Lighting dashboard state
@@ -275,7 +278,7 @@ const UnifiedDataExplorer = () => {
           cycling: '/data/processed/walkability/cycling_month_all.geojson'
         })
         
-        const [network, pedestrian, cycling] = await Promise.all([
+        const [network, pedestrian, cycling, transit] = await Promise.all([
           fetch(shadeFile).then(async r => {
             if (!r.ok) throw new Error(`Shade file failed: ${r.status} ${r.statusText}`)
             return r.json()
@@ -286,6 +289,10 @@ const UnifiedDataExplorer = () => {
           }),
           fetch('/data/processed/walkability/cycling_month_all.geojson').then(async r => {
             if (!r.ok) throw new Error(`Cycling file failed: ${r.status} ${r.statusText}`)
+            return r.json()
+          }),
+          fetch('/data/walkabilty/roads_with_walking_times.geojson').then(async r => {
+            if (!r.ok) throw new Error(`Transit walking times file failed: ${r.status} ${r.statusText}`)
             return r.json()
           })
         ])
@@ -335,19 +342,21 @@ const UnifiedDataExplorer = () => {
         console.log('Walkability data loaded:', {
           network: network.features?.length,
           pedestrian: pedestrian.features?.length,
-          cycling: cycling.features?.length
+          cycling: cycling.features?.length,
+          transit: transit.features?.length
         })
 
         setNetworkData(network)
         setPedestrianData(pedestrian)
         setCyclingData(cycling)
+        setTransitData(transit)
       } catch (error) {
         console.error('Error loading walkability data:', error)
       }
     }
     
     // Load walkability data when dashboard is walkability OR when any walkability layer is locked
-    const hasLockedWalkabilityLayer = ['pedestrianRoutes', 'cyclingRoutes', 'networkAnalysis'].some(id => lockedLayers.has(id))
+    const hasLockedWalkabilityLayer = ['pedestrianRoutes', 'cyclingRoutes', 'networkAnalysis', 'transitAccessibility'].some(id => lockedLayers.has(id))
     if (dashboardMode === 'walkability' || hasLockedWalkabilityLayer) {
       loadWalkabilityData()
     }
@@ -588,7 +597,8 @@ const UnifiedDataExplorer = () => {
       const modeMap = {
         pedestrianRoutes: 'pedestrian',
         cyclingRoutes: 'cycling',
-        networkAnalysis: 'network'
+        networkAnalysis: 'network',
+        transitAccessibility: 'transit'
       }
       if (modeMap[categoryId]) {
         setWalkabilityMode(modeMap[categoryId])
@@ -736,7 +746,8 @@ const UnifiedDataExplorer = () => {
                 const categoryMap = {
                   pedestrian: 'pedestrianRoutes',
                   cycling: 'cyclingRoutes',
-                  network: 'networkAnalysis'
+                  network: 'networkAnalysis',
+                  transit: 'transitAccessibility'
                 }
                 if (categoryMap[mode]) {
                   selectCategory(categoryMap[mode])
@@ -744,9 +755,12 @@ const UnifiedDataExplorer = () => {
               }}
               networkMetric={networkMetric}
               onNetworkMetricChange={setNetworkMetric}
+              transitView={transitView}
+              onTransitViewChange={setTransitView}
               pedestrianData={pedestrianData}
               cyclingData={cyclingData}
               networkData={networkData}
+              transitData={transitData}
               hideLayerControls={true}
               selectedSegment={selectedRouteSegment}
             />
@@ -784,6 +798,7 @@ const UnifiedDataExplorer = () => {
             businessMode={businessMode}
             walkabilityMode={walkabilityMode}
             networkMetric={networkMetric}
+            transitView={transitView}
             dayOfWeek={dayOfWeek}
             hour={hour}
             businessesData={businessesData}
@@ -793,6 +808,7 @@ const UnifiedDataExplorer = () => {
             networkData={networkData}
             pedestrianData={pedestrianData}
             cyclingData={cyclingData}
+            transitData={transitData}
             lightingSegments={lightingSegments}
             lightingProjects={lightingProjects}
             temperatureData={temperatureData}

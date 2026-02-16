@@ -13,6 +13,7 @@ const ExplorerMap = ({
   businessMode,
   walkabilityMode,
   networkMetric,
+  transitView = 'combined',
   dayOfWeek,
   hour,
   businessesData,
@@ -22,6 +23,7 @@ const ExplorerMap = ({
   networkData,
   pedestrianData,
   cyclingData,
+  transitData,
   lightingSegments,
   lightingProjects,
   temperatureData,
@@ -125,8 +127,13 @@ const ExplorerMap = ({
       }
       
       // For walkability dashboard, set selected route segment (no popup)
-      if (dashboardMode === 'walkability' && (feature.source === 'pedestrian-routes' || feature.source === 'cycling-routes')) {
-        onRouteSegmentClick?.(feature.properties, feature.source === 'pedestrian-routes' ? 'pedestrian' : 'cycling')
+      if (dashboardMode === 'walkability' && (feature.source === 'pedestrian-routes' || feature.source === 'cycling-routes' || feature.source === 'transit-accessibility')) {
+        const modeMap = {
+          'pedestrian-routes': 'pedestrian',
+          'cycling-routes': 'cycling',
+          'transit-accessibility': 'transit'
+        }
+        onRouteSegmentClick?.(feature.properties, modeMap[feature.source])
         return // Don't show popup for route segments
       }
       
@@ -166,6 +173,7 @@ const ExplorerMap = ({
           'cycling-layer',
           'pedestrian-routes-layer',
           'cycling-routes-layer',
+          'transit-accessibility-layer',
           'lighting-segments-layer',
           'temperature-segments-layer',
           'greenery-skyview-layer',
@@ -808,6 +816,55 @@ const ExplorerMap = ({
                 </Source>
               )
             })()}
+        
+        {/* Transit Accessibility - Walking times from train/bus */}
+        {shouldRenderCategory('transitAccessibility') && transitData && (
+          <Source
+            id="transit-accessibility"
+            type="geojson"
+            data={transitData}
+          >
+            <Layer
+              id="transit-accessibility-layer"
+              type="line"
+              paint={{
+                'line-color': [
+                  'interpolate',
+                  ['linear'],
+                  // Use the appropriate time based on transitView
+                  transitView === 'bus' ? ['coalesce', ['get', 'walk_time_bus'], 999] :
+                  transitView === 'train' ? ['coalesce', ['get', 'walk_time_train'], 999] :
+                  ['min',
+                    ['coalesce', ['get', 'walk_time_bus'], 999],
+                    ['coalesce', ['get', 'walk_time_train'], 999]
+                  ],
+                  0, '#064e3b',     // Dark green - immediate access
+                  2, '#059669',     // Green - excellent
+                  5, '#34d399',     // Light green - good
+                  8, '#fbbf24',     // Yellow - moderate
+                  10, '#f97316',    // Orange - limited
+                  15, '#dc2626',    // Red - poor
+                  20, '#991b1b'     // Dark red - very limited
+                ],
+                'line-width': [
+                  'interpolate',
+                  ['linear'],
+                  transitView === 'bus' ? ['coalesce', ['get', 'walk_time_bus'], 999] :
+                  transitView === 'train' ? ['coalesce', ['get', 'walk_time_train'], 999] :
+                  ['min',
+                    ['coalesce', ['get', 'walk_time_bus'], 999],
+                    ['coalesce', ['get', 'walk_time_train'], 999]
+                  ],
+                  0, 6,
+                  5, 4,
+                  10, 3,
+                  20, 2
+                ],
+                'line-opacity': 0.85
+              }}
+            />
+          </Source>
+        )}
         
         {/* Lighting Layers */}
         {/* Lighting Segments Layer */}
