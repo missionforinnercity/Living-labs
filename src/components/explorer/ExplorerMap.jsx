@@ -68,8 +68,18 @@ const ExplorerMap = ({
       return displayName.text
     }
     
+    // Check for biz_name (vendor opinions/street stalls)
+    if (properties.biz_name && properties.biz_name.trim() !== '') {
+      return properties.biz_name
+    }
+    
     // Fallbacks
-    return displayName || properties.name || 'Business'
+    return displayName || properties.name || 'Street Vendor'
+  }
+
+  // Helper function to check if amenity is true (handles both boolean and string)
+  const isAmenityTrue = (value) => {
+    return value === true || value === 'True' || value === 'true'
   }
   const [viewState, setViewState] = useState({
     longitude: 18.4241,
@@ -356,11 +366,39 @@ const ExplorerMap = ({
                 type: 'FeatureCollection',
                 features: businessesData.features.filter(f => {
                   const props = f.properties
-                  if (amenitiesFilters.allowsDogs && !props.allowsDogs) return false
-                  if (amenitiesFilters.servesBeer && !props.servesBeer && !props.servesWine) return false
-                  if (amenitiesFilters.servesCoffee && !props.servesCoffee) return false
-                  if (amenitiesFilters.outdoorSeating && !props.outdoorSeating) return false
-                  if (amenitiesFilters.liveMusic && !props.liveMusic) return false
+                  
+                  // Dining Options
+                  if (amenitiesFilters.dineIn && !isAmenityTrue(props.dineIn)) return false
+                  if (amenitiesFilters.takeout && !isAmenityTrue(props.takeout)) return false
+                  if (amenitiesFilters.delivery && !isAmenityTrue(props.delivery)) return false
+                  if (amenitiesFilters.reservable && !isAmenityTrue(props.reservable)) return false
+                  
+                  // Meals
+                  if (amenitiesFilters.servesBreakfast && !isAmenityTrue(props.servesBreakfast)) return false
+                  if (amenitiesFilters.servesBrunch && !isAmenityTrue(props.servesBrunch)) return false
+                  if (amenitiesFilters.servesLunch && !isAmenityTrue(props.servesLunch)) return false
+                  if (amenitiesFilters.servesDinner && !isAmenityTrue(props.servesDinner)) return false
+                  
+                  // Beverages
+                  if (amenitiesFilters.servesCoffee && !isAmenityTrue(props.servesCoffee)) return false
+                  if (amenitiesFilters.servesBeer && !isAmenityTrue(props.servesBeer)) return false
+                  if (amenitiesFilters.servesWine && !isAmenityTrue(props.servesWine)) return false
+                  if (amenitiesFilters.servesCocktails && !isAmenityTrue(props.servesCocktails)) return false
+                  
+                  // Features
+                  if (amenitiesFilters.outdoorSeating && !isAmenityTrue(props.outdoorSeating)) return false
+                  if (amenitiesFilters.liveMusic && !isAmenityTrue(props.liveMusic)) return false
+                  if (amenitiesFilters.allowsDogs && !isAmenityTrue(props.allowsDogs)) return false
+                  if (amenitiesFilters.goodForGroups && !isAmenityTrue(props.goodForGroups)) return false
+                  if (amenitiesFilters.goodForChildren && !isAmenityTrue(props.goodForChildren)) return false
+                  
+                  // Accessibility
+                  if (amenitiesFilters.wheelchairAccessible) {
+                    const accessibility = props.accessibilityOptions
+                    if (!accessibility || typeof accessibility !== 'object') return false
+                    if (!accessibility.wheelchairAccessibleEntrance) return false
+                  }
+                  
                   return true
                 })
               } : businessesData
@@ -990,15 +1028,86 @@ const ExplorerMap = ({
                       <div style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
                         <strong>Amenities:</strong>
                         <div style={{ marginTop: '0.25rem' }}>
-                          {popupInfo.feature.properties.allowsDogs && <p style={{ margin: '0.25rem 0' }}>🐕 Dog Friendly</p>}
-                          {popupInfo.feature.properties.servesBeer && <p style={{ margin: '0.25rem 0' }}>🍺 Serves Beer</p>}
-                          {popupInfo.feature.properties.servesWine && <p style={{ margin: '0.25rem 0' }}>🍷 Serves Wine</p>}
-                          {popupInfo.feature.properties.servesCoffee && <p style={{ margin: '0.25rem 0' }}>☕ Serves Coffee</p>}
-                          {popupInfo.feature.properties.outdoorSeating && <p style={{ margin: '0.25rem 0' }}>🌳 Outdoor Seating</p>}
-                          {popupInfo.feature.properties.liveMusic && <p style={{ margin: '0.25rem 0' }}>🎵 Live Music</p>}
-                          {!popupInfo.feature.properties.allowsDogs && !popupInfo.feature.properties.servesBeer && !popupInfo.feature.properties.servesWine && !popupInfo.feature.properties.servesCoffee && !popupInfo.feature.properties.outdoorSeating && !popupInfo.feature.properties.liveMusic && (
-                            <p style={{ margin: '0.25rem 0', color: '#999' }}>No special amenities listed</p>
-                          )}
+                          {/* Dining Options */}
+                          {isAmenityTrue(popupInfo.feature.properties.dineIn) && <p style={{ margin: '0.25rem 0' }}>🍽️ Dine-in</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.takeout) && <p style={{ margin: '0.25rem 0' }}>🥡 Takeout</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.delivery) && <p style={{ margin: '0.25rem 0' }}>🚚 Delivery</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.curbsidePickup) && <p style={{ margin: '0.25rem 0' }}>🚗 Curbside Pickup</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.reservable) && <p style={{ margin: '0.25rem 0' }}>📅 Reservations</p>}
+                          
+                          {/* Food & Beverage */}
+                          {isAmenityTrue(popupInfo.feature.properties.servesBreakfast) && <p style={{ margin: '0.25rem 0' }}>🌅 Breakfast</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesBrunch) && <p style={{ margin: '0.25rem 0' }}>🥐 Brunch</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesLunch) && <p style={{ margin: '0.25rem 0' }}>🥗 Lunch</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesDinner) && <p style={{ margin: '0.25rem 0' }}>🍝 Dinner</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesCoffee) && <p style={{ margin: '0.25rem 0' }}>☕ Coffee</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesBeer) && <p style={{ margin: '0.25rem 0' }}>🍺 Beer</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesWine) && <p style={{ margin: '0.25rem 0' }}>🍷 Wine</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesCocktails) && <p style={{ margin: '0.25rem 0' }}>🍹 Cocktails</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesDessert) && <p style={{ margin: '0.25rem 0' }}>🍰 Desserts</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.servesVegetarianFood) && <p style={{ margin: '0.25rem 0' }}>🥗 Vegetarian Options</p>}
+                          
+                          {/* Ambiance & Features */}
+                          {isAmenityTrue(popupInfo.feature.properties.outdoorSeating) && <p style={{ margin: '0.25rem 0' }}>🌳 Outdoor Seating</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.liveMusic) && <p style={{ margin: '0.25rem 0' }}>🎵 Live Music</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.allowsDogs) && <p style={{ margin: '0.25rem 0' }}>🐕 Dog Friendly</p>}
+                          
+                          {/* Family & Groups */}
+                          {isAmenityTrue(popupInfo.feature.properties.goodForChildren) && <p style={{ margin: '0.25rem 0' }}>👶 Kid Friendly</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.menuForChildren) && <p style={{ margin: '0.25rem 0' }}>🍼 Kids Menu</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.goodForGroups) && <p style={{ margin: '0.25rem 0' }}>👥 Good for Groups</p>}
+                          {isAmenityTrue(popupInfo.feature.properties.goodForWatchingSports) && <p style={{ margin: '0.25rem 0' }}>⚽ Sports Viewing</p>}
+                          
+                          {/* Facilities */}
+                          {isAmenityTrue(popupInfo.feature.properties.restroom) && <p style={{ margin: '0.25rem 0' }}>🚻 Restroom</p>}
+                          
+                          {/* Accessibility */}
+                          {(() => {
+                            const accessibility = popupInfo.feature.properties.accessibilityOptions;
+                            if (accessibility && typeof accessibility === 'object') {
+                              return (
+                                <>
+                                  {accessibility.wheelchairAccessibleEntrance && <p style={{ margin: '0.25rem 0' }}>♿ Wheelchair Accessible Entrance</p>}
+                                  {accessibility.wheelchairAccessibleParking && <p style={{ margin: '0.25rem 0' }}>🅿️ Accessible Parking</p>}
+                                  {accessibility.wheelchairAccessibleRestroom && <p style={{ margin: '0.25rem 0' }}>♿ Accessible Restroom</p>}
+                                  {accessibility.wheelchairAccessibleSeating && <p style={{ margin: '0.25rem 0' }}>♿ Accessible Seating</p>}
+                                </>
+                              );
+                            }
+                            return null;
+                          })()}
+                          
+                          {/* Payment Options */}
+                          {(() => {
+                            const payment = popupInfo.feature.properties.paymentOptions;
+                            if (payment && typeof payment === 'object') {
+                              return (
+                                <>
+                                  {payment.acceptsCreditCards && <p style={{ margin: '0.25rem 0' }}>💳 Credit Cards</p>}
+                                  {payment.acceptsDebitCards && <p style={{ margin: '0.25rem 0' }}>💳 Debit Cards</p>}
+                                  {payment.acceptsNfc && <p style={{ margin: '0.25rem 0' }}>📱 Contactless Payment</p>}
+                                  {payment.acceptsCashOnly && <p style={{ margin: '0.25rem 0' }}>💵 Cash Only</p>}
+                                </>
+                              );
+                            }
+                            return null;
+                          })()}
+                          
+                          {/* No amenities message */}
+                          {(() => {
+                            const props = popupInfo.feature.properties;
+                            const hasAnyAmenity = isAmenityTrue(props.dineIn) || isAmenityTrue(props.takeout) || isAmenityTrue(props.delivery) || 
+                              isAmenityTrue(props.curbsidePickup) || isAmenityTrue(props.reservable) ||
+                              isAmenityTrue(props.servesBreakfast) || isAmenityTrue(props.servesBrunch) || isAmenityTrue(props.servesLunch) || 
+                              isAmenityTrue(props.servesDinner) || isAmenityTrue(props.servesCoffee) ||
+                              isAmenityTrue(props.servesBeer) || isAmenityTrue(props.servesWine) || isAmenityTrue(props.servesCocktails) || 
+                              isAmenityTrue(props.servesDessert) || isAmenityTrue(props.servesVegetarianFood) ||
+                              isAmenityTrue(props.outdoorSeating) || isAmenityTrue(props.liveMusic) || isAmenityTrue(props.allowsDogs) || 
+                              isAmenityTrue(props.goodForChildren) || isAmenityTrue(props.menuForChildren) ||
+                              isAmenityTrue(props.goodForGroups) || isAmenityTrue(props.goodForWatchingSports) || isAmenityTrue(props.restroom) || 
+                              props.accessibilityOptions || props.paymentOptions;
+                            return !hasAnyAmenity && <p style={{ margin: '0.25rem 0', color: '#999' }}>No amenities information available</p>;
+                          })()}
                         </div>
                       </div>
                     </>

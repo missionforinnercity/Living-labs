@@ -534,61 +534,115 @@ const BusinessAnalytics = ({
           </div>
           
           <div className="amenities-filters">
-            <label className="filter-checkbox">
-              <input 
-                type="checkbox" 
-                checked={amenitiesFiltersProps.allowsDogs || false}
-                onChange={() => onAmenitiesFiltersChange({
-                  ...amenitiesFiltersProps,
-                  allowsDogs: !amenitiesFiltersProps.allowsDogs
-                })}
-              />
-              <span>🐕 Dog Friendly</span>
-            </label>
-            <label className="filter-checkbox">
-              <input 
-                type="checkbox"
-                checked={amenitiesFiltersProps.servesBeer || false}
-                onChange={() => onAmenitiesFiltersChange({
-                  ...amenitiesFiltersProps,
-                  servesBeer: !amenitiesFiltersProps.servesBeer
-                })}
-              />
-              <span>🍺 Serves Beer/Wine</span>
-            </label>
-            <label className="filter-checkbox">
-              <input 
-                type="checkbox"
-                checked={amenitiesFiltersProps.servesCoffee || false}
-                onChange={() => onAmenitiesFiltersChange({
-                  ...amenitiesFiltersProps,
-                  servesCoffee: !amenitiesFiltersProps.servesCoffee
-                })}
-              />
-              <span>☕ Serves Coffee</span>
-            </label>
-            <label className="filter-checkbox">
-              <input 
-                type="checkbox"
-                checked={amenitiesFiltersProps.outdoorSeating || false}
-                onChange={() => onAmenitiesFiltersChange({
-                  ...amenitiesFiltersProps,
-                  outdoorSeating: !amenitiesFiltersProps.outdoorSeating
-                })}
-              />
-              <span>🌳 Outdoor Seating</span>
-            </label>
-            <label className="filter-checkbox">
-              <input 
-                type="checkbox"
-                checked={amenitiesFiltersProps.liveMusic || false}
-                onChange={() => onAmenitiesFiltersChange({
-                  ...amenitiesFiltersProps,
-                  liveMusic: !amenitiesFiltersProps.liveMusic
-                })}
-              />
-              <span>🎵 Live Music</span>
-            </label>
+            {/* Dining Options */}
+            <div className="amenity-group">
+              <div className="amenity-group-label">Dining Options</div>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.dineIn || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, dineIn: !amenitiesFiltersProps.dineIn})} />
+                <span>🍽️ Dine-in</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.takeout || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, takeout: !amenitiesFiltersProps.takeout})} />
+                <span>🥡 Takeout</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.delivery || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, delivery: !amenitiesFiltersProps.delivery})} />
+                <span>🚚 Delivery</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.reservable || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, reservable: !amenitiesFiltersProps.reservable})} />
+                <span>📅 Reservations</span>
+              </label>
+            </div>
+
+            {/* Meals */}
+            <div className="amenity-group">
+              <div className="amenity-group-label">Meals</div>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.servesBreakfast || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesBreakfast: !amenitiesFiltersProps.servesBreakfast})} />
+                <span>🌅 Breakfast</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.servesBrunch || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesBrunch: !amenitiesFiltersProps.servesBrunch})} />
+                <span>🥐 Brunch</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.servesLunch || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesLunch: !amenitiesFiltersProps.servesLunch})} />
+                <span>🥗 Lunch</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.servesDinner || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesDinner: !amenitiesFiltersProps.servesDinner})} />
+                <span>🍝 Dinner</span>
+              </label>
+            </div>
+
+            {/* Beverages */}
+            <div className="amenity-group">
+              <div className="amenity-group-label">Beverages</div>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.servesCoffee || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesCoffee: !amenitiesFiltersProps.servesCoffee})} />
+                <span>☕ Coffee</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.servesBeer || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesBeer: !amenitiesFiltersProps.servesBeer})} />
+                <span>🍺 Beer</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.servesWine || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesWine: !amenitiesFiltersProps.servesWine})} />
+                <span>🍷 Wine</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.servesCocktails || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesCocktails: !amenitiesFiltersProps.servesCocktails})} />
+                <span>🍹 Cocktails</span>
+              </label>
+            </div>
+
+            {/* Features */}
+            <div className="amenity-group">
+              <div className="amenity-group-label">Features</div>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.outdoorSeating || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, outdoorSeating: !amenitiesFiltersProps.outdoorSeating})} />
+                <span>🌳 Outdoor Seating</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.liveMusic || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, liveMusic: !amenitiesFiltersProps.liveMusic})} />
+                <span>🎵 Live Music</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.allowsDogs || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, allowsDogs: !amenitiesFiltersProps.allowsDogs})} />
+                <span>🐕 Dog Friendly</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.goodForGroups || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, goodForGroups: !amenitiesFiltersProps.goodForGroups})} />
+                <span>👥 Good for Groups</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.goodForChildren || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, goodForChildren: !amenitiesFiltersProps.goodForChildren})} />
+                <span>👶 Kid Friendly</span>
+              </label>
+              <label className="filter-checkbox">
+                <input type="checkbox" checked={amenitiesFiltersProps.wheelchairAccessible || false}
+                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, wheelchairAccessible: !amenitiesFiltersProps.wheelchairAccessible})} />
+                <span>♿ Wheelchair Accessible</span>
+              </label>
+            </div>
           </div>
         </div>
       )}
