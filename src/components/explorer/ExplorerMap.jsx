@@ -24,6 +24,8 @@ const ExplorerMap = ({
   pedestrianData,
   cyclingData,
   transitData,
+  busStopsData,
+  trainStationData,
   lightingSegments,
   lightingProjects,
   temperatureData,
@@ -137,6 +139,17 @@ const ExplorerMap = ({
         return // Don't show popup for route segments
       }
       
+      // For bus stops and train station, show a basic popup
+      if (feature.source === 'bus-stops' || feature.source === 'train-station') {
+        setSelectedFeature(feature)
+        setPopupInfo({
+          longitude: event.lngLat.lng,
+          latitude: event.lngLat.lat,
+          feature: feature
+        })
+        return
+      }
+      
       setSelectedFeature(feature)
       setPopupInfo({
         longitude: event.lngLat.lng,
@@ -174,6 +187,8 @@ const ExplorerMap = ({
           'pedestrian-routes-layer',
           'cycling-routes-layer',
           'transit-accessibility-layer',
+          'bus-stops-layer',
+          'train-station-fill',
           'lighting-segments-layer',
           'temperature-segments-layer',
           'greenery-skyview-layer',
@@ -866,6 +881,52 @@ const ExplorerMap = ({
           </Source>
         )}
         
+        {/* Bus Stops - White outlined circles */}
+        {shouldRenderCategory('transitAccessibility') && busStopsData && (
+          <Source
+            id="bus-stops"
+            type="geojson"
+            data={busStopsData}
+          >
+            <Layer
+              id="bus-stops-layer"
+              type="circle"
+              paint={{
+                'circle-radius': 5,
+                'circle-color': 'rgba(255, 255, 255, 0.05)',
+                'circle-stroke-color': 'rgba(255, 255, 255, 0.4)',
+                'circle-stroke-width': 1.5
+              }}
+            />
+          </Source>
+        )}
+        
+        {/* Train Station - White outlined polygon */}
+        {shouldRenderCategory('transitAccessibility') && trainStationData && (
+          <Source
+            id="train-station"
+            type="geojson"
+            data={trainStationData}
+          >
+            <Layer
+              id="train-station-outline"
+              type="line"
+              paint={{
+                'line-color': 'rgba(255, 255, 255, 0.4)',
+                'line-width': 1.5
+              }}
+            />
+            <Layer
+              id="train-station-fill"
+              type="fill"
+              paint={{
+                'fill-color': 'rgba(255, 255, 255, 0.1)',
+                'fill-opacity': 0.3
+              }}
+            />
+          </Source>
+        )}
+        
         {/* Lighting Layers */}
         {/* Lighting Segments Layer */}
         {shouldRenderCategory('streetLighting') && lightingSegments && (
@@ -1232,7 +1293,7 @@ const ExplorerMap = ({
                 </>
               )}
               
-              {dashboardMode === 'walkability' && (
+              {dashboardMode === 'walkability' && popupInfo.feature.source !== 'bus-stops' && popupInfo.feature.source !== 'train-station' && (
                 <>
                   <h3>Street Segment</h3>
                   {popupInfo.feature.properties.total_count && (
@@ -1241,6 +1302,29 @@ const ExplorerMap = ({
                   {popupInfo.feature.properties.hillier_integration_400 && (
                     <p><strong>Integration:</strong> {popupInfo.feature.properties.hillier_integration_400.toFixed(2)}</p>
                   )}
+                </>
+              )}
+              
+              {/* Bus Stops and Train Station */}
+              {popupInfo.feature.source === 'bus-stops' && (
+                <>
+                  <h3>{popupInfo.feature.properties.STOP_NAME || 'Bus Stop'}</h3>
+                  {popupInfo.feature.properties.STOP_TYPE && (
+                    <p><strong>Type:</strong> {popupInfo.feature.properties.STOP_TYPE}</p>
+                  )}
+                  {popupInfo.feature.properties.STOP_STS && (
+                    <p><strong>Status:</strong> {popupInfo.feature.properties.STOP_STS}</p>
+                  )}
+                  {popupInfo.feature.properties.STOP_DSCR && (
+                    <p><strong>Description:</strong> {popupInfo.feature.properties.STOP_DSCR}</p>
+                  )}
+                </>
+              )}
+              
+              {popupInfo.feature.source === 'train-station' && (
+                <>
+                  <h3>Train Station</h3>
+                  <p>Cape Town Railway Station</p>
                 </>
               )}
               

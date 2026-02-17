@@ -143,6 +143,8 @@ const UnifiedDataExplorer = () => {
   const [pedestrianData, setPedestrianData] = useState(null)
   const [cyclingData, setCyclingData] = useState(null)
   const [transitData, setTransitData] = useState(null)
+  const [busStopsData, setBusStopsData] = useState(null)
+  const [trainStationData, setTrainStationData] = useState(null)
   const [selectedRouteSegment, setSelectedRouteSegment] = useState(null)
   
   // Lighting dashboard state
@@ -269,18 +271,12 @@ const UnifiedDataExplorer = () => {
   useEffect(() => {
     const loadWalkabilityData = async () => {
       try {
-        // Load network data from shade dataset (has betweenness centrality)
-        const shadeFile = '/data/processed/shade/winter/2025-06-21_0800.geojson'
+        // Load network data and other walkability datasets
+        console.log('Loading walkability files...')
         
-        console.log('Loading walkability files from:', {
-          shade: shadeFile,
-          pedestrian: '/data/processed/walkability/pedestrian_month_all.geojson',
-          cycling: '/data/processed/walkability/cycling_month_all.geojson'
-        })
-        
-        const [network, pedestrian, cycling, transit] = await Promise.all([
-          fetch(shadeFile).then(async r => {
-            if (!r.ok) throw new Error(`Shade file failed: ${r.status} ${r.statusText}`)
+        const [network, pedestrian, cycling, transit, busStops, trainStation] = await Promise.all([
+          fetch('/data/processed/walkability/network_connectivity.geojson').then(async r => {
+            if (!r.ok) throw new Error(`Network file failed: ${r.status} ${r.statusText}`)
             return r.json()
           }),
           fetch('/data/processed/walkability/pedestrian_month_all.geojson').then(async r => {
@@ -293,6 +289,14 @@ const UnifiedDataExplorer = () => {
           }),
           fetch('/data/walkabilty/roads_with_walking_times.geojson').then(async r => {
             if (!r.ok) throw new Error(`Transit walking times file failed: ${r.status} ${r.statusText}`)
+            return r.json()
+          }),
+          fetch('/data/walkabilty/bus stops.geojson').then(async r => {
+            if (!r.ok) throw new Error(`Bus stops file failed: ${r.status} ${r.statusText}`)
+            return r.json()
+          }),
+          fetch('/data/walkabilty/trainStation.geojson').then(async r => {
+            if (!r.ok) throw new Error(`Train station file failed: ${r.status} ${r.statusText}`)
             return r.json()
           })
         ])
@@ -343,13 +347,17 @@ const UnifiedDataExplorer = () => {
           network: network.features?.length,
           pedestrian: pedestrian.features?.length,
           cycling: cycling.features?.length,
-          transit: transit.features?.length
+          transit: transit.features?.length,
+          busStops: busStops.features?.length,
+          trainStation: trainStation.features?.length
         })
 
         setNetworkData(network)
         setPedestrianData(pedestrian)
         setCyclingData(cycling)
         setTransitData(transit)
+        setBusStopsData(busStops)
+        setTrainStationData(trainStation)
       } catch (error) {
         console.error('Error loading walkability data:', error)
       }
@@ -809,6 +817,8 @@ const UnifiedDataExplorer = () => {
             pedestrianData={pedestrianData}
             cyclingData={cyclingData}
             transitData={transitData}
+            busStopsData={busStopsData}
+            trainStationData={trainStationData}
             lightingSegments={lightingSegments}
             lightingProjects={lightingProjects}
             temperatureData={temperatureData}
