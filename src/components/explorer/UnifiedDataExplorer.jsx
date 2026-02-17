@@ -352,18 +352,16 @@ const UnifiedDataExplorer = () => {
           trainStation: trainStation.features?.length
         })
 
-        // Transform network data from EPSG:3857 to EPSG:4326
+        // Transform ONLY network data from EPSG:3857 to EPSG:4326
+        // Pedestrian, cycling, and transit data are already in EPSG:4326
         const transformedNetwork = transformGeoJSON(network, 'EPSG:3857', 'EPSG:4326')
-        const transformedPedestrian = transformGeoJSON(pedestrian, 'EPSG:3857', 'EPSG:4326')
-        const transformedCycling = transformGeoJSON(cycling, 'EPSG:3857', 'EPSG:4326')
-        const transformedTransit = transformGeoJSON(transit, 'EPSG:3857', 'EPSG:4326')
 
         console.log('Transformed network data sample coordinate:', transformedNetwork.features?.[0]?.geometry?.coordinates?.[0]?.[0])
 
         setNetworkData(transformedNetwork)
-        setPedestrianData(transformedPedestrian)
-        setCyclingData(transformedCycling)
-        setTransitData(transformedTransit)
+        setPedestrianData(pedestrian)
+        setCyclingData(cycling)
+        setTransitData(transit)
         setBusStopsData(busStops)
         setTrainStationData(trainStation)
       } catch (error) {
