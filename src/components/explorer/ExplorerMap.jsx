@@ -1508,24 +1508,30 @@ const ExplorerMap = ({
                   )}
                   
                   {/* Road Segments (original lighting data) */}
-                  {popupInfo.feature.source === 'lighting-segments' && (
-                    <>
-                      <h3>{popupInfo.feature.properties.street_name || popupInfo.feature.properties.STR_NAME || 'Street Segment'}</h3>
-                      {popupInfo.feature.properties.mean_lux !== null && (
-                        <>
-                          <p><strong>Mean Lux:</strong> {popupInfo.feature.properties.mean_lux.toFixed(2)}</p>
-                          <p><strong>Min Lux:</strong> {popupInfo.feature.properties.min_lux?.toFixed(2)}</p>
-                          <p><strong>Max Lux:</strong> {popupInfo.feature.properties.max_lux?.toFixed(2)}</p>
-                          {popupInfo.feature.properties.nearby_lights_count !== undefined && (
-                            <p><strong>Nearby Lights:</strong> {popupInfo.feature.properties.nearby_lights_count}</p>
-                          )}
-                          {popupInfo.feature.properties.pct_above_5lux !== undefined && (
-                            <p><strong>Coverage ≥5 Lux:</strong> {popupInfo.feature.properties.pct_above_5lux.toFixed(1)}%</p>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )}
+                  {popupInfo.feature.source === 'lighting-segments' && (() => {
+                    const p = popupInfo.feature.properties
+                    const meanLux = parseFloat(p.mean_lux)
+                    const minLux = parseFloat(p.min_lux)
+                    const maxLux = parseFloat(p.max_lux)
+                    const stdLux = parseFloat(p.std_lux)
+                    const nearbyLights = parseInt(p.nearby_lights_count)
+                    const coverage = parseFloat(p.pct_above_5lux)
+                    return (
+                      <>
+                        <h3>{p.street_name || p.STR_NAME || 'Street Segment'}</h3>
+                        {!isNaN(meanLux) && (
+                          <>
+                            <p><strong>Mean Lux:</strong> {meanLux.toFixed(2)}</p>
+                            {!isNaN(minLux) && <p><strong>Min Lux:</strong> {minLux.toFixed(2)}</p>}
+                            {!isNaN(maxLux) && <p><strong>Max Lux:</strong> {maxLux.toFixed(2)}</p>}
+                            {!isNaN(stdLux) && <p><strong>Std Dev:</strong> {stdLux.toFixed(2)}</p>}
+                            {!isNaN(nearbyLights) && <p><strong>Nearby Lights:</strong> {nearbyLights}</p>}
+                            {!isNaN(coverage) && <p><strong>Coverage ≥5 Lux:</strong> {coverage.toFixed(1)}%</p>}
+                          </>
+                        )}
+                      </>
+                    )
+                  })()}
                 </>
               )}
               
@@ -1629,34 +1635,29 @@ const ExplorerMap = ({
                 )
               })()}
               
-              {dashboardMode === 'greenery' && (
-                <>
-                  <h3>{popupInfo.feature.properties.street_name || popupInfo.feature.properties.STR_NAME || 'Greenery Analysis'}</h3>
-                  {popupInfo.feature.properties.vegetation_index !== null && popupInfo.feature.properties.vegetation_index !== undefined && (
-                    <p><strong>Vegetation Index:</strong> {popupInfo.feature.properties.vegetation_index.toFixed(3)}</p>
-                  )}
-                  {popupInfo.feature.properties.sky_view_factor !== null && popupInfo.feature.properties.sky_view_factor !== undefined && (
-                    <p><strong>Sky View Factor:</strong> {popupInfo.feature.properties.sky_view_factor.toFixed(3)}</p>
-                  )}
-                  {popupInfo.feature.properties.shade_coverage_pct !== null && popupInfo.feature.properties.shade_coverage_pct !== undefined && (
-                    <p><strong>Shade Coverage:</strong> {popupInfo.feature.properties.shade_coverage_pct.toFixed(1)}%</p>
-                  )}
-                  {popupInfo.feature.properties.surface_temp_celsius !== null && popupInfo.feature.properties.surface_temp_celsius !== undefined && (
-                    <p><strong>Surface Temp:</strong> {popupInfo.feature.properties.surface_temp_celsius.toFixed(1)}°C</p>
-                  )}
-                  {popupInfo.feature.properties.PARK_NAME && (
-                    <>
-                      <p><strong>Park Name:</strong> {popupInfo.feature.properties.PARK_NAME}</p>
-                      {popupInfo.feature.properties.SUB_AREA && (
-                        <p><strong>Area:</strong> {popupInfo.feature.properties.SUB_AREA} ha</p>
-                      )}
-                      {popupInfo.feature.properties.PLAY_EQPM && (
-                        <p><strong>Play Equipment:</strong> {popupInfo.feature.properties.PLAY_EQPM}</p>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
+              {dashboardMode === 'greenery' && (() => {
+                const p = popupInfo.feature.properties
+                const vegIndex = parseFloat(p.vegetation_index)
+                const svf = parseFloat(p.sky_view_factor)
+                const shadePct = parseFloat(p.shade_coverage_pct)
+                const surfTemp = parseFloat(p.surface_temp_celsius)
+                return (
+                  <>
+                    <h3>{p.street_name || p.STR_NAME || 'Greenery Analysis'}</h3>
+                    {!isNaN(vegIndex) && <p><strong>Vegetation Index:</strong> {vegIndex.toFixed(3)}</p>}
+                    {!isNaN(svf) && <p><strong>Sky View Factor:</strong> {svf.toFixed(3)}</p>}
+                    {!isNaN(shadePct) && <p><strong>Shade Coverage:</strong> {shadePct.toFixed(1)}%</p>}
+                    {!isNaN(surfTemp) && <p><strong>Surface Temp:</strong> {surfTemp.toFixed(1)}°C</p>}
+                    {p.PARK_NAME && (
+                      <>
+                        <p><strong>Park Name:</strong> {p.PARK_NAME}</p>
+                        {p.SUB_AREA && <p><strong>Area:</strong> {p.SUB_AREA} ha</p>}
+                        {p.PLAY_EQPM && <p><strong>Play Equipment:</strong> {p.PLAY_EQPM}</p>}
+                      </>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           </Popup>
         )}
