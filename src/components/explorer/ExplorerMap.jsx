@@ -1395,7 +1395,7 @@ const ExplorerMap = ({
               
               {dashboardMode === 'walkability' && popupInfo.feature.source !== 'bus-stops' && popupInfo.feature.source !== 'train-station' && (
                 <>
-                  <h3>Street Segment</h3>
+                  <h3>{popupInfo.feature.properties.street_name || popupInfo.feature.properties.STR_NAME || 'Street Segment'}</h3>
                   {popupInfo.feature.properties.total_count && (
                     <p><strong>Total Trips:</strong> {popupInfo.feature.properties.total_count}</p>
                   )}
@@ -1510,7 +1510,7 @@ const ExplorerMap = ({
                   {/* Road Segments (original lighting data) */}
                   {popupInfo.feature.source === 'lighting-segments' && (
                     <>
-                      <h3>{popupInfo.feature.properties.name || 'Street Segment'}</h3>
+                      <h3>{popupInfo.feature.properties.street_name || popupInfo.feature.properties.STR_NAME || 'Street Segment'}</h3>
                       {popupInfo.feature.properties.mean_lux !== null && (
                         <>
                           <p><strong>Mean Lux:</strong> {popupInfo.feature.properties.mean_lux.toFixed(2)}</p>
@@ -1631,7 +1631,7 @@ const ExplorerMap = ({
               
               {dashboardMode === 'greenery' && (
                 <>
-                  <h3>Greenery Analysis</h3>
+                  <h3>{popupInfo.feature.properties.street_name || popupInfo.feature.properties.STR_NAME || 'Greenery Analysis'}</h3>
                   {popupInfo.feature.properties.vegetation_index !== null && popupInfo.feature.properties.vegetation_index !== undefined && (
                     <p><strong>Vegetation Index:</strong> {popupInfo.feature.properties.vegetation_index.toFixed(3)}</p>
                   )}
