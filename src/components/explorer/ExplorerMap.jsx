@@ -45,7 +45,9 @@ const ExplorerMap = ({
   categoriesFilters,
   selectedSegment,
   onSegmentSelect,
-  onRouteSegmentClick
+  onRouteSegmentClick,
+  trafficData,
+  trafficScenario = 'WORK_MORNING'
 }) => {
   const mapRef = useRef()
   
@@ -222,7 +224,8 @@ const ExplorerMap = ({
           'temperature-segments-layer',
           'greenery-skyview-layer',
           'tree-canopy-layer',
-          'parks-nearby-layer'
+          'parks-nearby-layer',
+          'traffic-layer'
         ]}
         onClick={handleMapClick}
       >
@@ -1190,6 +1193,79 @@ const ExplorerMap = ({
                 />
               </Source>
             )}
+
+        {/* ── Traffic Layers ───────────────────────────────────────── */}
+        {shouldRenderCategory('trafficFlow') && trafficData && (() => {
+          // Map scenario id -> kpi field
+          const scenarioFields = {
+            WORK_MORNING:     'kpi_work_morning',
+            WORK_SCHOOL_RUN:  'kpi_work_school_run',
+            WORK_EVENING:     'kpi_work_evening',
+            MISSION_FEB_EVENT:'kpi_mission_feb_event',
+            FIRST_THURSDAY:   'kpi_first_thursday',
+            NIGHTLIFE_SAT:    'kpi_nightlife_peak',
+            BASELINE:         'kpi_baseline'
+          }
+          const field = scenarioFields[trafficScenario] || 'kpi_work_morning'
+
+          return (
+            <Source
+              id="traffic-segments"
+              type="geojson"
+              data={trafficData}
+            >
+              {/* Glow / halo underneath */}
+              <Layer
+                id="traffic-layer-glow"
+                type="line"
+                paint={{
+                  'line-color': [
+                    'interpolate', ['linear'],
+                    ['coalesce', ['get', field], 0],
+                    0,    '#1e3a8a',
+                    0.3,  '#2563eb',
+                    0.6,  '#10b981',
+                    1.0,  '#fbbf24',
+                    1.3,  '#f59e0b',
+                    1.6,  '#ef4444',
+                    2.0,  '#7f1d1d'
+                  ],
+                  'line-width': [
+                    'interpolate', ['linear'],
+                    ['coalesce', ['get', field], 0],
+                    0, 6, 1.0, 10, 2.0, 14
+                  ],
+                  'line-opacity': 0.2,
+                  'line-blur': 4
+                }}
+              />
+              {/* Main traffic line */}
+              <Layer
+                id="traffic-layer"
+                type="line"
+                paint={{
+                  'line-color': [
+                    'interpolate', ['linear'],
+                    ['coalesce', ['get', field], 0],
+                    0,    '#1e3a8a',
+                    0.3,  '#2563eb',
+                    0.6,  '#10b981',
+                    1.0,  '#fbbf24',
+                    1.3,  '#f59e0b',
+                    1.6,  '#ef4444',
+                    2.0,  '#7f1d1d'
+                  ],
+                  'line-width': [
+                    'interpolate', ['linear'],
+                    ['coalesce', ['get', field], 0],
+                    0, 2, 0.6, 3, 1.0, 4, 1.6, 6, 2.0, 8
+                  ],
+                  'line-opacity': 0.92
+                }}
+              />
+            </Source>
+          )
+        })()}
         
         {/* Popup */}
         {popupInfo && (
@@ -1635,6 +1711,69 @@ const ExplorerMap = ({
                 )
               })()}
               
+              {dashboardMode === 'traffic' && (() => {
+                const p = popupInfo.feature.properties
+                const scenarioFields = {
+                  WORK_MORNING:     'kpi_work_morning',
+                  WORK_SCHOOL_RUN:  'kpi_work_school_run',
+                  WORK_EVENING:     'kpi_work_evening',
+                  MISSION_FEB_EVENT:'kpi_mission_feb_event',
+                  FIRST_THURSDAY:   'kpi_first_thursday',
+                  NIGHTLIFE_SAT:    'kpi_nightlife_peak',
+                  BASELINE:         'kpi_baseline'
+                }
+                const scenarioLabels = {
+                  WORK_MORNING:     'Work Morning (07:30)',
+                  WORK_SCHOOL_RUN:  'School / Lunch Run (14:30)',
+                  WORK_EVENING:     'Evening Rush (17:00)',
+                  MISSION_FEB_EVENT:'Inner City Saturday (11:00)',
+                  FIRST_THURSDAY:   'First Thursday (19:00)',
+                  NIGHTLIFE_SAT:    'Nightlife Peak (22:30)',
+                  BASELINE:         'Baseline (03:00)'
+                }
+                const field = scenarioFields[trafficScenario] || 'kpi_work_morning'
+                const kpi = parseFloat(p[field])
+                const kpiColor = kpi >= 1.6 ? '#ef4444' : kpi >= 1.3 ? '#f59e0b' : kpi >= 1.0 ? '#fbbf24' : kpi >= 0.6 ? '#10b981' : '#3b82f6'
+                return (
+                  <>
+                    <h3>{p.STR_NAME || p.street_name || 'Street Segment'}</h3>
+                    <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '0 0 0.5rem 0' }}>
+                      Scenario: <strong style={{ color: '#e8f5e9' }}>{scenarioLabels[trafficScenario]}</strong>
+                    </p>
+                    {!isNaN(kpi) && (
+                      <p style={{ margin: '0.25rem 0' }}>
+                        <strong>Traffic KPI:</strong>{' '}
+                        <span style={{ color: kpiColor, fontWeight: 700 }}>{kpi.toFixed(3)}</span>
+                      </p>
+                    )}
+                    {p.congestion_level && (
+                      <p style={{ margin: '0.25rem 0' }}>
+                        <strong>Congestion Level:</strong> {p.congestion_level}
+                      </p>
+                    )}
+                    {p.static_duration_s && (
+                      <p style={{ margin: '0.25rem 0' }}>
+                        <strong>Free-flow Duration:</strong> {p.static_duration_s}s
+                      </p>
+                    )}
+                    <div style={{ marginTop: '0.75rem', borderTop: '1px solid #2a3f2d', paddingTop: '0.5rem' }}>
+                      <p style={{ fontSize: '0.7rem', color: '#6b7280', margin: 0 }}>All scenarios:</p>
+                      {Object.entries(scenarioFields).map(([sid, sfield]) => {
+                        const v = parseFloat(p[sfield])
+                        if (isNaN(v)) return null
+                        const c = v >= 1.6 ? '#ef4444' : v >= 1.3 ? '#f59e0b' : v >= 1.0 ? '#fbbf24' : v >= 0.6 ? '#10b981' : '#3b82f6'
+                        return (
+                          <div key={sid} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', padding: '0.1rem 0' }}>
+                            <span style={{ color: sid === trafficScenario ? '#e8f5e9' : '#9ca3af' }}>{scenarioLabels[sid]}</span>
+                            <span style={{ color: c, fontWeight: 600 }}>{v.toFixed(2)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )
+              })()}
+
               {dashboardMode === 'greenery' && (() => {
                 const p = popupInfo.feature.properties
                 const vegIndex = parseFloat(p.vegetation_index)

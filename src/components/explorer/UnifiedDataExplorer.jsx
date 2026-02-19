@@ -7,6 +7,7 @@ import WalkabilityAnalytics from './WalkabilityAnalytics'
 import LightingAnalytics from './LightingAnalytics'
 import TemperatureAnalytics from './TemperatureAnalytics'
 import GreeneryAnalytics from './GreeneryAnalytics'
+import TrafficAnalytics, { TRAFFIC_SCENARIOS } from './TrafficAnalytics'
 import './UnifiedDataExplorer.css'
 
 // Define coordinate reference systems
@@ -77,7 +78,8 @@ const DASHBOARD_MODES = [
   { id: 'walkability', label: 'Walkability & Cycling' },
   { id: 'lighting', label: 'Street Lighting' },
   { id: 'temperature', label: 'Surface Temperature' },
-  { id: 'greenery', label: 'Greenery' }
+  { id: 'greenery', label: 'Greenery' },
+  { id: 'traffic', label: 'Traffic' }
 ]
 
 // All available layer categories - these are what users click to view
@@ -103,7 +105,9 @@ const LAYER_CATEGORIES = [
   // Greenery layers
   { id: 'greeneryIndex', label: 'Greenery Index', dashboard: 'greenery', dataKey: 'greenerySegments' },
   { id: 'treeCanopy', label: 'Tree Canopy', dashboard: 'greenery', dataKey: 'treeCanopy' },
-  { id: 'parksNearby', label: 'Parks Nearby', dashboard: 'greenery', dataKey: 'parksNearby' }
+  { id: 'parksNearby', label: 'Parks Nearby', dashboard: 'greenery', dataKey: 'parksNearby' },
+  // Traffic layers
+  { id: 'trafficFlow', label: 'Traffic Flow', dashboard: 'traffic', dataKey: 'trafficSegments' }
 ]
 
 const UnifiedDataExplorer = () => {
@@ -168,6 +172,10 @@ const UnifiedDataExplorer = () => {
   const [greeneryAndSkyview, setGreeneryAndSkyview] = useState(null)
   const [treeCanopyData, setTreeCanopyData] = useState(null)
   const [parksData, setParksData] = useState(null)
+
+  // Traffic dashboard state
+  const [trafficData, setTrafficData] = useState(null)
+  const [trafficScenario, setTrafficScenario] = useState('WORK_MORNING')
   
   // Layer visibility
   const [visibleLayers, setVisibleLayers] = useState({
@@ -188,7 +196,9 @@ const UnifiedDataExplorer = () => {
     // Greenery layers
     greenerySegments: false,
     treeCanopy: false,
-    parksNearby: false
+    parksNearby: false,
+    // Traffic layers
+    trafficSegments: false
   })
   
   // Active layer stack - shows what's currently on the map
@@ -561,6 +571,25 @@ const UnifiedDataExplorer = () => {
       loadGreeneryData()
     }
   }, [dashboardMode, season, timeOfDay, lockedLayers])
+
+  // Load traffic data
+  useEffect(() => {
+    const loadTrafficData = async () => {
+      try {
+        const response = await fetch('/data/Traffic/traffic_analysis.geojson')
+        const data = await response.json()
+        setTrafficData(data)
+        console.log('Traffic data loaded:', data.features?.length, 'segments')
+      } catch (error) {
+        console.error('Error loading traffic data:', error)
+      }
+    }
+
+    const hasLockedTrafficLayer = lockedLayers.has('trafficFlow')
+    if (dashboardMode === 'traffic' || hasLockedTrafficLayer) {
+      loadTrafficData()
+    }
+  }, [dashboardMode, lockedLayers])
   
   // Listen for clear segment selection event
   useEffect(() => {
@@ -842,6 +871,18 @@ const UnifiedDataExplorer = () => {
               hideLayerControls={true}
             />
           )}
+
+          {dashboardMode === 'traffic' && (
+            <TrafficAnalytics
+              trafficData={trafficData}
+              activeScenario={trafficScenario}
+              onScenarioChange={(scenario) => {
+                setTrafficScenario(scenario)
+                selectCategory('trafficFlow')
+              }}
+              hideLayerControls={true}
+            />
+          )}
         </aside>
         
         <main className="explorer-map-container">
@@ -880,6 +921,8 @@ const UnifiedDataExplorer = () => {
             opinionSource={opinionSource}
             amenitiesFilters={amenitiesFilters}
             categoriesFilters={categoriesFilters}
+            trafficData={trafficData}
+            trafficScenario={trafficScenario}
             selectedSegment={selectedSegment}
             onSegmentSelect={setSelectedSegment}
             onRouteSegmentClick={(segment, mode) => {
