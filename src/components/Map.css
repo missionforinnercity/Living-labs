@@ -164,3 +164,38 @@
   height: 4px;
   border-radius: 2px;
 }
+
+/* ─── District Narrative Engine Popup ──────────────────────────────────── */
+.district-popup .mapboxgl-popup-content {
+  background: #0f1117;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(102,126,234,0.2);
+  border-radius: 10px;
+  padding: 0;
+}
+
+.district-popup .mapboxgl-popup-tip {
+  border-top-color: #0f1117;
+  border-bottom-color: #0f1117;
+}
+
+.district-popup .mapboxgl-popup-close-button {
+  color: #94a3b8;
+  font-size: 14px;
+  right: 6px;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  line-height: 1;
+  padding: 0;
+}
+
+.district-popup .mapboxgl-popup-close-button:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}

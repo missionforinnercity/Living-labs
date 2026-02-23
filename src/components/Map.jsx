@@ -25,7 +25,7 @@ import './Map.css'
 // Replace with your Mapbox token
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5lZXNvbWFyIiwiYSI6ImNtN3lnYXhveTA5NmsyanM2Z2NmaHhrcncifQ.xIzrc87ZIEJZE1vpB2gFfw'
 
-const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour }) => {
+const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour, districtGeoJSON, selectedDistrictId, districtBounds, onDistrictClick }) => {
   const mapContainer = useRef(null)
   const map = useRef(null)
   const [mapLoaded, setMapLoaded] = useState(false)
@@ -51,7 +51,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
     try {
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/light-v11',
+        style: 'mapbox://styles/mapbox/dark-v11',
         center: [18.4241, -33.9249], // Cape Town CBD
         zoom: 14,
         pitch: 0,
@@ -1006,6 +1006,114 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour 
       }
     }
   }, [mapLoaded, selectedTour, mode, temporalState])
+
+  // ── District Narrative Engine — render all district polygons ──────────────
+  useEffect(() => {
+    if (!mapLoaded || !map.current) return
+
+    const SOURCE_ID = 'districts-source'
+    const FILL_ID   = 'districts-fill'
+    const LINE_ID   = 'districts-line'
+    const GLOW_ID   = 'districts-glow'
+
+    const cleanup = () => {
+      if (!map.current) return
+      ;[FILL_ID, LINE_ID, GLOW_ID].forEach(id => {
+        if (map.current.getLayer(id)) map.current.removeLayer(id)
+      })
+      if (map.current.getSource(SOURCE_ID)) map.current.removeSource(SOURCE_ID)
+    }
+
+    if (!districtGeoJSON || !districtGeoJSON.features?.length) {
+      cleanup()
+      return
+    }
+
+    cleanup()
+
+    map.current.addSource(SOURCE_ID, {
+      type: 'geojson',
+      data: districtGeoJSON
+    })
+
+    // Soft glow (wide blurred outline)
+    map.current.addLayer({
+      id: GLOW_ID,
+      type: 'line',
+      source: SOURCE_ID,
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': [
+          'case',
+          ['==', ['get', 'districtId'], selectedDistrictId || ''], 18, 8
+        ],
+        'line-opacity': 0.20,
+        'line-blur': 8
+      }
+    })
+
+    // Semi-transparent fill
+    map.current.addLayer({
+      id: FILL_ID,
+      type: 'fill',
+      source: SOURCE_ID,
+      paint: {
+        'fill-color': ['get', 'color'],
+        'fill-opacity': [
+          'case',
+          ['==', ['get', 'districtId'], selectedDistrictId || ''], 0.22, 0.10
+        ]
+      }
+    })
+
+    // Crisp border
+    map.current.addLayer({
+      id: LINE_ID,
+      type: 'line',
+      source: SOURCE_ID,
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': [
+          'case',
+          ['==', ['get', 'districtId'], selectedDistrictId || ''], 2.5, 1.5
+        ],
+        'line-opacity': [
+          'case',
+          ['==', ['get', 'districtId'], selectedDistrictId || ''], 1.0, 0.7
+        ]
+      }
+    })
+
+    // Click — update stats panel
+    map.current.off('click', FILL_ID)
+    map.current.on('click', FILL_ID, (e) => {
+      const feat  = e.features[0]
+      if (!feat) return
+      if (onDistrictClick) onDistrictClick(feat)
+    })
+
+    map.current.on('mouseenter', FILL_ID, () => {
+      map.current.getCanvas().style.cursor = 'pointer'
+    })
+    map.current.on('mouseleave', FILL_ID, () => {
+      map.current.getCanvas().style.cursor = ''
+    })
+
+    return cleanup
+  }, [mapLoaded, districtGeoJSON, selectedDistrictId, onDistrictClick])
+
+  // ── Fly to selected district bounds ──────────────────────────────────────
+  useEffect(() => {
+    if (!mapLoaded || !map.current || !districtBounds) return
+    try {
+      map.current.fitBounds(
+        [[districtBounds[0], districtBounds[1]], [districtBounds[2], districtBounds[3]]],
+        { padding: 60, duration: 1400, pitch: 20 }
+      )
+    } catch (e) {
+      console.warn('fitBounds error:', e)
+    }
+  }, [mapLoaded, districtBounds])
 
   // Update other layers based on active state
   useEffect(() => {

@@ -1,27 +1,19 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import Map from './components/Map'
 import ModeToggle from './components/ModeToggle'
-import NarrativeTours from './components/NarrativeTours'
+import NarrativeDistricts from './components/NarrativeDistricts'
+import DistrictStatsPanel from './components/DistrictStatsPanel'
 import DataExplorer from './components/DataExplorer'
-import TemporalControls from './components/TemporalControls'
 import './App.css'
 
 function App() {
   const [mode, setMode] = useState('narrative') // 'narrative' or 'explorer'
-  const [selectedTour, setSelectedTour] = useState(null)
   const [activeLayers, setActiveLayers] = useState({
     shade: false,
     lighting: false,
     walkability: false,
     business: false,
     publicArt: false
-  })
-  
-  const [temporalState, setTemporalState] = useState({
-    season: 'summer',
-    timeOfDay: '1400',
-    hour: 14,
-    date: new Date('2025-12-15')
   })
 
   const [explorerFilters, setExplorerFilters] = useState({
@@ -30,27 +22,39 @@ function App() {
     limit: 10
   })
 
+  // District Narrative Engine state
+  const [selectedDistrictId,      setSelectedDistrictId]      = useState(null)
+  const [selectedDistrictFeature, setSelectedDistrictFeature] = useState(null)
+  const [districtGeoJSON,         setDistrictGeoJSON]         = useState(null)
+  const [districtBounds,          setDistrictBounds]          = useState(null)
+
+  const handleDistrictSelect = useCallback((districtId, feature, bounds, fc) => {
+    setSelectedDistrictId(districtId)
+    setSelectedDistrictFeature(feature)
+    setDistrictBounds(bounds)
+    if (fc) setDistrictGeoJSON(fc)
+  }, [])
+
+  const handleDistrictClick = useCallback((feat) => {
+    setSelectedDistrictFeature(feat)
+    setSelectedDistrictId(feat.properties.districtId)
+  }, [])
+
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Urban Experience Dashboard</h1>
+        <h1>District Narrative Engine</h1>
         <ModeToggle mode={mode} onModeChange={setMode} />
       </header>
 
       <div className="app-content">
         {mode === 'narrative' ? (
           <>
-            <aside className="sidebar">
-              <NarrativeTours
-                selectedTour={selectedTour}
-                onTourSelect={setSelectedTour}
+            <aside className="sidebar sidebar--dark">
+              <NarrativeDistricts
+                selectedDistrictId={selectedDistrictId}
+                onDistrictSelect={handleDistrictSelect}
                 onLayersChange={setActiveLayers}
-                onTemporalChange={setTemporalState}
-              />
-              <TemporalControls
-                state={temporalState}
-                onChange={setTemporalState}
-                mode={mode}
               />
             </aside>
 
@@ -58,9 +62,17 @@ function App() {
               <Map
                 mode={mode}
                 activeLayers={activeLayers}
-                temporalState={temporalState}
+                temporalState={{ season: 'summer', timeOfDay: '1400', hour: 14 }}
                 explorerFilters={explorerFilters}
-                selectedTour={selectedTour}
+                selectedTour={null}
+                districtGeoJSON={districtGeoJSON}
+                selectedDistrictId={selectedDistrictId}
+                districtBounds={districtBounds}
+                onDistrictClick={handleDistrictClick}
+              />
+              <DistrictStatsPanel
+                feature={selectedDistrictFeature}
+                onClose={() => setSelectedDistrictFeature(null)}
               />
             </main>
           </>

@@ -45,6 +45,46 @@
   background: #e8eaf6;
 }
 
+/* Dark sidebar for District Narrative Engine */
+.sidebar--dark {
+  background: #0f1117;
+  border-right-color: rgba(255,255,255,0.07);
+}
+
+/* TemporalControls inside dark sidebar */
+.sidebar--dark .temporal-controls {
+  background: #161b27;
+  border-top-color: rgba(255,255,255,0.07);
+}
+
+.sidebar--dark .temporal-controls h2,
+.sidebar--dark .control-label {
+  color: #94a3b8;
+}
+
+.sidebar--dark .temporal-controls p,
+.sidebar--dark .temporal-controls span {
+  color: #64748b;
+}
+
+.sidebar--dark .season-btn,
+.sidebar--dark .time-btn {
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.1);
+  color: #94a3b8;
+}
+
+.sidebar--dark .season-btn.active,
+.sidebar--dark .time-btn.active {
+  background: rgba(102,126,234,0.2);
+  border-color: #667eea;
+  color: #a5b4fc;
+}
+
+.sidebar--dark input[type="range"] {
+  accent-color: #667eea;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app-content {
