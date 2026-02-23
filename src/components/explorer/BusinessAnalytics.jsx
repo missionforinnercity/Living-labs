@@ -22,6 +22,9 @@ const BusinessAnalytics = ({
   onCategoriesFiltersChange,
   expandedGroups,
   onExpandedGroupsChange,
+  eventsData,
+  eventsMonth,
+  onEventsMonthChange,
   hideLayerControls = false
 }) => {
   // Define hierarchical category structure
@@ -251,6 +254,16 @@ const BusinessAnalytics = ({
             onChange={() => onModeChange('property')}
           />
           <span>Property Sales</span>
+        </label>
+
+        <label className="mode-radio">
+          <input
+            type="radio"
+            name="businessMode"
+            checked={businessMode === 'events'}
+            onChange={() => onModeChange('events')}
+          />
+          <span>City Events</span>
         </label>
       </div>
       )}
@@ -807,6 +820,274 @@ const BusinessAnalytics = ({
           </div>
         </div>
       )}
+      {/* City Events Mode */}
+      {businessMode === 'events' && (() => {
+        const allFeatures = eventsData?.features || []
+
+        // Parse all dates and extract year-month keys
+        const monthSet = new Set()
+        allFeatures.forEach(f => {
+          const d = f.properties?.date
+          if (d) {
+            const [year, month] = d.split('-')
+            if (year && month) monthSet.add(`${year}-${month}`)
+          }
+        })
+        const sortedMonths = Array.from(monthSet).sort()
+
+        // Determine active month key
+        const activeMonthKey = eventsMonth
+          ? `${String(Math.floor(eventsMonth / 100)).padStart(4, '0')}-${String(eventsMonth % 100).padStart(2, '0')}`
+          : null
+
+        // Filter features to selected month
+        const filtered = activeMonthKey
+          ? allFeatures.filter(f => f.properties?.date?.startsWith(activeMonthKey))
+          : allFeatures
+
+        // Stats
+        const totalEvents = filtered.length
+
+        // Venue frequency
+        const venueCounts = {}
+        filtered.forEach(f => {
+          const v = f.properties?.venue || 'Unknown'
+          venueCounts[v] = (venueCounts[v] || 0) + 1
+        })
+        const topVenues = Object.entries(venueCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+
+        // Monthly event counts for mini-bar chart
+        const monthCounts = {}
+        sortedMonths.forEach(m => { monthCounts[m] = 0 })
+        allFeatures.forEach(f => {
+          const d = f.properties?.date
+          if (d) {
+            const key = d.slice(0, 7) // YYYY-MM
+            if (monthCounts[key] !== undefined) monthCounts[key]++
+          }
+        })
+        const maxMonthCount = Math.max(...Object.values(monthCounts), 1)
+
+        const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+        const formatMonthKey = (key) => {
+          if (!key) return 'All Months'
+          const [y, m] = key.split('-')
+          return `${MONTH_LABELS[parseInt(m) - 1]} ${y}`
+        }
+
+        // Upcoming events sorted by date
+        const upcomingEvents = [...filtered]
+          .sort((a, b) => (a.properties?.date || '').localeCompare(b.properties?.date || ''))
+          .slice(0, 8)
+
+        return (
+          <div className="mode-content">
+            {/* Month Slider */}
+            <div className="control-section">
+              <div className="control-header">FILTER BY MONTH</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#a5f3c0', minWidth: '90px' }}>
+                  {activeMonthKey ? formatMonthKey(activeMonthKey) : 'All Months'}
+                </span>
+                <button
+                  onClick={() => onEventsMonthChange(null)}
+                  style={{
+                    fontSize: '0.7rem',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #4ade80',
+                    background: activeMonthKey ? 'transparent' : '#4ade8020',
+                    color: '#4ade80',
+                    cursor: 'pointer'
+                  }}
+                >
+                  All
+                </button>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={sortedMonths.length - 1}
+                value={activeMonthKey ? sortedMonths.indexOf(activeMonthKey) : sortedMonths.length - 1}
+                onChange={(e) => {
+                  const key = sortedMonths[parseInt(e.target.value)]
+                  if (key) {
+                    const [y, m] = key.split('-')
+                    onEventsMonthChange(parseInt(y) * 100 + parseInt(m))
+                  }
+                }}
+                className="hour-slider"
+                style={{ width: '100%' }}
+                disabled={sortedMonths.length === 0}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.25rem' }}>
+                <span>{formatMonthKey(sortedMonths[0])}</span>
+                <span>{formatMonthKey(sortedMonths[sortedMonths.length - 1])}</span>
+              </div>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="stats-summary">
+              <div className="stat-card primary">
+                <div className="stat-value">{totalEvents}</div>
+                <div className="stat-label">Events{activeMonthKey ? ` in ${formatMonthKey(activeMonthKey)}` : ' Total'}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value">{topVenues.length}</div>
+                <div className="stat-label">Active Venues</div>
+              </div>
+            </div>
+
+            {/* Monthly Distribution Bar Chart */}
+            <div className="control-section">
+              <div className="control-header">MONTHLY DISTRIBUTION</div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '60px', marginTop: '0.5rem' }}>
+                {sortedMonths.map(key => {
+                  const count = monthCounts[key] || 0
+                  const isActive = activeMonthKey === key
+                  const barH = Math.max(4, (count / maxMonthCount) * 52)
+                  const [, m] = key.split('-')
+                  return (
+                    <div
+                      key={key}
+                      title={`${formatMonthKey(key)}: ${count} events`}
+                      onClick={() => {
+                        const [y, mo] = key.split('-')
+                        onEventsMonthChange(parseInt(y) * 100 + parseInt(mo))
+                      }}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        gap: '2px'
+                      }}
+                    >
+                      <div style={{
+                        width: '100%',
+                        height: `${barH}px`,
+                        background: isActive ? '#4ade80' : '#1d4d2e',
+                        borderRadius: '2px 2px 0 0',
+                        border: isActive ? '1px solid #22c55e' : '1px solid #2d6a3f',
+                        transition: 'height 0.2s ease'
+                      }} />
+                      <span style={{ fontSize: '0.55rem', color: isActive ? '#4ade80' : '#6b7280' }}>
+                        {MONTH_LABELS[parseInt(m) - 1]?.slice(0, 1)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Top Venues */}
+            {topVenues.length > 0 && (
+              <div className="control-section">
+                <div className="control-header">TOP VENUES</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.5rem' }}>
+                  {topVenues.map(([venue, count], i) => (
+                    <div key={venue} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{
+                        width: '18px', height: '18px', borderRadius: '50%',
+                        background: i === 0 ? '#4ade80' : i === 1 ? '#22c55e' : '#16a34a',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.65rem', fontWeight: 700, color: '#000', flexShrink: 0
+                      }}>
+                        {i + 1}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: '0.8rem', color: '#e8f5e9',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                        }} title={venue}>
+                          {venue}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                          <div style={{
+                            height: '4px',
+                            width: `${(count / (topVenues[0]?.[1] || 1)) * 80}px`,
+                            background: '#4ade80',
+                            borderRadius: '2px'
+                          }} />
+                          <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>{count} event{count !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Event List */}
+            {upcomingEvents.length > 0 && (
+              <div className="control-section">
+                <div className="control-header">
+                  {activeMonthKey ? `EVENTS IN ${formatMonthKey(activeMonthKey).toUpperCase()}` : 'UPCOMING EVENTS'}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {upcomingEvents.map((f, i) => {
+                    const p = f.properties || {}
+                    const dateObj = p.date ? new Date(p.date + 'T00:00:00') : null
+                    const formattedDate = dateObj ? dateObj.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : p.date
+                    const formattedTime = p.time ? p.time.slice(0, 5) : ''
+                    return (
+                      <div key={i} style={{
+                        background: '#0d1f12',
+                        border: '1px solid #1a3d22',
+                        borderRadius: '6px',
+                        padding: '0.6rem 0.75rem'
+                      }}>
+                        <div style={{
+                          fontSize: '0.82rem', fontWeight: 600, color: '#d1fae5',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                        }} title={p.name}>
+                          {p.name}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#6b7280', marginTop: '3px' }}>
+                          📍 {p.venue}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#4ade80', marginTop: '2px' }}>
+                          🗓 {formattedDate}{formattedTime ? ` · ${formattedTime}` : ''}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {filtered.length > 8 && (
+                    <div style={{ fontSize: '0.75rem', color: '#6b7280', textAlign: 'center', padding: '0.25rem' }}>
+                      +{filtered.length - 8} more events — click on the map to explore
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {totalEvents === 0 && (
+              <div style={{ padding: '1rem', textAlign: 'center', color: '#6b7280', fontSize: '0.875rem' }}>
+                No events found for {activeMonthKey ? formatMonthKey(activeMonthKey) : 'the selected period'}.
+              </div>
+            )}
+
+            {/* Heatmap Legend */}
+            <div className="legend-section" style={{ marginTop: '1rem' }}>
+              <div className="control-header">HEATMAP LEGEND</div>
+              <div className="legend-gradient" style={{ marginTop: '0.5rem' }}>
+                <div className="legend-bar" style={{
+                  background: 'linear-gradient(to right, transparent, #00ff88)',
+                  height: '12px', borderRadius: '4px', border: '1px solid #1a3d22'
+                }}></div>
+                <div className="legend-labels">
+                  <span>No events</span>
+                  <span>Event hotspot</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

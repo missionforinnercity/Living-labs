@@ -47,7 +47,9 @@ const ExplorerMap = ({
   onSegmentSelect,
   onRouteSegmentClick,
   trafficData,
-  trafficScenario = 'WORK_MORNING'
+  trafficScenario = 'WORK_MORNING',
+  eventsData,
+  eventsMonth
 }) => {
   const mapRef = useRef()
   
@@ -225,7 +227,8 @@ const ExplorerMap = ({
           'greenery-skyview-layer',
           'tree-canopy-layer',
           'parks-nearby-layer',
-          'traffic-layer'
+          'traffic-layer',
+          'events-points-layer'
         ]}
         onClick={handleMapClick}
       >
@@ -1194,6 +1197,76 @@ const ExplorerMap = ({
               </Source>
             )}
 
+        {/* ── City Events Layers ────────────────────────────────────── */}
+        {shouldRenderCategory('cityEvents') && eventsData && (() => {
+          // Filter by selected month if provided
+          const activeMonthKey = eventsMonth
+            ? `${String(Math.floor(eventsMonth / 100)).padStart(4, '0')}-${String(eventsMonth % 100).padStart(2, '0')}`
+            : null
+
+          const filteredEvents = activeMonthKey
+            ? {
+                type: 'FeatureCollection',
+                features: eventsData.features.filter(f => f.properties?.date?.startsWith(activeMonthKey))
+              }
+            : eventsData
+
+          if (!filteredEvents.features.length) return null
+
+          return (
+            <Source id="city-events" type="geojson" data={filteredEvents}>
+              {/* Heatmap — green hotspots where events cluster */}
+              <Layer
+                id="events-heatmap-layer"
+                type="heatmap"
+                paint={{
+                  'heatmap-weight': 1,
+                  'heatmap-intensity': [
+                    'interpolate', ['linear'], ['zoom'],
+                    0, 1,
+                    15, 3
+                  ],
+                  'heatmap-color': [
+                    'interpolate',
+                    ['linear'],
+                    ['heatmap-density'],
+                    0,   'rgba(0, 0, 0, 0)',
+                    0.1, 'rgba(0, 80, 30, 0.3)',
+                    0.3, 'rgba(0, 160, 60, 0.5)',
+                    0.6, 'rgba(0, 220, 90, 0.75)',
+                    0.8, 'rgba(50, 255, 130, 0.9)',
+                    1.0, 'rgba(160, 255, 180, 1.0)'
+                  ],
+                  'heatmap-radius': [
+                    'interpolate', ['linear'], ['zoom'],
+                    0, 4,
+                    12, 20,
+                    15, 35
+                  ],
+                  'heatmap-opacity': 0.85
+                }}
+              />
+              {/* Clickable point layer visible at closer zoom */}
+              <Layer
+                id="events-points-layer"
+                type="circle"
+                minzoom={13}
+                paint={{
+                  'circle-radius': [
+                    'interpolate', ['linear'], ['zoom'],
+                    13, 4,
+                    16, 8
+                  ],
+                  'circle-color': '#22c55e',
+                  'circle-opacity': 0.85,
+                  'circle-stroke-width': 1.5,
+                  'circle-stroke-color': '#ffffff'
+                }}
+              />
+            </Source>
+          )
+        })()}
+
         {/* ── Traffic Layers ───────────────────────────────────────── */}
         {shouldRenderCategory('trafficFlow') && trafficData && (() => {
           // Map scenario id -> kpi field
@@ -1466,6 +1539,36 @@ const ExplorerMap = ({
                       )}
                     </>
                   )}
+
+                  {/* City Events Mode */}
+                  {(businessMode === 'events' || popupInfo?.feature?.source === 'city-events') && (() => {
+                    const p = popupInfo.feature.properties || {}
+                    const dateObj = p.date ? new Date(p.date + 'T00:00:00') : null
+                    const formattedDate = dateObj
+                      ? dateObj.toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                      : p.date
+                    const formattedTime = p.time ? p.time.slice(0, 5) : null
+                    return (
+                      <>
+                        <h3 style={{ marginBottom: '0.5rem' }}>{p.name || 'Event'}</h3>
+                        {p.venue && (
+                          <p style={{ margin: '0.25rem 0' }}>
+                            <span style={{ color: '#4ade80' }}>📍</span> <strong>Venue:</strong> {p.venue}
+                          </p>
+                        )}
+                        {formattedDate && (
+                          <p style={{ margin: '0.25rem 0' }}>
+                            <span style={{ color: '#4ade80' }}>🗓</span> <strong>Date:</strong> {formattedDate}
+                          </p>
+                        )}
+                        {formattedTime && (
+                          <p style={{ margin: '0.25rem 0' }}>
+                            <span style={{ color: '#4ade80' }}>🕐</span> <strong>Time:</strong> {formattedTime}
+                          </p>
+                        )}
+                      </>
+                    )
+                  })()}
                 </>
               )}
               

@@ -91,6 +91,7 @@ const LAYER_CATEGORIES = [
   { id: 'amenities', label: 'Amenities', dashboard: 'business', dataKey: 'businesses' },
   { id: 'businessCategories', label: 'Business Categories', dashboard: 'business', dataKey: 'businesses' },
   { id: 'propertySales', label: 'Property Sales', dashboard: 'business', dataKey: 'properties' },
+  { id: 'cityEvents', label: 'City Events', dashboard: 'business', dataKey: 'eventsData' },
   // Walkability layers
   { id: 'pedestrianRoutes', label: 'Pedestrian Routes', dashboard: 'walkability', dataKey: 'pedestrianActivity' },
   { id: 'cyclingRoutes', label: 'Cycling Routes', dashboard: 'walkability', dataKey: 'cyclingActivity' },
@@ -123,6 +124,10 @@ const UnifiedDataExplorer = () => {
   const [propertiesData, setPropertiesData] = useState(null)
   const [surveyData, setSurveyData] = useState(null)
   
+  // Events state
+  const [eventsData, setEventsData] = useState(null)
+  const [eventsMonth, setEventsMonth] = useState(null) // null = all months, 1-12 for specific month
+
   // Opinion mode state
   const [opinionSource, setOpinionSource] = useState('both') // 'formal', 'informal', 'both'
   
@@ -183,6 +188,7 @@ const UnifiedDataExplorer = () => {
     businesses: false,
     streetStalls: false,
     properties: false,
+    eventsData: false,
     // Walkability layers
     network: false,
     pedestrianActivity: false,
@@ -214,11 +220,12 @@ const UnifiedDataExplorer = () => {
   useEffect(() => {
     const loadBusinessData = async () => {
       try {
-        const [businesses, stalls, properties, survey] = await Promise.all([
+        const [businesses, stalls, properties, survey, events] = await Promise.all([
           fetch('/data/business/POI_enriched_20260120_185944.geojson').then(r => r.json()),
           fetch('/data/business/streetStalls.geojson').then(r => r.json()),
           fetch('/data/business/properties_consolidated.geojson').then(r => r.json()),
-          fetch('/data/business/survey_data.geojson').then(r => r.json())
+          fetch('/data/business/survey_data.geojson').then(r => r.json()),
+          fetch('/data/business/events.geojson').then(r => r.json()).catch(() => ({ type: 'FeatureCollection', features: [] }))
         ])
         
         // Process properties data to calculate transfer_count and total_value
@@ -268,13 +275,14 @@ const UnifiedDataExplorer = () => {
         setStreetStallsData(stalls)
         setPropertiesData(processedProperties)
         setSurveyData(survey)
+        setEventsData(events)
       } catch (error) {
         console.error('Error loading business data:', error)
       }
     }
     
     // Load business data when dashboard is business OR when any business layer is locked
-    const hasLockedBusinessLayer = ['businessLiveliness', 'vendorOpinions', 'businessRatings', 'amenities', 'businessCategories', 'propertySales'].some(id => lockedLayers.has(id))
+    const hasLockedBusinessLayer = ['businessLiveliness', 'vendorOpinions', 'businessRatings', 'amenities', 'businessCategories', 'propertySales', 'cityEvents'].some(id => lockedLayers.has(id))
     if (dashboardMode === 'business' || hasLockedBusinessLayer) {
       loadBusinessData()
     }
@@ -667,7 +675,8 @@ const UnifiedDataExplorer = () => {
         businessRatings: 'ratings',
         amenities: 'amenities',
         businessCategories: 'categories',
-        propertySales: 'property'
+        propertySales: 'property',
+        cityEvents: 'events'
       }
       if (modeMap[categoryId]) {
         setBusinessMode(modeMap[categoryId])
@@ -790,7 +799,8 @@ const UnifiedDataExplorer = () => {
                   ratings: 'businessRatings',
                   amenities: 'amenities',
                   categories: 'businessCategories',
-                  property: 'propertySales'
+                  property: 'propertySales',
+                  events: 'cityEvents'
                 }
                 if (categoryMap[mode]) {
                   selectCategory(categoryMap[mode])
@@ -812,6 +822,9 @@ const UnifiedDataExplorer = () => {
               onCategoriesFiltersChange={setCategoriesFilters}
               expandedGroups={expandedGroups}
               onExpandedGroupsChange={setExpandedGroups}
+              eventsData={eventsData}
+              eventsMonth={eventsMonth}
+              onEventsMonthChange={setEventsMonth}
               hideLayerControls={true}
             />
           )}
@@ -921,6 +934,8 @@ const UnifiedDataExplorer = () => {
             opinionSource={opinionSource}
             amenitiesFilters={amenitiesFilters}
             categoriesFilters={categoriesFilters}
+            eventsData={eventsData}
+            eventsMonth={eventsMonth}
             trafficData={trafficData}
             trafficScenario={trafficScenario}
             selectedSegment={selectedSegment}
