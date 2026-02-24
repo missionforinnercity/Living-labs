@@ -5,6 +5,7 @@ import {
   loadLightingData, 
   loadWalkabilityData, 
   loadBusinessData, 
+  loadCCIDBoundary,
   colorScales, 
   createColorExpression,
   filterPOIByTime,
@@ -20,18 +21,22 @@ import {
   getNarrativeColorExpression,
   getNarrativeWidthExpression
 } from '../utils/narrativeScoring'
+import {
+  thermalColorExpression,
+  safetyColorExpression,
+} from '../utils/walkabilityEngine'
 import './Map.css'
 
 // Replace with your Mapbox token
 mapboxgl.accessToken = 'pk.eyJ1IjoiYW5lZXNvbWFyIiwiYSI6ImNtN3lnYXhveTA5NmsyanM2Z2NmaHhrcncifQ.xIzrc87ZIEJZE1vpB2gFfw'
 
-const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour, districtGeoJSON, selectedDistrictId, districtBounds, onDistrictClick }) => {
+const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour, districtGeoJSON, selectedDistrictId, districtBounds, onDistrictClick, compareDistricts, showDistricts, walkabilityData: walkabilityIndexData, onSegmentClick, compareSegments, focusedSegment }) => {
   const mapContainer = useRef(null)
   const map = useRef(null)
   const [mapLoaded, setMapLoaded] = useState(false)
   const [currentShadeMetric, setCurrentShadeMetric] = useState('shade_coverage_pct')
   const [lightingData, setLightingData] = useState(null)
-  const [walkabilityData, setWalkabilityData] = useState(null)
+  const [netWalkData, setNetWalkData] = useState(null)
   const [walkabilityMode, setWalkabilityMode] = useState('network') // 'network', 'pedestrian', 'cycling'
   const [businessData, setBusinessData] = useState(null)
   const [isLoadingLayer, setIsLoadingLayer] = useState(null)
@@ -414,8 +419,8 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
       try {
         setIsLoadingLayer('walkability')
         // Use cached data if already loaded
-        const data = walkabilityData || await loadWalkabilityData()
-        if (!walkabilityData) setWalkabilityData(data)
+        const data = netWalkData || await loadWalkabilityData()
+        if (!netWalkData) setNetWalkData(data)
         
         // Remove existing layers
         ;['walkability-network', 'walkability-pedestrian', 'walkability-cycling'].forEach(layerId => {
@@ -852,14 +857,14 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
         // Load necessary data
         const [lightingDataset, walkabilityDataset, businessDataset, shadeDataset] = await Promise.all([
           lightingData || loadLightingData(),
-          walkabilityData || loadWalkabilityData(),
+          netWalkData || loadWalkabilityData(),
           businessData || loadBusinessData(),
           loadShadeData(temporalState.season, temporalState.timeOfDay).catch(() => null)
         ])
 
         // Cache loaded data
         if (!lightingData) setLightingData(lightingDataset)
-        if (!walkabilityData) setWalkabilityData(walkabilityDataset)
+        if (!netWalkData) setNetWalkData(walkabilityDataset)
         if (!businessData) setBusinessData(businessDataset)
 
         // Score street segments based on selected tour
@@ -875,7 +880,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
               shadeDataset,
               walkabilityDataset.pedestrian
             )
-            usedLayers = ['Road Lighting (avg lumens)', 'Pedestrian Activity (Strava)', 'POI with Outdoor Seating', 'Shade Coverage']
+            usedLayers = ['Road Lighting (avg lumens)', 'Pedestrian Activity', 'POI with Outdoor Seating', 'Shade Coverage']
             break
 
           case 'outdoor-dining':
@@ -1024,7 +1029,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
       if (map.current.getSource(SOURCE_ID)) map.current.removeSource(SOURCE_ID)
     }
 
-    if (!districtGeoJSON || !districtGeoJSON.features?.length) {
+    if (!showDistricts || !districtGeoJSON || !districtGeoJSON.features?.length) {
       cleanup()
       return
     }
@@ -1100,7 +1105,231 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
     })
 
     return cleanup
-  }, [mapLoaded, districtGeoJSON, selectedDistrictId, onDistrictClick])
+  }, [mapLoaded, showDistricts, districtGeoJSON, selectedDistrictId, onDistrictClick])
+
+  // ── District comparison highlights (amber A / blue B) ─────────────────────
+  useEffect(() => {
+    if (!mapLoaded || !map.current) return
+    const CMP_A = 'districts-cmp-a'
+    const CMP_B = 'districts-cmp-b'
+    const SOURCE_ID = 'districts-source'
+
+    const removeCompare = () => {
+      if (!map.current) return
+      ;[CMP_A, CMP_B].forEach(id => {
+        if (map.current.getLayer(id)) map.current.removeLayer(id)
+      })
+    }
+
+    removeCompare()
+    if (!map.current.getSource(SOURCE_ID)) return
+
+    const addCmpLayer = (id, clusterId, color) => {
+      map.current.addLayer({
+        id,
+        type: 'fill',
+        source: SOURCE_ID,
+        filter: ['==', ['get', 'clusterId'], clusterId],
+        paint: { 'fill-color': color, 'fill-opacity': 0.38 }
+      })
+    }
+
+    if (compareDistricts?.[0]) {
+      addCmpLayer(CMP_A, compareDistricts[0].properties.clusterId, '#e8a020')
+    }
+    if (compareDistricts?.[1]) {
+      addCmpLayer(CMP_B, compareDistricts[1].properties.clusterId, '#3d80c0')
+    }
+
+    return removeCompare
+  }, [mapLoaded, showDistricts, compareDistricts])
+
+  // ── 15-Minute City accessibility layers ────────────────────────────────
+  // ── Dual-State Walkability Index layers ─────────────────────────────────
+  useEffect(() => {
+    if (!mapLoaded || !map.current) return
+
+    const SRC_WLK    = 'walkability-idx-src'
+    const LYR_WLK    = 'walkability-idx-line'
+    const LYR_STORY_GLOW = 'walkability-story-glow'
+    const LYR_STORY  = 'walkability-story-line'
+    const SRC_STORY  = 'walkability-story-src'
+
+    const cleanup = () => {
+      if (!map.current) return
+      ;[LYR_WLK, LYR_STORY_GLOW, LYR_STORY].forEach(id => {
+        if (map.current.getLayer(id)) map.current.removeLayer(id)
+      })
+      ;[SRC_WLK, SRC_STORY].forEach(id => {
+        if (map.current.getSource(id)) map.current.removeSource(id)
+      })
+    }
+
+    if (!walkabilityIndexData) { cleanup(); return }
+
+    const { fc, mode: wMode, activeTour, storyFeatures, thresholds } = walkabilityIndexData
+    const EMPTY_FC = { type: 'FeatureCollection', features: [] }
+
+    cleanup()
+
+    // Main walkability layer — quintile step colours when thresholds are available
+    map.current.addSource(SRC_WLK, { type: 'geojson', data: fc || EMPTY_FC })
+    map.current.addLayer({
+      id:     LYR_WLK,
+      type:   'line',
+      source: SRC_WLK,
+      paint: {
+        'line-color':   wMode === 'day'
+          ? thermalColorExpression('kpi_day',   thresholds || null)
+          : safetyColorExpression('kpi_night',  thresholds || null),
+        'line-width':   3,
+        'line-opacity': 0.9,
+      }
+    })
+
+    // Click to select segment for compare panel
+    const handleWalkClick = (e) => {
+      const features = map.current.queryRenderedFeatures(e.point, { layers: [LYR_WLK] })
+      if (features.length > 0 && onSegmentClick) {
+        onSegmentClick({ properties: features[0].properties, geometry: features[0].geometry })
+      }
+    }
+    map.current.on('click', LYR_WLK, handleWalkClick)
+    map.current.on('mouseenter', LYR_WLK, () => { map.current.getCanvas().style.cursor = 'crosshair' })
+    map.current.on('mouseleave', LYR_WLK, () => { map.current.getCanvas().style.cursor = '' })
+
+    const fullCleanup = () => {
+      cleanup()
+      if (map.current) {
+        map.current.off('click', LYR_WLK, handleWalkClick)
+        map.current.off('mouseenter', LYR_WLK, () => {})
+        map.current.off('mouseleave', LYR_WLK, () => {})
+      }
+    }
+
+    // Story tour highlight overlay — outer glow + crisp core line
+    if (storyFeatures && storyFeatures.length > 0 && activeTour) {
+      const storyFC = { type: 'FeatureCollection', features: storyFeatures }
+      map.current.addSource(SRC_STORY, { type: 'geojson', data: storyFC })
+
+      // Wide blurred glow layer underneath
+      map.current.addLayer({
+        id:     LYR_STORY_GLOW,
+        type:   'line',
+        source: SRC_STORY,
+        paint: {
+          'line-color':   activeTour.glowColor || activeTour.highlightColor || '#ffffff',
+          'line-width':   14,
+          'line-opacity': 0.28,
+          'line-blur':    8,
+        }
+      })
+
+      // Crisp bright line on top
+      map.current.addLayer({
+        id:     LYR_STORY,
+        type:   'line',
+        source: SRC_STORY,
+        paint: {
+          'line-color':   activeTour.highlightColor || '#ffffff',
+          'line-width':   3.5,
+          'line-opacity': 0.95,
+          'line-blur':    0,
+        }
+      })
+    } else {
+      // Ensure story layers don't linger
+      if (map.current.getLayer(LYR_STORY_GLOW)) map.current.removeLayer(LYR_STORY_GLOW)
+      if (map.current.getLayer(LYR_STORY))      map.current.removeLayer(LYR_STORY)
+      if (map.current.getSource(SRC_STORY))     map.current.removeSource(SRC_STORY)
+    }
+
+    return fullCleanup
+  }, [mapLoaded, walkabilityIndexData, onSegmentClick])
+
+  // ── Compare segment highlight overlay ────────────────────────────────────
+  useEffect(() => {
+    if (!mapLoaded || !map.current) return
+    const SRC_SEL = 'compare-sel-src'
+    const LYR_SEL = 'compare-sel-line'
+
+    const removeSelLayer = () => {
+      if (map.current.getLayer(LYR_SEL))  map.current.removeLayer(LYR_SEL)
+      if (map.current.getSource(SRC_SEL)) map.current.removeSource(SRC_SEL)
+    }
+
+    removeSelLayer()
+
+    if (!compareSegments || compareSegments.length === 0) return
+
+    const colors = ['#e8a020', '#3d80c0']
+    const features = compareSegments.map((seg, i) => ({
+      ...seg,
+      properties: { ...seg.properties, _selColor: colors[i] }
+    }))
+    const fc = { type: 'FeatureCollection', features }
+
+    map.current.addSource(SRC_SEL, { type: 'geojson', data: fc })
+    map.current.addLayer({
+      id:     LYR_SEL,
+      type:   'line',
+      source: SRC_SEL,
+      paint: {
+        'line-color':   ['get', '_selColor'],
+        'line-width':   5,
+        'line-opacity': 1,
+        'line-dasharray': [1, 0],
+      }
+    })
+
+    return removeSelLayer
+  }, [mapLoaded, compareSegments])
+
+  // ── CCID boundary — permanent thin white outline ─────────────────────────
+  useEffect(() => {
+    if (!mapLoaded || !map.current) return
+    const SRC = 'ccid-boundary-src'
+    const LYR_FILL   = 'ccid-boundary-fill'
+    const LYR_LINE   = 'ccid-boundary-line'
+    const LYR_GLOW   = 'ccid-boundary-glow'
+
+    if (map.current.getSource(SRC)) return  // already added
+
+    loadCCIDBoundary()
+      .then(geojson => {
+        if (!map.current) return
+        map.current.addSource(SRC, { type: 'geojson', data: geojson })
+
+        // Faint fill so the interior is subtly distinguishable
+        map.current.addLayer({
+          id: LYR_FILL, type: 'fill', source: SRC,
+          paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.025 }
+        })
+
+        // Soft outer glow
+        map.current.addLayer({
+          id: LYR_GLOW, type: 'line', source: SRC,
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 6,
+            'line-opacity': 0.08,
+            'line-blur': 4
+          }
+        })
+
+        // Crisp white boundary line
+        map.current.addLayer({
+          id: LYR_LINE, type: 'line', source: SRC,
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 1.5,
+            'line-opacity': 0.65,
+            'line-dasharray': [4, 3]
+          }
+        })
+      })
+      .catch(err => console.warn('[Map] CCID boundary load failed:', err))
+  }, [mapLoaded])
 
   // ── Fly to selected district bounds ──────────────────────────────────────
   useEffect(() => {
@@ -1114,6 +1343,32 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
       console.warn('fitBounds error:', e)
     }
   }, [mapLoaded, districtBounds])
+
+  // ── Zoom to focused walkability segment ──────────────────────────────────
+  useEffect(() => {
+    if (!mapLoaded || !map.current || !focusedSegment) return
+    const geom = focusedSegment.geometry
+    if (!geom) return
+    let allCoords = []
+    if (geom.type === 'LineString') {
+      allCoords = geom.coordinates
+    } else if (geom.type === 'MultiLineString') {
+      allCoords = geom.coordinates.flat()
+    }
+    if (allCoords.length === 0) return
+    const lngs = allCoords.map(c => c[0])
+    const lats = allCoords.map(c => c[1])
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats)
+    try {
+      map.current.fitBounds(
+        [[minLng, minLat], [maxLng, maxLat]],
+        { padding: 120, duration: 1200, maxZoom: 18 }
+      )
+    } catch (e) {
+      console.warn('fitBounds segment error:', e)
+    }
+  }, [mapLoaded, focusedSegment])
 
   // Update other layers based on active state
   useEffect(() => {
@@ -1215,7 +1470,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
             {selectedTour === 'evening-walk' && (
               <>
                 <li>Road Lighting (avg lumens from 1,057 segments)</li>
-                <li>Pedestrian Activity (Strava data)</li>
+                <li>Pedestrian Activity</li>
                 <li>POI with Outdoor Seating</li>
                 <li>Shade Coverage at 7PM</li>
               </>

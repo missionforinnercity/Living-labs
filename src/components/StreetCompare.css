@@ -1,0 +1,265 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   StreetCompare — Side-by-side KPI spider comparison panel
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --sc-bg:          #13161d;
+  --sc-border:      rgba(255, 255, 255, 0.08);
+  --sc-text:        #d8dce8;
+  --sc-text-dim:    rgba(255, 255, 255, 0.38);
+  --sc-text-muted:  rgba(255, 255, 255, 0.2);
+  --sc-win:         #4aaa7a;
+  --sc-lose:        rgba(255, 255, 255, 0.3);
+}
+
+.sc-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--sc-bg);
+  border-top: 1px solid var(--sc-border);
+  z-index: 500;
+  max-height: 420px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  font-family: 'Inter', 'Helvetica Neue', sans-serif;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+.sc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 1.25rem;
+  border-bottom: 1px solid var(--sc-border);
+  flex-shrink: 0;
+}
+.sc-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+.sc-panel-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sc-text);
+}
+.sc-hint {
+  font-size: 0.72rem;
+  color: var(--sc-text-dim);
+  font-style: italic;
+}
+.sc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sc-btn {
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 5px;
+  border: 1px solid var(--sc-border);
+  cursor: pointer;
+  padding: 4px 10px;
+  transition: all 0.14s;
+}
+.sc-btn--ghost {
+  background: transparent;
+  color: var(--sc-text-dim);
+}
+.sc-btn--ghost:hover { background: rgba(255,255,255,0.06); color: var(--sc-text); }
+.sc-btn--close {
+  background: transparent;
+  color: var(--sc-text-dim);
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+.sc-btn--close:hover { background: rgba(239,68,68,0.12); color: #f87171; border-color: rgba(239,68,68,0.3); }
+
+/* ─── Street name headers ────────────────────────────────────────────────── */
+.sc-names {
+  display: flex;
+  gap: 1px;
+  padding: 0.65rem 1.25rem 0;
+}
+.sc-name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+  border-left: 3px solid;
+  padding: 0.4rem 0.65rem;
+}
+.sc-name-tag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #0a0c10;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sc-name-text {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--sc-text);
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Chart layout ───────────────────────────────────────────────────────── */
+.sc-charts {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 1.25rem 0;
+  gap: 1rem;
+}
+.sc-charts--two .sc-chart-col { flex: 1; }
+.sc-chart-col { display: flex; justify-content: center; }
+
+/* ─── SVG radar ──────────────────────────────────────────────────────────── */
+.sc-radar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 220px;
+}
+.sc-radar-svg {
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+}
+
+/* SVG ring polygons */
+.sc-radar-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 1;
+}
+.sc-radar-spoke {
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
+}
+.sc-radar-label {
+  font-size: 9px;
+  fill: rgba(255, 255, 255, 0.45);
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+}
+
+/* KPI scores below chart */
+.sc-radar-scores {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.sc-radar-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.sc-radar-kpi-val {
+  font-size: 1.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.sc-radar-kpi-label {
+  font-size: 0.62rem;
+  color: var(--sc-text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sc-radar-divider {
+  width: 1px;
+  height: 30px;
+  background: var(--sc-border);
+}
+
+/* ─── Comparison table ───────────────────────────────────────────────────── */
+.sc-table {
+  margin: 0.75rem 1.25rem 0;
+  border: 1px solid var(--sc-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.sc-table-header {
+  display: grid;
+  grid-template-columns: 1fr 120px 1fr;
+  padding: 0.4rem 0.75rem;
+  background: rgba(255,255,255,0.04);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--sc-text-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.sc-table-header span:last-child { text-align: right; }
+.sc-table-metric { text-align: center; color: var(--sc-text-muted); }
+
+.sc-row {
+  display: grid;
+  grid-template-columns: 1fr 120px 1fr;
+  padding: 0.35rem 0.75rem;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  align-items: center;
+  transition: background 0.12s;
+}
+.sc-row:hover { background: rgba(255,255,255,0.03); }
+.sc-row-label {
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--sc-text-dim);
+}
+.sc-row-val {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sc-lose);
+}
+.sc-row-val--right { text-align: right; }
+.sc-row-val--win   { color: var(--sc-win); font-weight: 700; }
+
+/* ─── Axis legend ────────────────────────────────────────────────────────── */
+.sc-axes-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  padding: 0.75rem 1.25rem 0.9rem;
+  border-top: 1px solid var(--sc-border);
+  margin-top: 0.75rem;
+}
+.sc-axis-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  font-size: 0.67rem;
+}
+.sc-axis-name {
+  font-weight: 700;
+  color: var(--sc-text-dim);
+}
+.sc-axis-desc {
+  color: var(--sc-text-muted);
+}

@@ -1,0 +1,191 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   DistrictCompare — Radar spider chart panel, mirrors StreetCompare style
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --dc-bg:        #13161d;
+  --dc-border:    rgba(255, 255, 255, 0.08);
+  --dc-text:      #d8dce8;
+  --dc-dim:       rgba(255, 255, 255, 0.38);
+  --dc-muted:     rgba(255, 255, 255, 0.2);
+  --dc-win:       #4aaa7a;
+  --dc-lose:      rgba(255, 255, 255, 0.3);
+}
+
+.dc-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--dc-bg);
+  border-top: 1px solid var(--dc-border);
+  z-index: 500;
+  max-height: 480px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Inter', 'Helvetica Neue', sans-serif;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+.dc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 1.25rem;
+  border-bottom: 1px solid var(--dc-border);
+  flex-shrink: 0;
+}
+.dc-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+.dc-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dc-text);
+}
+.dc-hint {
+  font-size: 0.7rem;
+  color: var(--dc-dim);
+}
+.dc-header-actions {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+.dc-btn {
+  padding: 0.28rem 0.7rem;
+  border-radius: 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.14s;
+}
+.dc-btn--ghost {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.55);
+}
+.dc-btn--ghost:hover { background: rgba(255,255,255,0.1); color: var(--dc-text); }
+.dc-btn--close {
+  background: rgba(255,80,80,0.1);
+  border-color: rgba(255,80,80,0.2);
+  color: rgba(255,120,120,0.8);
+  padding: 0.28rem 0.55rem;
+}
+.dc-btn--close:hover { background: rgba(255,80,80,0.2); }
+
+/* ─── District name headers ──────────────────────────────────────────────── */
+.dc-names {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.65rem 1.25rem 0;
+  flex-shrink: 0;
+}
+.dc-name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.7rem;
+  border-left: 3px solid;
+  background: rgba(255,255,255,0.03);
+  border-radius: 0 6px 6px 0;
+}
+.dc-name-tag {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+.dc-name-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.dc-name-text {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #dde0ea;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dc-name-sub {
+  font-size: 0.6rem;
+  color: var(--dc-dim);
+  margin-top: 1px;
+}
+
+/* ─── Radar chart ────────────────────────────────────────────────────────── */
+.dc-radar-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 0.6rem 1rem 0.4rem;
+  flex-shrink: 0;
+}
+.dc-radar-svg {
+  width: 220px;
+  height: 220px;
+  overflow: visible;
+}
+.dc-radar-ring {
+  fill: none;
+  stroke: rgba(255,255,255,0.08);
+  stroke-width: 1;
+}
+.dc-radar-spoke {
+  stroke: rgba(255,255,255,0.08);
+  stroke-width: 1;
+}
+.dc-radar-label {
+  font-size: 9px;
+  fill: rgba(255,255,255,0.45);
+  font-family: 'Inter', sans-serif;
+}
+
+/* ─── Comparison rows ────────────────────────────────────────────────────── */
+.dc-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.5rem 1.25rem 0.8rem;
+  border-top: 1px solid var(--dc-border);
+}
+.dc-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  align-items: center;
+  padding: 0.22rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.dc-row:last-child { border-bottom: none; }
+.dc-row-val {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--dc-lose);
+  text-align: left;
+}
+.dc-row-val--right { text-align: right; }
+.dc-row-val--win   { color: var(--dc-text); }
+.dc-row-val--lose  { color: rgba(255,255,255,0.28); }
+.dc-row-label {
+  font-size: 0.64rem;
+  color: var(--dc-dim);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+

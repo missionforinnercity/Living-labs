@@ -154,7 +154,7 @@ data/processed/               # Preprocessed EPSG:3857 data
 
 - Shade/thermal: Modeled from buildings + DTM + trees + satellite
 - Lighting: City infrastructure database + field documentation
-- Walkability: Strava December 2025 + cityseer network analysis
+- Walkability: December 2025 + cityseer network analysis
 - Business: Google Places API + field surveys + property transactions
 
 ## 🤝 Contributing

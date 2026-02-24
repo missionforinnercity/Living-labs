@@ -59,6 +59,51 @@ export async function loadWalkabilityData() {
   }
 }
 
+export async function loadParksData () {
+  const res = await fetch('/data/greenery/parks_nearby.geojson')
+  if (!res.ok) throw new Error('Failed to load parks data')
+  return res.json()
+}
+
+export async function loadRoadSegmentsData () {
+  const res = await fetch('/data/roads/segments.geojson')
+  if (!res.ok) throw new Error('Failed to load road segments')
+  return res.json()
+}
+
+export async function loadWalkabilityRanked () {
+  const r = await fetch('/data/processed/walkability/walkability_ranked.geojson')
+  if (!r.ok) throw new Error('Failed to load walkability_ranked.geojson')
+  return r.json()
+}
+
+export async function loadTreeCanopyData () {
+  const res = await fetch('/data/greenery/tree_canopy.geojson')
+  if (!res.ok) throw new Error('Failed to load tree canopy data')
+  return res.json()
+}
+
+export async function loadCCIDBoundary () {
+  const res = await fetch('/data/DEM/CCID_boundary.geojson')
+  if (!res.ok) throw new Error('Failed to load CCID boundary')
+  return res.json()
+}
+
+/**
+ * Load all friction-layer datasets needed by the True Effort 15-min engine.
+ * Returns { greeneryFC, lightingRoadsFC, networkFC, surfaceTempFC, canopyFC }
+ */
+export async function loadFrictionData () {
+  const [greenery, lightingRoads, network, surfaceTemp, canopy] = await Promise.all([
+    fetch('/data/greenery/greenryandSkyview.geojson').then(r => r.json()),
+    fetch('/data/lighting/new_Lights/road_segments_lighting_kpis_all.geojson').then(r => r.json()),
+    fetch('/data/processed/walkability/network_connectivity.geojson').then(r => r.json()),
+    fetch('/data/surfaceTemp/annual_surface_temperature_timeseries_20260211_1332.geojson').then(r => r.json()),
+    fetch('/data/greenery/tree_canopy.geojson').then(r => r.json()),
+  ])
+  return { greeneryFC: greenery, lightingRoadsFC: lightingRoads, networkFC: network, surfaceTempFC: surfaceTemp, canopyFC: canopy }
+}
+
 function getSeasonDate(season) {
   const dates = {
     summer: '12-21',

@@ -8,52 +8,50 @@ import { loadBusinessData, loadLightingData, loadWalkabilityData } from '../util
 import './NarrativeDistricts.css'
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Methodology catalogue
+// ─────────────────────────────────────────────────────────────────────────────
+
+const METHODOLOGY = [
+  {
+    attr: 'Business Density',
+    formula: 'POI count per ha',
+    detail: 'Total points of interest within each DBSCAN cluster boundary divided by the convex-hull area in hectares. Higher density indicates a more compact commercial district.'
+  },
+  {
+    attr: 'Business Diversity',
+    formula: 'Shannon entropy of categories',
+    detail: 'Shannon’s H index computed across the Google Places category distribution within each cluster. A higher score means a broader mix of business types.'
+  },
+  {
+    attr: 'Lighting Score',
+    formula: '% segments ≥ 5 lux',
+    detail: 'Road segments within or adjacent to the cluster are intersected with CoCT lighting KPI data. Score = percentage of segments whose mean lux value exceeds the 5 lux safety threshold.'
+  },
+  {
+    attr: 'Connectivity Score',
+    formula: 'Normalised betweenness centrality',
+    detail: 'Network betweenness centrality (400 m radius) averaged across all street-network nodes within the cluster boundary, normalised 0–100 city-wide.'
+  },
+  {
+    attr: 'Overall Score',
+    formula: '35% Density · 20% Diversity · 25% Lighting · 20% Connect.',
+    detail: 'Weighted linear combination of the four sub-scores. Weights reflect the relative importance of commercial vitality (density + diversity) and public-realm quality (lighting + connectivity).'
+  },
+  {
+    attr: 'Clustering Method',
+    formula: 'DBSCAN ε=80 m, minPts=4',
+    detail: 'Density-Based Spatial Clustering of Applications with Noise. Parameters: 80 m neighbourhood radius, minimum 4 POIs to form a core point. Noise points (isolated POIs) are excluded from districts.'
+  },
+]
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Data sources catalogue
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DATA_SOURCES = [
-  {
-    label: 'Business POI',
-    file: 'POI_simplified.geojson',
-    desc: '4 100+ Google Places points of interest across the Cape Town CBD.',
-    usedFor: 'All district clustering and scoring',
-    active: true
-  },
-  {
-    label: 'Pedestrian Activity',
-    file: 'pedestrian_month_all.geojson',
-    desc: 'Strava Metro monthly pedestrian trip counts per street segment.',
-    usedFor: 'Data Explorer only',
-    active: false
-  },
-  {
-    label: 'Network Connectivity',
-    file: 'network_connectivity.geojson',
-    desc: 'Space syntax network — Hillier integration and betweenness centrality.',
-    usedFor: 'Connectivity score (pedestrian flow)',
-    active: true
-  },
-  {
-    label: 'Street Lighting',
-    file: 'road_segments_lighting_kpis_all.geojson',
-    desc: 'Road segments with average lux values and coverage above 5 lux threshold.',
-    usedFor: 'Lighting score (% above 5 lux)',
-    active: true
-  },
-  {
-    label: 'Greenery & Sky View',
-    file: 'greenryandSkyview.geojson',
-    desc: 'Street-level vegetation index and sky view factor per network node.',
-    usedFor: 'Data Explorer only',
-    active: false
-  },
-  {
-    label: 'Surface Temperature',
-    file: 'annual_surface_temp.geojson',
-    desc: 'Seasonal surface temperatures per road segment from satellite imagery.',
-    usedFor: 'Data Explorer only',
-    active: false
-  }
+  { label: 'Business POI',         usedFor: 'District clustering and scoring' },
+  { label: 'Network Connectivity', usedFor: 'Connectivity score'               },
+  { label: 'Street Lighting',      usedFor: 'Lighting score'                   },
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,7 +70,7 @@ function CategoryBadge ({ type, count }) {
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect }) => {
+const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChange }) => {
   const [tab,          setTab]          = useState('districts')
   const [districtFC,   setDistrictFC]   = useState(null)
   const [status,       setStatus]       = useState('idle')
@@ -181,6 +179,9 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect }) => {
       <div className="nd-tabs">
         <button className={`nd-tab ${tab === 'districts' ? 'active' : ''}`} onClick={() => setTab('districts')}>
           Districts
+        </button>
+        <button className={`nd-tab ${tab === 'methodology' ? 'active' : ''}`} onClick={() => setTab('methodology')}>
+          Methodology
         </button>
         <button className={`nd-tab ${tab === 'sources' ? 'active' : ''}`} onClick={() => setTab('sources')}>
           Data Sources
@@ -305,6 +306,8 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect }) => {
                         </div>
                       </div>
                     )}
+
+                    {/* Compare by clicking districts on the map */}
                   </div>
                 )
               })()}
@@ -315,23 +318,37 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect }) => {
         </div>
       )}
 
+      {/* ── METHODOLOGY TAB ────────────────────────────────────────── */}
+      {tab === 'methodology' && (
+        <div className="nd-sources-pane">
+          <p className="nd-sources-intro">
+            How each district score is computed from the underlying data.
+          </p>
+          {METHODOLOGY.map(m => (
+            <div key={m.attr} className="nd-meth-row">
+              <div className="nd-meth-header">
+                <span className="nd-meth-name">{m.attr}</span>
+                <span className="nd-meth-formula">{m.formula}</span>
+              </div>
+              <p className="nd-meth-detail">{m.detail}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── DATA SOURCES TAB ───────────────────────────────────────── */}
       {tab === 'sources' && (
         <div className="nd-sources-pane">
           <p className="nd-sources-intro">
             Datasets powering the District Narrative Engine.
-            Inactive datasets are available in the Data Explorer.
           </p>
           {DATA_SOURCES.map(s => (
-            <div key={s.file} className={`nd-source-card ${s.active ? 'active' : ''}`}>
+            <div key={s.label} className="nd-source-card active">
               <div className="nd-source-header">
                 <span className="nd-source-label">{s.label}</span>
-                <span className={`nd-source-status ${s.active ? 'used' : ''}`}>
-                  {s.active ? 'Used' : 'Explorer'}
-                </span>
+                <span className="nd-source-status used">Used</span>
               </div>
-              <p className="nd-source-file">{s.file}</p>
-              <p className="nd-source-desc">{s.desc}</p>
+              <p className="nd-source-used-for">{s.usedFor}</p>
             </div>
           ))}
         </div>

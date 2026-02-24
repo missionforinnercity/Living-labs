@@ -7,7 +7,7 @@
  * Score street segments for "Perfect Evening Walk" narrative
  * Criteria:
  * - Well-lit streets (avg_illuminance > 20 lux)
- * - High pedestrian activity (Strava data)
+ * - High pedestrian activity 
  * - Nearby cafes/restaurants with outdoor seating
  * - Comfortable shade/temperature
  */
@@ -36,7 +36,7 @@ export function scoreEveningWalk(roadSegments, poiData, shadeData, walkabilityDa
       }
       
       // Walkability score (0-30 points)
-      // Based on pedestrian activity from Strava
+      // Based on pedestrian activity 
       if (props.ped_count) {
         const pedCount = parseFloat(props.ped_count)
         score += Math.min(30, (pedCount / 100) * 30)
@@ -127,7 +127,7 @@ export function scoreMorningCoffee(roadSegments, poiData) {
 /**
  * Score streets for "Safe Cycling Route" narrative
  * Criteria:
- * - High cycling activity (Strava)
+ * - High cycling activity
  * - Good street lighting for visibility
  * - Lower pedestrian density (less conflict)
  * - Connected network (betweenness centrality)

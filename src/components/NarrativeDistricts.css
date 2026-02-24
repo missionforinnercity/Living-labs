@@ -797,11 +797,11 @@
 }
 
 .nd-sources-intro {
-  font-size: 0.75rem;
-  color: #64748b;
-  line-height: 1.5;
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.55;
   padding: 0 0 0.35rem;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
   margin-bottom: 0.2rem;
 }
 
@@ -850,17 +850,46 @@
   border-color: rgba(102,126,234,0.3);
 }
 
-.nd-source-file {
-  font-size: 0.66rem;
-  color: #475569;
-  font-family: 'Fira Code', monospace;
-  margin: 0 0 0.3rem;
+.nd-source-used-for {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.45);
+  margin: 0.2rem 0 0;
 }
 
-.nd-source-desc {
-  font-size: 0.72rem;
-  color: #64748b;
-  line-height: 1.45;
+/* ─── Methodology rows ───────────────────────────────────────────────────── */
+.nd-meth-row {
+  padding: 0.65rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.nd-meth-row:last-child { border-bottom: none; }
+.nd-meth-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.nd-meth-name {
+  font-size: 0.73rem;
+  font-weight: 700;
+  color: #dde0ea;
+  flex: 1;
+}
+.nd-meth-formula {
+  font-size: 0.6rem;
+  color: #fbbf24;
+  background: rgba(251,191,36,0.12);
+  border: 1px solid rgba(251,191,36,0.28);
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.nd-meth-detail {
   margin: 0;
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.6;
 }
 

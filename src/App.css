@@ -49,6 +49,26 @@
 .sidebar--dark {
   background: #0f1117;
   border-right-color: rgba(255,255,255,0.07);
+  /* Visible scrollbar on dark background */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.18) transparent;
+}
+
+.sidebar--dark::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar--dark::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.03);
+}
+
+.sidebar--dark::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.18);
+  border-radius: 3px;
+}
+
+.sidebar--dark::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.35);
 }
 
 /* TemporalControls inside dark sidebar */
@@ -97,4 +117,38 @@
     border-right: none;
     border-bottom: 1px solid #e0e0e0;
   }
+}
+
+/* ── Narrative sub-tab switcher ──────────────────────────────────────────── */
+.narrative-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.narrative-tab {
+  flex: 1;
+  padding: 10px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.narrative-tab:hover {
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.narrative-tab--active {
+  color: #a5b4fc;
+  border-bottom-color: #667eea;
+  background: rgba(102, 126, 234, 0.08);
 }
