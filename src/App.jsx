@@ -7,9 +7,11 @@ import DistrictCompare from './components/DistrictCompare'
 import WalkabilityPanel from './components/WalkabilityPanel'
 import StreetCompare from './components/StreetCompare'
 import DataExplorer from './components/DataExplorer'
+import WardExplorer from './components/WardExplorer'
 import './App.css'
 
 function App() {
+  const [showLanding, setShowLanding] = useState(true)
   const [mode, setMode] = useState('narrative') // 'narrative' or 'explorer'
   const [narrativeTab, setNarrativeTab] = useState('districts') // 'districts' | 'walkability'
   const [activeLayers, setActiveLayers] = useState({
@@ -86,10 +88,19 @@ function App() {
     })
   }, [])
 
+  if (showLanding) {
+    return <WardExplorer onEnterDashboard={() => setShowLanding(false)} />
+  }
+
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Urban Analytics Lab</h1>
+        <div className="app-header-left">
+          <button className="app-back-btn" onClick={() => setShowLanding(true)}>
+            ← Neighbourhood View
+          </button>
+          <h1>Urban Analytics Lab</h1>
+        </div>
         <ModeToggle mode={mode} onModeChange={setMode} />
       </header>
 
