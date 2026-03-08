@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import proj4 from 'proj4'
 import ExplorerMap from './ExplorerMap'
@@ -181,7 +181,14 @@ const UnifiedDataExplorer = () => {
   // Traffic dashboard state
   const [trafficData, setTrafficData] = useState(null)
   const [trafficScenario, setTrafficScenario] = useState('WORK_MORNING')
-  
+
+  // Resizable sidebar
+  const [sidebarWidth, setSidebarWidth] = useState(360)
+  const sidebarDragRef = useRef(null)
+
+  // Rating filter — null = all, Set of floor values e.g. new Set([4,5])
+  const [ratingFilter, setRatingFilter] = useState(null)
+
   // Layer visibility
   const [visibleLayers, setVisibleLayers] = useState({
     // Business layers
@@ -737,6 +744,36 @@ const UnifiedDataExplorer = () => {
     }
   }
   
+  // Activate all layers for a given dashboard at once
+  const selectAllLayersForDashboard = (dashboard) => {
+    const cats = LAYER_CATEGORIES.filter(c => c.dashboard === dashboard)
+    const ids = cats.map(c => c.id)
+
+    const newLockedLayers = new Set(lockedLayers)
+    ids.forEach(id => newLockedLayers.add(id))
+    setLockedLayers(newLockedLayers)
+
+    setVisibleLayers(prev => {
+      const updated = { ...prev }
+      cats.forEach(c => { updated[c.dataKey] = true })
+      return updated
+    })
+
+    setLayerStack(prev => {
+      const existingIds = new Set(prev.map(item => item.id))
+      const updated = prev.map(item =>
+        ids.includes(item.id) ? { ...item, locked: true } : item
+      )
+      const newItems = cats
+        .filter(c => !existingIds.has(c.id))
+        .map(c => ({ id: c.id, label: c.label, dataKey: c.dataKey, dashboard: c.dashboard, locked: true }))
+      return [...updated, ...newItems]
+    })
+
+    setActiveCategory(null)
+    setDashboardMode(dashboard)
+  }
+
   // Move layer in stack (for reordering)
   const moveLayerInStack = (fromIndex, toIndex) => {
     const newStack = [...layerStack]
@@ -749,7 +786,131 @@ const UnifiedDataExplorer = () => {
   const getCurrentDashboardCategories = () => {
     return LAYER_CATEGORIES.filter(c => c.dashboard === dashboardMode)
   }
+
+  // Get businesses matching the current category/filters for bottom panel
+  const getActiveBusinesses = () => {
+    if (dashboardMode !== 'business' || !activeCategory) return []
+
+    let features = []
+    if (activeCategory === 'cityEvents') {
+      features = eventsData?.features || []
+    } else if (activeCategory === 'propertySales') {
+      features = propertiesData?.features || []
+    } else if (activeCategory === 'vendorOpinions') {
+      features = streetStallsData?.features || []
+    } else {
+      features = businessesData?.features || []
+    }
+
+    if (activeCategory === 'amenities') {
+      const active = Object.entries(amenitiesFilters).filter(([, v]) => v).map(([k]) => k)
+      if (active.length > 0) {
+        features = features.filter(f => active.every(k => f.properties[k]))
+      }
+    }
+
+    return features
+      .filter(f => {
+        const p = f.properties
+        return (p.displayName?.text || p.name) && p.businessStatus !== 'CLOSED_PERMANENTLY'
+      })
+      .sort((a, b) => (b.properties.rating || 0) - (a.properties.rating || 0))
+      .slice(0, 40)
+  }
   
+  // Compute stats for a business category selection
+  const computeCategoryStats = () => {
+    if (dashboardMode !== 'business' || !activeCategory || !businessesData) return null
+    if (['propertySales', 'cityEvents', 'vendorOpinions'].includes(activeCategory)) return null
+
+    const categoryMap = {
+      businessLiveliness: null,     // all businesses
+      businessRatings: null,
+      amenities: null,
+      businessCategories: null
+    }
+    if (!(activeCategory in categoryMap)) return null
+
+    const features = businessesData.features || []
+    const active = features.filter(f => f.properties.businessStatus !== 'CLOSED_PERMANENTLY')
+
+    const withRating = active.filter(f => f.properties.rating > 0)
+    const avgRating = withRating.length > 0
+      ? (withRating.reduce((s, f) => s + f.properties.rating, 0) / withRating.length).toFixed(1)
+      : null
+
+    // Rating distribution
+    const ratingBuckets = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+    withRating.forEach(f => {
+      const bucket = Math.floor(f.properties.rating)
+      if (ratingBuckets[bucket] !== undefined) ratingBuckets[bucket]++
+    })
+
+    // Open now count
+    const now = new Date()
+    const nowDay = now.getDay()
+    const nowHour = now.getHours()
+    const openCount = active.filter(f => {
+      try {
+        const hrs = f.properties.regularOpeningHours
+        if (!hrs || !hrs.weekdayDescriptions) return false
+        // simple check: use isBusinessOpen util
+        return true
+      } catch { return false }
+    }).length
+    // Use dayOfWeek/hour state as proxy
+    const openNowCount = active.filter(f => {
+      try {
+        const hrs = f.properties.regularOpeningHours
+        if (!hrs || !hrs.periods) return false
+        return true
+      } catch { return false }
+    }).length
+
+    // Top types
+    const typeCounts = {}
+    active.forEach(f => {
+      const t = f.properties.primaryType
+      if (t) typeCounts[t] = (typeCounts[t] || 0) + 1
+    })
+    const topTypes = Object.entries(typeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+
+    // Avg review count
+    const withReviews = active.filter(f => f.properties.userRatingCount > 0)
+    const avgReviewCount = withReviews.length > 0
+      ? Math.round(withReviews.reduce((s, f) => s + (f.properties.userRatingCount || 0), 0) / withReviews.length)
+      : null
+
+    return {
+      total: active.length,
+      avgRating,
+      ratingBuckets,
+      topTypes,
+      avgReviewCount,
+      withRatingCount: withRating.length
+    }
+  }
+
+  // Resize drag handlers
+  const startSidebarDrag = useCallback((e) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = sidebarWidth
+    const onMove = (ev) => {
+      const delta = startX - ev.clientX
+      const next = Math.max(280, Math.min(640, startWidth + delta))
+      setSidebarWidth(next)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [sidebarWidth])
+
   return (
     <div className="unified-data-explorer">
       <div className="explorer-header">
@@ -768,24 +929,37 @@ const UnifiedDataExplorer = () => {
         </div>
       </div>
       
+      {/* Category sub-nav — horizontal pill bar below mode tabs */}
+      <div className="category-subnav">
+        {/* All Layers toggle — only for dashboards with multiple layer types */}
+        {['greenery'].includes(dashboardMode) && (() => {
+          const dashCats = getCurrentDashboardCategories()
+          const allActive = dashCats.every(c => layerStack.some(l => l.id === c.id))
+          return (
+            <button
+              className={`category-pill category-pill--all ${allActive ? 'active' : ''}`}
+              onClick={() => selectAllLayersForDashboard(dashboardMode)}
+            >
+              <span className="category-pill-dot category-pill-dot--all"></span>
+              <span className="category-pill-label">All Layers</span>
+            </button>
+          )
+        })()}
+        {getCurrentDashboardCategories().map(category => (
+          <button
+            key={category.id}
+            className={`category-pill ${activeCategory === category.id || (layerStack.some(l => l.id === category.id) && !activeCategory) ? 'active' : ''}`}
+            onClick={() => selectCategory(category.id)}
+          >
+            <span className="category-pill-dot"></span>
+            <span className="category-pill-label">{category.label}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="explorer-content">
-        <aside className="explorer-sidebar">
-          {/* Category Selector - Always visible */}
-          <div className="category-selector">
-            <h3>Data Layers</h3>
-            {getCurrentDashboardCategories().map(category => (
-              <button
-                key={category.id}
-                className={`category-btn ${activeCategory === category.id ? 'active' : ''}`}
-                onClick={() => selectCategory(category.id)}
-              >
-                <span className="category-dot"></span>
-                <span className="category-icon">{category.icon}</span>
-                <span className="category-label">{category.label}</span>
-              </button>
-            ))}
-          </div>
-          
+        <aside className="explorer-sidebar" style={{ width: sidebarWidth }}>
+          <div className="sidebar-resize-handle" onMouseDown={startSidebarDrag} />
           {/* Dashboard-specific content */}
           {dashboardMode === 'business' && (
             <BusinessAnalytics
@@ -828,7 +1002,84 @@ const UnifiedDataExplorer = () => {
               hideLayerControls={true}
             />
           )}
-          
+
+          {/* Business category stats panel */}
+          {dashboardMode === 'business' && (() => {
+            const stats = computeCategoryStats()
+            if (!stats) return null
+            const maxBucket = Math.max(...Object.values(stats.ratingBuckets), 1)
+            return (
+              <div className="biz-stats-panel">
+                <div className="biz-stats-header">
+                  <span className="biz-stats-title">Category Intelligence</span>
+                  <span className="biz-stats-count">{stats.total.toLocaleString()} businesses</span>
+                </div>
+                <div className="biz-stats-grid">
+                  <div className="biz-stat-card">
+                    <div className="biz-stat-value">{stats.avgRating ?? '—'}</div>
+                    <div className="biz-stat-label">Avg Rating</div>
+                  </div>
+                  <div className="biz-stat-card">
+                    <div className="biz-stat-value">{stats.withRatingCount}</div>
+                    <div className="biz-stat-label">Rated</div>
+                  </div>
+                  <div className="biz-stat-card">
+                    <div className="biz-stat-value">{stats.avgReviewCount ?? '—'}</div>
+                    <div className="biz-stat-label">Avg Reviews</div>
+                  </div>
+                  <div className="biz-stat-card">
+                    <div className="biz-stat-value">{stats.topTypes.length > 0 ? stats.topTypes[0][1] : '—'}</div>
+                    <div className="biz-stat-label">Top Type Count</div>
+                  </div>
+                </div>
+                <div className="biz-stats-section-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Rating Distribution</span>
+                  {ratingFilter && ratingFilter.size > 0 && (
+                    <button className="biz-filter-clear" onClick={() => setRatingFilter(null)}>clear filter</button>
+                  )}
+                </div>
+                <div className="biz-rating-dist">
+                  {[5,4,3,2,1].map(star => {
+                    const count = stats.ratingBuckets[star] || 0
+                    const pct = maxBucket > 0 ? (count / maxBucket) * 100 : 0
+                    const isSelected = ratingFilter && ratingFilter.has(star)
+                    const hasFilter = ratingFilter && ratingFilter.size > 0
+                    const toggleStar = () => {
+                      setRatingFilter(prev => {
+                        const next = new Set(prev || [])
+                        if (next.has(star)) { next.delete(star) } else { next.add(star) }
+                        return next.size === 0 ? null : next
+                      })
+                    }
+                    return (
+                      <div
+                        key={star}
+                        className={`biz-rating-row biz-rating-row--clickable ${isSelected ? 'selected' : ''} ${hasFilter && !isSelected ? 'dimmed' : ''}`}
+                        onClick={toggleStar}
+                        title={`${isSelected ? 'Deselect' : 'Select'} ${star}-star businesses`}
+                      >
+                        <span className="biz-rating-star">{star}★</span>
+                        <div className="biz-rating-bar-track">
+                          <div className="biz-rating-bar-fill" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="biz-rating-count">{count}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="biz-stats-section-label">Top Business Types</div>
+                <div className="biz-top-types">
+                  {stats.topTypes.map(([type, count]) => (
+                    <div key={type} className="biz-type-row">
+                      <span className="biz-type-name">{type.replace(/_/g, ' ')}</span>
+                      <span className="biz-type-count">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
           {dashboardMode === 'walkability' && (
             <WalkabilityAnalytics
               walkabilityMode={walkabilityMode}
@@ -882,6 +1133,7 @@ const UnifiedDataExplorer = () => {
               treeCanopyData={treeCanopyData}
               parksData={parksData}
               hideLayerControls={true}
+              allLayersActive={LAYER_CATEGORIES.filter(c => c.dashboard === 'greenery').every(c => layerStack.some(l => l.id === c.id))}
             />
           )}
 
@@ -895,6 +1147,28 @@ const UnifiedDataExplorer = () => {
               }}
               hideLayerControls={true}
             />
+          )}
+
+          {/* Active Layers — inline at sidebar bottom */}
+          {layerStack.length > 0 && (
+            <div className="sidebar-layer-stack">
+              <div className="sidebar-layer-stack-header">
+                <span className="sidebar-layer-stack-label">Active Layers</span>
+                <span className="sidebar-layer-stack-count">{layerStack.length}</span>
+              </div>
+              {layerStack.map((layer) => (
+                <div key={layer.id} className="sidebar-layer-item">
+                  <span className="sidebar-layer-name">{layer.label}</span>
+                  <button
+                    className="sidebar-layer-remove"
+                    onClick={() => removeFromStack(layer.id)}
+                    title="Remove layer"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </aside>
         
@@ -938,6 +1212,7 @@ const UnifiedDataExplorer = () => {
             eventsMonth={eventsMonth}
             trafficData={trafficData}
             trafficScenario={trafficScenario}
+            ratingFilter={ratingFilter ? Array.from(ratingFilter) : null}
             selectedSegment={selectedSegment}
             onSegmentSelect={setSelectedSegment}
             onRouteSegmentClick={(segment, mode) => {
@@ -1051,50 +1326,51 @@ const UnifiedDataExplorer = () => {
             </div>
           )}
         </main>
-        
-        {/* Persistent Layer Stack UI */}
-        {layerStack.length > 0 && (
-          <div className="persistent-layer-stack">
-            <h4>📍 Map Layers</h4>
-            <p className="stack-hint">Top layers render above · Drag to reorder</p>
-            <div className="layer-stack-items">
-              {layerStack.map((layer, index) => (
-                <div 
-                  key={layer.id} 
-                  className={`layer-stack-item ${layer.locked ? 'locked' : ''}`}
-                  draggable
-                  onDragStart={(e) => e.dataTransfer.setData('index', index.toString())}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    const fromIndex = parseInt(e.dataTransfer.getData('index'))
-                    if (fromIndex !== index) {
-                      moveLayerInStack(fromIndex, index)
-                    }
-                  }}
-                >
-                  <span className="drag-handle">⋮⋮</span>
-                  <span className="layer-icon">{layer.icon}</span>
-                  <span className="layer-label">{layer.label}</span>
-                  <button 
-                    className={`lock-btn ${layer.locked ? 'locked' : ''}`}
-                    onClick={() => toggleLayerLock(layer.id)}
-                    title={layer.locked ? 'Unlock layer' : 'Lock layer to persist'}
-                  >
-                    {layer.locked ? '🔒' : '🔓'}
-                  </button>
-                  <button 
-                    className="remove-layer-btn"
-                    onClick={() => removeFromStack(layer.id)}
-                    title="Remove layer from map"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+
+        {/* Business bottom panel */}
+        {(() => {
+          const businesses = getActiveBusinesses()
+          if (businesses.length === 0) return null
+          const categoryLabel = getCurrentDashboardCategories().find(c => c.id === activeCategory)?.label || 'Businesses'
+          return (
+            <div className="biz-bottom-panel">
+              <div className="bbp-header">
+                <span className="bbp-title">{categoryLabel}</span>
+                <span className="bbp-count">{businesses.length}</span>
+              </div>
+              <div className="bbp-list">
+                {businesses.map((feature, i) => {
+                  const p = feature.properties
+                  const name = p.displayName?.text || p.name || 'Unknown'
+                  const type = p.primaryTypeDisplayName?.text || p.types?.[0]?.replace(/_/g, ' ') || ''
+                  const rating = p.rating
+                  const isOpen = p.currentOpeningHours?.openNow
+                  const addr = p.shortFormattedAddress || ''
+                  const price = p.priceLevel ? '·'.repeat(parseInt(p.priceLevel.replace('PRICE_LEVEL_', '') || 0)) : ''
+                  return (
+                    <div key={p.id || i} className="bbp-card">
+                      <div className="bbp-card-name" title={name}>{name}</div>
+                      {type && <div className="bbp-card-type">{type}</div>}
+                      <div className="bbp-card-meta">
+                        {rating != null && (
+                          <span className="bbp-rating">★ {rating.toFixed(1)}</span>
+                        )}
+                        {price && <span className="bbp-price">{price}</span>}
+                        {isOpen != null && (
+                          <span className={`bbp-status ${isOpen ? 'open' : 'closed'}`}>
+                            {isOpen ? 'Open' : 'Closed'}
+                          </span>
+                        )}
+                      </div>
+                      {addr && <div className="bbp-card-address" title={addr}>{addr}</div>}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
+
       </div>
     </div>
   )

@@ -1,37 +1,43 @@
 .mode-toggle {
   display: flex;
-  gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.25rem;
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 4px;
+  border-radius: 100px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .mode-button {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border: none;
+  gap: 0.4rem;
+  padding: 6px 18px;
+  border: 1px solid transparent;
   background: transparent;
-  color: white;
-  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.38);
+  border-radius: 100px;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  transition: all 0.18s ease;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .mode-button:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .mode-button.active {
-  background: white;
-  color: #667eea;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: rgba(0, 229, 160, 0.14);
+  border-color: rgba(0, 229, 160, 0.45);
+  color: #00e5a0;
+  box-shadow: 0 0 14px rgba(0, 229, 160, 0.15);
 }
 
 .mode-button .icon {
-  font-size: 1.1rem;
+  font-size: 0.9rem;
 }

@@ -154,6 +154,11 @@ export default function WardExplorer({ onEnterDashboard }) {
   const [activeMetricIdx,setActiveMetricIdx]= useState(0)
   const [selectedWard,   setSelectedWard]   = useState(null)
   const [hoveredWardId,  setHoveredWardId]  = useState(null)
+  const [hoveredPos,     setHoveredPos]     = useState({ x: 0, y: 0 })
+  const [searchQuery,    setSearchQuery]    = useState('')
+  const [searchOpen,     setSearchOpen]     = useState(false)
+  const [copied,         setCopied]         = useState(false)
+  const [pendingWard,    setPendingWard]    = useState(null)
 
   // Fetch neighbourhood data once
   useEffect(() => {
@@ -183,6 +188,35 @@ export default function WardExplorer({ onEnterDashboard }) {
 
   const tab    = TABS[activeTab]
   const metric = tab.metrics[activeMetricIdx]
+
+  // City-wide field averages — for ward vs city comparison
+  const cityAverages = useMemo(() => {
+    if (!geojson) return {}
+    const fields = [...new Set(TABS.flatMap(t => t.statFields.map(sf => sf.key)))]
+    const avgs = {}
+    fields.forEach(key => {
+      const vals = geojson.features
+        .map(f => f.properties[key])
+        .filter(v => v != null && isFinite(v) && v > 0)
+      if (vals.length) avgs[key] = vals.reduce((s, v) => s + v, 0) / vals.length
+    })
+    return avgs
+  }, [geojson])
+
+  // Hovered ward properties for tooltip
+  const hoveredWardProps = useMemo(() => {
+    if (!hoveredWardId || !geojson) return null
+    return geojson.features.find(f => f.properties.neighbourhood === hoveredWardId)?.properties ?? null
+  }, [hoveredWardId, geojson])
+
+  // Search results
+  const searchResults = useMemo(() => {
+    if (!geojson || !searchQuery.trim()) return []
+    const q = searchQuery.toLowerCase()
+    return geojson.features
+      .filter(f => f.properties.neighbourhood?.toLowerCase().includes(q))
+      .slice(0, 6)
+  }, [geojson, searchQuery])
 
   // ── Init map (waits for geojson) ──────────────────────────────────────────
   useEffect(() => {
@@ -263,6 +297,7 @@ export default function WardExplorer({ onEnterDashboard }) {
           hoveredIdRef.current = id
           setHoveredWardId(id)
         }
+        setHoveredPos({ x: e.point.x, y: e.point.y })
         m.getCanvas().style.cursor = 'pointer'
       })
 
@@ -295,6 +330,46 @@ export default function WardExplorer({ onEnterDashboard }) {
     return () => { mapRef.current?.remove(); mapRef.current = null }
   }, [geojson]) // eslint-disable-line
 
+  // ── URL hash: read on mount ───────────────────────────────────────────────
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.slice(1))
+    const tabIdx = parseInt(hash.get('tab'))
+    const metricIdx = parseInt(hash.get('metric'))
+    const ward = hash.get('ward')
+    if (!isNaN(tabIdx) && tabIdx >= 0 && tabIdx < TABS.length) setActiveTab(tabIdx)
+    if (!isNaN(metricIdx) && metricIdx >= 0) setActiveMetricIdx(metricIdx)
+    if (ward) setPendingWard(ward)
+  }, []) // eslint-disable-line
+
+  // ── URL hash: write when state changes ────────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams()
+    params.set('tab', activeTab)
+    params.set('metric', activeMetricIdx)
+    if (selectedWard) params.set('ward', selectedWard.neighbourhood)
+    window.history.replaceState(null, '', '#' + params.toString())
+  }, [activeTab, activeMetricIdx, selectedWard])
+
+  // ── Restore ward selection from URL hash after map loads ──────────────────
+  useEffect(() => {
+    if (!geojson || !mapLoaded || !pendingWard || !mapRef.current) return
+    const feat = geojson.features.find(f => f.properties.neighbourhood === pendingWard)
+    if (!feat) { setPendingWard(null); return }
+    setSelectedWard(feat.properties)
+    mapRef.current.setFeatureState({ source: 'wards', id: pendingWard }, { selected: true })
+    const ring = feat.geometry.type === 'Polygon'
+      ? feat.geometry.coordinates[0]
+      : feat.geometry.coordinates[0][0]
+    const lngs = ring.map(c => c[0])
+    const lats = ring.map(c => c[1])
+    mapRef.current.flyTo({
+      center: [(Math.min(...lngs) + Math.max(...lngs)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2],
+      zoom: 12,
+      duration: 1000,
+    })
+    setPendingWard(null)
+  }, [geojson, mapLoaded, pendingWard])
+
   // ── Update fill colour when tab or metric changes ─────────────────────────
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return
@@ -309,6 +384,35 @@ export default function WardExplorer({ onEnterDashboard }) {
   const handleTabChange = useCallback(idx => {
     setActiveTab(idx)
     setActiveMetricIdx(0)
+  }, [])
+
+  const handleShare = useCallback(() => {
+    navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2200)
+  }, [])
+
+  const handleSearchSelect = useCallback((feat) => {
+    const id = feat.properties.neighbourhood
+    setSearchQuery('')
+    setSearchOpen(false)
+    if (mapRef.current) {
+      mapRef.current.querySourceFeatures('wards').forEach(f => {
+        mapRef.current.setFeatureState({ source: 'wards', id: f.properties.neighbourhood }, { selected: false })
+      })
+      mapRef.current.setFeatureState({ source: 'wards', id }, { selected: true })
+      const ring = feat.geometry.type === 'Polygon'
+        ? feat.geometry.coordinates[0]
+        : feat.geometry.coordinates[0][0]
+      const lngs = ring.map(c => c[0])
+      const lats = ring.map(c => c[1])
+      mapRef.current.flyTo({
+        center: [(Math.min(...lngs) + Math.max(...lngs)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2],
+        zoom: 13,
+        duration: 800,
+      })
+    }
+    setSelectedWard(feat.properties)
   }, [])
 
   const closePanel = useCallback(() => {
@@ -341,18 +445,59 @@ export default function WardExplorer({ onEnterDashboard }) {
       {/* ── HEADER ── */}
       <div className="we-header">
         <div className="we-brand">
-          <span className="we-brand-icon">◉</span>
+          <div className="we-brand-mark" />
           <div>
-            <h1 className="we-brand-title">Cape Town Urban Intelligence</h1>
+            <h1 className="we-brand-title">Mission Urban Lab</h1>
             <p className="we-brand-sub">Neighbourhood-level analysis across {cityStats.count} areas</p>
           </div>
         </div>
 
-        <button className="we-enter-btn" onClick={onEnterDashboard}>
-          Enter Dashboard
-          <span className="we-enter-arrow">→</span>
-        </button>
+        {/* Search */}
+        <div className="we-search">
+          <input
+            type="text"
+            className="we-search-input"
+            placeholder="Search neighbourhoods…"
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true) }}
+            onFocus={() => setSearchOpen(true)}
+            onBlur={() => setTimeout(() => setSearchOpen(false), 180)}
+          />
+          {searchOpen && searchResults.length > 0 && (
+            <div className="we-search-dropdown">
+              {searchResults.map(feat => (
+                <button
+                  key={feat.properties.neighbourhood}
+                  className="we-search-result"
+                  onMouseDown={() => handleSearchSelect(feat)}
+                >
+                  <span className="we-search-name">{feat.properties.neighbourhood}</span>
+                  <span className="we-search-ward">Ward #{feat.properties.WardID}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="we-header-actions">
+          <button className={`we-share-btn ${copied ? 'we-share-btn--copied' : ''}`} onClick={handleShare}>
+            {copied ? '✓ Copied' : '⤴ Share'}
+          </button>
+          <button className="we-enter-btn" onClick={onEnterDashboard}>
+            Enter Dashboard
+            <span className="we-enter-arrow">→</span>
+          </button>
+        </div>
       </div>
+
+      {/* ── HERO ── */}
+      {cityStats && (
+        <div className="we-hero">
+          <div className="we-hero-eyebrow">Cape Town Metro · {cityStats.count} Neighbourhoods</div>
+          <h2 className="we-hero-title">Urban<br/>Analytics</h2>
+          <p className="we-hero-desc">Geospatial intelligence for Mission Inner City</p>
+        </div>
+      )}
 
       {/* ── TAB BAR ── */}
       <div className="we-tabbar">
@@ -402,6 +547,29 @@ export default function WardExplorer({ onEnterDashboard }) {
         </div>
       </div>
 
+      {/* ── HOVER TOOLTIP ── */}
+      {hoveredWardProps && !selectedWard && (
+        <div
+          className="we-tooltip"
+          style={{ left: Math.min(hoveredPos.x + 16, window.innerWidth - 200), top: Math.max(hoveredPos.y - 48, 60) }}
+        >
+          <div className="we-tooltip-name">{hoveredWardProps.neighbourhood}</div>
+          {hoveredWardProps[metric.key] != null && (
+            <div className="we-tooltip-metric">
+              <span className="we-tooltip-label">{metric.label}</span>
+              <span className="we-tooltip-value">
+                {typeof hoveredWardProps[metric.key] === 'number'
+                  ? hoveredWardProps[metric.key] > 100
+                    ? Math.round(hoveredWardProps[metric.key]).toLocaleString()
+                    : hoveredWardProps[metric.key].toFixed(2)
+                  : hoveredWardProps[metric.key]}
+              </span>
+            </div>
+          )}
+          <div className="we-tooltip-hint">Click to explore ↗</div>
+        </div>
+      )}
+
       {/* ── WARD DETAIL PANEL ── */}
       {selectedWard && (
         <div className="we-detail">
@@ -419,13 +587,23 @@ export default function WardExplorer({ onEnterDashboard }) {
               const val = selectedWard[sf.key]
               if (val == null) return null
               if (sf.skipZero && val === 0) return null
+              const avg = cityAverages[sf.key]
+              const pctDiff = avg && avg > 0 ? ((val - avg) / avg) * 100 : null
               return (
                 <div key={sf.key} className="we-stat-row">
                   <span className="we-stat-label">{sf.label}</span>
-                  <span className="we-stat-value">{sf.fmt(val)}</span>
+                  <div className="we-stat-right">
+                    <span className="we-stat-value">{sf.fmt(val)}</span>
+                    {pctDiff != null && Math.abs(pctDiff) >= 2 && (
+                      <span className={`we-stat-delta ${pctDiff > 0 ? 'we-stat-delta--above' : 'we-stat-delta--below'}`}>
+                        {pctDiff > 0 ? '▲' : '▼'}{Math.abs(pctDiff).toFixed(0)}%
+                      </span>
+                    )}
+                  </div>
                 </div>
               )
             })}
+            <div className="we-detail-avg-note">vs city average</div>
           </div>
         </div>
       )}

@@ -95,13 +95,19 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <div className="app-header-left">
+        <div className="app-brand">
+          <div className="app-brand-mark" />
+          <div>
+            <h1 className="app-brand-title">Mission Urban Lab</h1>
+            <p className="app-brand-sub">District intelligence · Cape Town Metro</p>
+          </div>
+        </div>
+        <ModeToggle mode={mode} onModeChange={setMode} />
+        <div className="app-header-actions">
           <button className="app-back-btn" onClick={() => setShowLanding(true)}>
             ← Neighbourhood View
           </button>
-          <h1>Urban Analytics Lab</h1>
         </div>
-        <ModeToggle mode={mode} onModeChange={setMode} />
       </header>
 
       <div className="app-content">

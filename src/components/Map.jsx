@@ -112,6 +112,9 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
     if (!activeLayers.shade) {
       // Remove shade layer if it exists and map is loaded
       if (mapLoaded && map.current) {
+        if (map.current.getLayer('shade-layer-glow')) {
+          map.current.removeLayer('shade-layer-glow')
+        }
         if (map.current.getLayer('shade-layer')) {
           map.current.removeLayer('shade-layer')
         }
@@ -130,6 +133,9 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
         const data = await loadShadeData(temporalState.season, temporalState.timeOfDay)
         
         // Remove existing layer/source
+        if (map.current.getLayer('shade-layer-glow')) {
+          map.current.removeLayer('shade-layer-glow')
+        }
         if (map.current.getLayer('shade-layer')) {
           map.current.removeLayer('shade-layer')
         }
@@ -148,6 +154,17 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           colorScales.shade[currentShadeMetric]
         )
 
+        map.current.addLayer({
+          id: 'shade-layer-glow',
+          type: 'line',
+          source: 'shade',
+          paint: {
+            'line-color': colorExpression,
+            'line-width': 10,
+            'line-opacity': 0.18,
+            'line-blur': 8,
+          }
+        })
         map.current.addLayer({
           id: 'shade-layer',
           type: 'line',
@@ -210,7 +227,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
     if (!activeLayers.lighting) {
       // Remove lighting layers if they exist and map is loaded
       if (mapLoaded && map.current) {
-        ['lighting-kpis', 'lighting-fixtures', 'lighting-projects'].forEach(layerId => {
+        ['lighting-kpis-glow', 'lighting-kpis', 'lighting-fixtures', 'lighting-projects-glow', 'lighting-projects'].forEach(layerId => {
           if (map.current.getLayer(layerId)) {
             map.current.removeLayer(layerId)
           }
@@ -248,6 +265,17 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
         const luxColorExpression = createColorExpression('mean_lux', colorScales.lighting.mean_lux)
 
+        map.current.addLayer({
+          id: 'lighting-kpis-glow',
+          type: 'line',
+          source: 'lighting-kpis-source',
+          paint: {
+            'line-color': luxColorExpression,
+            'line-width': 16,
+            'line-opacity': 0.20,
+            'line-blur': 10,
+          }
+        })
         map.current.addLayer({
           id: 'lighting-kpis',
           type: 'line',
@@ -289,9 +317,10 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
               'High Pressure Sodium', '#ff9800',
               '#ffd54f'
             ],
-            'circle-opacity': 0.8,
-            'circle-stroke-width': 1,
-            'circle-stroke-color': '#fff'
+            'circle-opacity': 0.9,
+            'circle-blur': 0.25,
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': 'rgba(255,255,255,0.55)'
           }
         })
 
@@ -308,6 +337,17 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           data: data.projects
         })
 
+        map.current.addLayer({
+          id: 'lighting-projects-glow',
+          type: 'line',
+          source: 'lighting-projects-source',
+          paint: {
+            'line-color': '#9c27b0',
+            'line-width': 18,
+            'line-opacity': 0.18,
+            'line-blur': 10,
+          }
+        })
         map.current.addLayer({
           id: 'lighting-projects',
           type: 'line',
@@ -399,7 +439,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
     if (!activeLayers.walkability) {
       // Remove walkability layers if they exist and map is loaded
       if (mapLoaded && map.current) {
-        ['walkability-network', 'walkability-pedestrian', 'walkability-cycling', 'walkability-arrows'].forEach(layerId => {
+        ['walkability-network-glow', 'walkability-network', 'walkability-pedestrian-glow', 'walkability-pedestrian', 'walkability-cycling-glow', 'walkability-cycling', 'walkability-arrows'].forEach(layerId => {
           if (map.current.getLayer(layerId)) {
             map.current.removeLayer(layerId)
           }
@@ -423,7 +463,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
         if (!netWalkData) setNetWalkData(data)
         
         // Remove existing layers
-        ;['walkability-network', 'walkability-pedestrian', 'walkability-cycling'].forEach(layerId => {
+        ;['walkability-network-glow', 'walkability-network', 'walkability-pedestrian-glow', 'walkability-pedestrian', 'walkability-cycling-glow', 'walkability-cycling'].forEach(layerId => {
           if (map.current.getLayer(layerId)) {
             map.current.removeLayer(layerId)
           }
@@ -445,6 +485,23 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
             colorScales.walkability.betweenness
           )
 
+          map.current.addLayer({
+            id: 'walkability-network-glow',
+            type: 'line',
+            source: 'walkability-network-source',
+            paint: {
+              'line-color': betweennessExpression,
+              'line-width': [
+                'interpolate', ['linear'], ['get', 'cc_betweenness_400'],
+                0, 8,
+                500, 14,
+                1000, 22,
+                2000, 28
+              ],
+              'line-opacity': 0.15,
+              'line-blur': 8,
+            }
+          })
           map.current.addLayer({
             id: 'walkability-network',
             type: 'line',
@@ -496,6 +553,23 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
             colorScales.walkability.trip_count
           )
 
+          map.current.addLayer({
+            id: 'walkability-pedestrian-glow',
+            type: 'line',
+            source: 'walkability-pedestrian-source',
+            paint: {
+              'line-color': tripColorExpression,
+              'line-width': [
+                'interpolate', ['linear'], ['get', 'total_trip_count'],
+                0, 8,
+                100, 14,
+                200, 20,
+                300, 26
+              ],
+              'line-opacity': 0.15,
+              'line-blur': 8,
+            }
+          })
           map.current.addLayer({
             id: 'walkability-pedestrian',
             type: 'line',
@@ -549,6 +623,23 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
             colorScales.walkability.trip_count
           )
 
+          map.current.addLayer({
+            id: 'walkability-cycling-glow',
+            type: 'line',
+            source: 'walkability-cycling-source',
+            paint: {
+              'line-color': cyclingColorExpression,
+              'line-width': [
+                'interpolate', ['linear'], ['get', 'total_trip_count'],
+                0, 8,
+                100, 14,
+                200, 20,
+                400, 26
+              ],
+              'line-opacity': 0.15,
+              'line-blur': 8,
+            }
+          })
           map.current.addLayer({
             id: 'walkability-cycling',
             type: 'line',
@@ -924,6 +1015,9 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
         if (!scoredSegments) return
 
         // Remove existing narrative layer
+        if (map.current.getLayer('narrative-segments-glow')) {
+          map.current.removeLayer('narrative-segments-glow')
+        }
         if (map.current.getLayer('narrative-segments')) {
           map.current.removeLayer('narrative-segments')
         }
@@ -937,6 +1031,17 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           data: scoredSegments
         })
 
+        map.current.addLayer({
+          id: 'narrative-segments-glow',
+          type: 'line',
+          source: 'narrative-segments-source',
+          paint: {
+            'line-color': getNarrativeColorExpression(),
+            'line-width': ['*', getNarrativeWidthExpression(), 4],
+            'line-opacity': 0.18,
+            'line-blur': 8,
+          }
+        })
         map.current.addLayer({
           id: 'narrative-segments',
           type: 'line',

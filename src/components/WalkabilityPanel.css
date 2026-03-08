@@ -2,18 +2,20 @@
    WalkabilityPanel — restrained dark palette
    ═══════════════════════════════════════════════════════════════════════════ */
 
-:root {
-  --w-bg:       #13161d;
-  --w-card:     rgba(255,255,255,0.04);
-  --w-border:   rgba(255,255,255,0.07);
-  --w-text:     #d0d4e0;
-  --w-dim:      rgba(255,255,255,0.38);
-  --w-muted:    rgba(255,255,255,0.18);
-  --w-day:      #d49030;
-  --w-night:    #3d7abf;
-  --w-good:     #3a9e70;
-  --w-poor:     #b84040;
-  --w-mod:      #9a7030;
+/* Scoped tokens — reference global vars from index.css */
+.wlk-panel {
+  --w-bg:     var(--bg-surface);
+  --w-card:   var(--bg-card);
+  --w-border: var(--border);
+  --w-text:   var(--text);
+  --w-dim:    var(--text-dim);
+  --w-muted:  var(--text-muted);
+  /* Walkability-specific semantic colors */
+  --w-day:  #d49030;
+  --w-night: #3d7abf;
+  --w-good:  var(--color-good);
+  --w-poor:  var(--color-poor);
+  --w-mod:   #9a7030;
 }
 
 .wlk-panel {

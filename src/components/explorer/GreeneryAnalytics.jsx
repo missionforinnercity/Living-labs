@@ -6,7 +6,8 @@ const GreeneryAnalytics = ({
   greeneryAndSkyview,
   treeCanopyData,
   parksData,
-  hideLayerControls = false
+  hideLayerControls = false,
+  allLayersActive = false
 }) => {
   const [stats, setStats] = useState(null)
   const [categoryStats, setCategoryStats] = useState(null)
@@ -64,13 +65,79 @@ const GreeneryAnalytics = ({
     }
   }, [greeneryAndSkyview, treeCanopyData, parksData])
   
+  // Compute green health score (0-100) from combined data
+  const greenHealthScore = stats ? Math.round(
+    (parseFloat(stats.avgVegetation) / 0.5) * 40 +
+    (1 - parseFloat(stats.avgSkyView)) * 30 +
+    Math.min(stats.treeCanopyCount / 2000, 1) * 20 +
+    Math.min(stats.parksCount / 40, 1) * 10
+  ) : null
+
+  const scoreColor = greenHealthScore >= 70 ? '#00e5a0' : greenHealthScore >= 45 ? '#fbbf24' : '#ef4444'
+  const scoreLabel = greenHealthScore >= 70 ? 'Good' : greenHealthScore >= 45 ? 'Moderate' : 'Low'
+
   return (
     <aside className="greenery-analytics">
       <div className="analytics-header">
         <h2>Greenery Analysis</h2>
         <p className="header-subtitle">Vegetation coverage metrics</p>
       </div>
-      
+
+      {/* Combined urban green profile — shown when all 3 layers are active */}
+      {allLayersActive && stats && (
+        <div className="green-profile-panel">
+          <div className="green-profile-header">
+            <span className="green-profile-badge">◉ ALL LAYERS</span>
+            <h3>Urban Green Profile</h3>
+            <p>Combined analysis across all greenery datasets</p>
+          </div>
+
+          <div className="green-score-row">
+            <div className="green-score-ring" style={{ '--score-color': scoreColor }}>
+              <span className="green-score-value" style={{ color: scoreColor }}>{greenHealthScore}</span>
+              <span className="green-score-label">/ 100</span>
+            </div>
+            <div className="green-score-meta">
+              <span className="green-score-grade" style={{ color: scoreColor }}>{scoreLabel} Green Coverage</span>
+              <p>Composite score from vegetation index, sky view, tree canopy &amp; parks data</p>
+            </div>
+          </div>
+
+          <div className="green-profile-grid">
+            <div className="green-profile-stat">
+              <span className="gps-icon">🌿</span>
+              <span className="gps-value">{stats.avgVegetation}</span>
+              <span className="gps-label">Avg NDVI</span>
+            </div>
+            <div className="green-profile-stat">
+              <span className="gps-icon">🌳</span>
+              <span className="gps-value">{stats.treeCanopyCount.toLocaleString()}</span>
+              <span className="gps-label">Canopy Areas</span>
+            </div>
+            <div className="green-profile-stat">
+              <span className="gps-icon">🏞️</span>
+              <span className="gps-value">{stats.parksCount}</span>
+              <span className="gps-label">Parks Nearby</span>
+            </div>
+            <div className="green-profile-stat">
+              <span className="gps-icon">☀️</span>
+              <span className="gps-value">{stats.avgSkyView}</span>
+              <span className="gps-label">Sky View Factor</span>
+            </div>
+          </div>
+
+          <div className="green-profile-insight">
+            <strong>Key Finding:</strong>{' '}
+            {parseFloat(stats.avgVegetation) < 0.2
+              ? `Most streets (${stats.analyzedSegments} segments) have minimal vegetation cover. Tree planting programmes would significantly improve urban heat and comfort.`
+              : parseFloat(stats.avgVegetation) < 0.4
+              ? `Moderate vegetation across ${stats.analyzedSegments} segments. Concentrated mostly in residential zones — city centre gaps remain a priority.`
+              : `Good vegetation coverage across ${stats.analyzedSegments} segments. Focus on maintaining canopy and expanding parks access.`
+            }
+          </div>
+        </div>
+      )}
+
       {/* Statistics */}
       {stats && (
         <div className="stats-container">

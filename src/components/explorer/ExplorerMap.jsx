@@ -49,7 +49,8 @@ const ExplorerMap = ({
   trafficData,
   trafficScenario = 'WORK_MORNING',
   eventsData,
-  eventsMonth
+  eventsMonth,
+  ratingFilter = null   // null = all, array of floor values e.g. [4,5]
 }) => {
   const mapRef = useRef()
   
@@ -109,12 +110,53 @@ const ExplorerMap = ({
     longitude: 18.4241,
     latitude: -33.9249,
     zoom: 14,
-    pitch: 0,
+    pitch: 45,
     bearing: 0
   })
   
   const [selectedFeature, setSelectedFeature] = useState(null)
   const [popupInfo, setPopupInfo] = useState(null)
+
+  // Animated traffic flow dash offset
+  const dashOffsetRef = useRef(0)
+  const rafRef = useRef(null)
+
+  // Start/stop flow animation when traffic layer is active
+  useEffect(() => {
+    const animate = () => {
+      dashOffsetRef.current = (dashOffsetRef.current - 0.5) % 16
+      const map = mapRef.current?.getMap?.()
+      if (map && map.getLayer('traffic-flow-animated')) {
+        map.setPaintProperty('traffic-flow-animated', 'line-dasharray', [
+          2, 2
+        ])
+        map.setPaintProperty('traffic-flow-animated', 'line-dash-offset', dashOffsetRef.current)
+      }
+      rafRef.current = requestAnimationFrame(animate)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [])
+
+  // Fog / atmosphere effect
+  useEffect(() => {
+    const map = mapRef.current?.getMap?.()
+    if (!map) return
+    const applyFog = () => {
+      map.setFog({
+        color: 'rgb(10, 12, 18)',
+        'high-color': 'rgb(18, 22, 36)',
+        'horizon-blend': 0.04,
+        'space-color': 'rgb(4, 6, 12)',
+        'star-intensity': 0.4
+      })
+    }
+    if (map.isStyleLoaded()) {
+      applyFog()
+    } else {
+      map.once('style.load', applyFog)
+    }
+  }, [mapRef.current])
   
   // Debug logging
   useEffect(() => {
@@ -203,7 +245,7 @@ const ExplorerMap = ({
         {...viewState}
         onMove={(evt) => setViewState(evt.viewState)}
         mapboxAccessToken={MAPBOX_TOKEN}
-        mapStyle="mapbox://styles/mapbox/dark-v10"
+        mapStyle="mapbox://styles/mapbox/dark-v11"
         interactiveLayerIds={[
           'businesses-points-layer',
           'businesses-ratings-layer',
@@ -383,11 +425,21 @@ const ExplorerMap = ({
             )}
             
             {/* Review Ratings - Bubble chart */}
-            {shouldRenderCategory('businessRatings') && businessesData && (
+            {shouldRenderCategory('businessRatings') && businessesData && (() => {
+              const ratingsData = ratingFilter && ratingFilter.length > 0
+                ? {
+                    type: 'FeatureCollection',
+                    features: businessesData.features.filter(f => {
+                      const r = parseFloat(f.properties.rating)
+                      return !isNaN(r) && ratingFilter.includes(Math.floor(r))
+                    })
+                  }
+                : businessesData
+              return (
               <Source
                 id="businesses-ratings"
                 type="geojson"
-                data={businessesData}
+                data={ratingsData}
               >
                 <Layer
                   id="businesses-ratings-layer"
@@ -424,8 +476,9 @@ const ExplorerMap = ({
                   }}
                 />
               </Source>
-            )}
-            
+              )
+            })()}
+
             {/* Amenities Mode */}
             {shouldRenderCategory('amenities') && businessesData && (() => {
               // Filter businesses based on selected amenities
@@ -825,45 +878,66 @@ const ExplorerMap = ({
               
               const colors = getColorScheme(networkMetric)
               
+              const networkWidthExpr = [
+                'interpolate', ['linear'],
+                ['coalesce', ['get', config.field], 0],
+                config.scale[0], 2,
+                config.scale[2], 3,
+                config.scale[4], 5,
+                config.scale[5], 7,
+                config.scale[6], 10
+              ]
+              const networkColorExpr = [
+                'interpolate', ['linear'],
+                ['coalesce', ['get', config.field], 0],
+                config.scale[0], colors[0],
+                config.scale[1], colors[1],
+                config.scale[2], colors[2],
+                config.scale[3], colors[3],
+                config.scale[4], colors[4],
+                config.scale[5], colors[5],
+                config.scale[6], colors[6]
+              ]
               return (
                 <Source
                   id="network-betweenness"
                   type="geojson"
                   data={networkData}
                 >
+                  {/* Outer glow */}
+                  <Layer
+                    id="network-glow-outer"
+                    type="line"
+                    paint={{
+                      'line-color': networkColorExpr,
+                      'line-width': ['*', networkWidthExpr, 4],
+                      'line-blur': 12,
+                      'line-opacity': 0.18
+                    }}
+                  />
+                  {/* Mid glow */}
+                  <Layer
+                    id="network-glow-mid"
+                    type="line"
+                    paint={{
+                      'line-color': networkColorExpr,
+                      'line-width': ['*', networkWidthExpr, 2.2],
+                      'line-blur': 5,
+                      'line-opacity': 0.35
+                    }}
+                  />
+                  {/* Main line */}
                   <Layer
                     id="network-betweenness-layer"
                     type="line"
                     paint={{
-                      'line-color': [
-                        'interpolate',
-                        ['linear'],
-                        ['coalesce', ['get', config.field], 0],
-                        config.scale[0], colors[0],
-                        config.scale[1], colors[1],
-                        config.scale[2], colors[2],
-                        config.scale[3], colors[3],
-                        config.scale[4], colors[4],
-                        config.scale[5], colors[5],
-                        config.scale[6], colors[6]
-                      ],
-                      'line-width': [
-                        'interpolate',
-                        ['linear'],
-                        ['coalesce', ['get', config.field], 0],
-                        config.scale[0], 2,
-                        config.scale[2], 3,
-                        config.scale[4], 5,
-                        config.scale[5], 7,
-                        config.scale[6], 10
-                      ],
+                      'line-color': networkColorExpr,
+                      'line-width': networkWidthExpr,
                       'line-opacity': [
-                        'interpolate',
-                        ['linear'],
+                        'interpolate', ['linear'],
                         ['coalesce', ['get', config.field], 0],
                         config.scale[0], 0.6,
-                        config.scale[3], 0.8,
-                        config.scale[5], 0.9,
+                        config.scale[3], 0.85,
                         config.scale[6], 0.95
                       ]
                     }}
@@ -1287,7 +1361,30 @@ const ExplorerMap = ({
               type="geojson"
               data={trafficData}
             >
-              {/* Glow / halo underneath */}
+              {/* Outer atmosphere glow */}
+              <Layer
+                id="traffic-layer-outer-glow"
+                type="line"
+                paint={{
+                  'line-color': [
+                    'interpolate', ['linear'],
+                    ['coalesce', ['get', field], 0],
+                    0,    '#00bfae',
+                    0.6,  '#10b981',
+                    1.0,  '#fbbf24',
+                    1.6,  '#ef4444',
+                    2.0,  '#ff0044'
+                  ],
+                  'line-width': [
+                    'interpolate', ['linear'], ['zoom'],
+                    12, ['interpolate', ['linear'], ['coalesce', ['get', field], 0], 0, 8,  1.0, 16, 2.0, 24],
+                    16, ['interpolate', ['linear'], ['coalesce', ['get', field], 0], 0, 16, 1.0, 28, 2.0, 40]
+                  ],
+                  'line-opacity': 0.07,
+                  'line-blur': 12
+                }}
+              />
+              {/* Mid glow */}
               <Layer
                 id="traffic-layer-glow"
                 type="line"
@@ -1295,21 +1392,20 @@ const ExplorerMap = ({
                   'line-color': [
                     'interpolate', ['linear'],
                     ['coalesce', ['get', field], 0],
-                    0,    '#1e3a8a',
-                    0.3,  '#2563eb',
+                    0,    '#00bfae',
                     0.6,  '#10b981',
                     1.0,  '#fbbf24',
                     1.3,  '#f59e0b',
                     1.6,  '#ef4444',
-                    2.0,  '#7f1d1d'
+                    2.0,  '#ff0044'
                   ],
                   'line-width': [
-                    'interpolate', ['linear'],
-                    ['coalesce', ['get', field], 0],
-                    0, 6, 1.0, 10, 2.0, 14
+                    'interpolate', ['linear'], ['zoom'],
+                    12, ['interpolate', ['linear'], ['coalesce', ['get', field], 0], 0, 4,  1.0, 8,  2.0, 14],
+                    16, ['interpolate', ['linear'], ['coalesce', ['get', field], 0], 0, 8,  1.0, 14, 2.0, 22]
                   ],
-                  'line-opacity': 0.2,
-                  'line-blur': 4
+                  'line-opacity': 0.22,
+                  'line-blur': 5
                 }}
               />
               {/* Main traffic line */}
@@ -1320,26 +1416,69 @@ const ExplorerMap = ({
                   'line-color': [
                     'interpolate', ['linear'],
                     ['coalesce', ['get', field], 0],
-                    0,    '#1e3a8a',
-                    0.3,  '#2563eb',
+                    0,    '#00bfae',
+                    0.3,  '#34d399',
                     0.6,  '#10b981',
                     1.0,  '#fbbf24',
                     1.3,  '#f59e0b',
                     1.6,  '#ef4444',
-                    2.0,  '#7f1d1d'
+                    2.0,  '#ff0044'
                   ],
                   'line-width': [
-                    'interpolate', ['linear'],
-                    ['coalesce', ['get', field], 0],
-                    0, 2, 0.6, 3, 1.0, 4, 1.6, 6, 2.0, 8
+                    'interpolate', ['linear'], ['zoom'],
+                    12, ['interpolate', ['linear'], ['coalesce', ['get', field], 0], 0, 1.5, 0.6, 2, 1.0, 3, 1.6, 5, 2.0, 7],
+                    16, ['interpolate', ['linear'], ['coalesce', ['get', field], 0], 0, 3,   0.6, 4, 1.0, 6, 1.6, 9, 2.0, 12]
                   ],
-                  'line-opacity': 0.92
+                  'line-opacity': 0.95
+                }}
+              />
+              {/* Animated flow on congested roads (KPI > 1.3) */}
+              <Layer
+                id="traffic-flow-animated"
+                type="line"
+                filter={['>', ['coalesce', ['get', field], 0], 1.3]}
+                paint={{
+                  'line-color': '#ff4466',
+                  'line-width': [
+                    'interpolate', ['linear'], ['zoom'],
+                    12, 1.5,
+                    16, 3
+                  ],
+                  'line-opacity': 0.8,
+                  'line-dasharray': [2, 2]
                 }}
               />
             </Source>
           )
         })()}
         
+        {/* 3D Buildings — composite tileset from dark-v11 */}
+        {(() => {
+          const spec = {
+            id: '3d-buildings',
+            source: 'composite',
+            'source-layer': 'building',
+            type: 'fill-extrusion',
+            minzoom: 14,
+            filter: ['==', ['get', 'extrude'], 'true'],
+            paint: {
+              'fill-extrusion-color': [
+                'interpolate', ['linear'], ['coalesce', ['get', 'height'], 0],
+                0,   'rgba(28, 28, 30, 0.95)',
+                20,  'rgba(36, 36, 38, 0.92)',
+                60,  'rgba(48, 48, 50, 0.90)',
+                120, 'rgba(60, 60, 62, 0.88)',
+                200, 'rgba(72, 72, 74, 0.85)'
+              ],
+              'fill-extrusion-height': ['coalesce', ['get', 'height'], 4],
+              'fill-extrusion-base': ['coalesce', ['get', 'min_height'], 0],
+              'fill-extrusion-opacity': 0.72,
+              'fill-extrusion-vertical-gradient': true
+            }
+          }
+          return <Layer {...spec} />
+        })()}
+
         {/* Popup */}
         {popupInfo && (
           <Popup

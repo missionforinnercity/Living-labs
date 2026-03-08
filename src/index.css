@@ -1,5 +1,48 @@
 /* Mapbox GL styles - must be first */
 @import 'mapbox-gl/dist/mapbox-gl.css';
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — single source of truth for the entire UI
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── Backgrounds ────────────────────────────────────── */
+  --bg-base:    #111118;                   /* deepest: root/map backdrop */
+  --bg-surface: rgba(255, 255, 255, 0.06); /* sidebars, panels */
+  --bg-card:    rgba(255, 255, 255, 0.04); /* inline cards, list items */
+
+  /* ── Borders ─────────────────────────────────────────── */
+  --border-faint:   rgba(255, 255, 255, 0.05);
+  --border:         rgba(255, 255, 255, 0.08);
+  --border-strong:  rgba(255, 255, 255, 0.14);
+  --border-accent:  rgba(0, 229, 160, 0.22);
+
+  /* ── Text ────────────────────────────────────────────── */
+  --text:       #e4e6f0;
+  --text-dim:   rgba(255, 255, 255, 0.55);
+  --text-muted: rgba(255, 255, 255, 0.32);
+  --text-faint: rgba(255, 255, 255, 0.18);
+
+  /* ── Accent ──────────────────────────────────────────── */
+  --accent:        #00e5a0;
+  --accent-bg:     rgba(0, 229, 160, 0.08);
+  --accent-border: rgba(0, 229, 160, 0.25);
+
+  /* ── Semantic status ─────────────────────────────────── */
+  --color-good: #3a9e70;
+  --color-warn: #d49030;
+  --color-poor: #b84040;
+
+  /* ── Radius ──────────────────────────────────────────── */
+  --r-sm:   6px;
+  --r-md:   10px;
+  --r-lg:   14px;
+  --r-pill: 100px;
+
+  /* ── Shadow ──────────────────────────────────────────── */
+  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-float: 0 12px 48px rgba(0, 0, 0, 0.60);
+}
 
 * {
   margin: 0;
@@ -8,12 +51,12 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
+  background: #111118;
+  color: #ffffff;
 }
 
 #root {

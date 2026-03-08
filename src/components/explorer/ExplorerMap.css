@@ -10,42 +10,56 @@
 }
 
 .map-popup {
-  padding: 0.5rem;
+  padding: 1rem;
   min-width: 200px;
 }
 
 .map-popup h3 {
-  color: #1f2937;
-  font-size: 1rem;
+  font-family: 'Space Grotesk', sans-serif;
+  color: #ffffff;
+  font-size: 0.875rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
+  letter-spacing: 0.01em;
 }
 
 .map-popup p {
-  color: #4b5563;
-  font-size: 0.875rem;
-  margin: 0.25rem 0;
+  color: rgba(255,255,255,0.45);
+  font-size: 0.8rem;
+  margin: 0.2rem 0;
+  line-height: 1.4;
 }
 
 .map-popup strong {
-  color: #1f2937;
+  color: #00e5a0;
+  font-weight: 600;
 }
 
-/* Mapbox overrides */
+/* Mapbox overrides — frosted glass popup */
 .mapboxgl-popup-content {
-  background: white;
-  border-radius: 0.5rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  padding: 0;
+  background: rgba(200, 210, 220, 0.14) !important;
+  backdrop-filter: blur(40px) saturate(1.1) brightness(1.1);
+  -webkit-backdrop-filter: blur(40px) saturate(1.1) brightness(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.06);
+  padding: 0 !important;
+}
+
+.mapboxgl-popup-tip {
+  border-top-color: rgba(200, 210, 220, 0.14) !important;
+  border-bottom-color: rgba(200, 210, 220, 0.14) !important;
 }
 
 .mapboxgl-popup-close-button {
-  font-size: 1.25rem;
-  padding: 0.25rem 0.5rem;
-  color: #6b7280;
+  color: rgba(255,255,255,0.35);
+  font-size: 1rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0 12px 0 0;
+  transition: color 0.15s, background 0.15s;
 }
 
 .mapboxgl-popup-close-button:hover {
-  background-color: transparent;
-  color: #1f2937;
+  background: rgba(255,255,255,0.08) !important;
+  color: #ffffff;
 }

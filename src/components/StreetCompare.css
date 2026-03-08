@@ -2,14 +2,16 @@
    StreetCompare — Side-by-side KPI spider comparison panel
    ═══════════════════════════════════════════════════════════════════════════ */
 
-:root {
-  --sc-bg:          #13161d;
-  --sc-border:      rgba(255, 255, 255, 0.08);
-  --sc-text:        #d8dce8;
-  --sc-text-dim:    rgba(255, 255, 255, 0.38);
-  --sc-text-muted:  rgba(255, 255, 255, 0.2);
-  --sc-win:         #4aaa7a;
-  --sc-lose:        rgba(255, 255, 255, 0.3);
+/* Scoped tokens — reference global vars from index.css */
+.sc-panel {
+  --sc-bg:         var(--bg-surface);
+  --sc-border:     var(--border);
+  --sc-text:       var(--text);
+  --sc-text-dim:   var(--text-dim);
+  --sc-text-muted: var(--text-muted);
+  /* Compare-specific semantic colors */
+  --sc-win:  #4aaa7a;
+  --sc-lose: rgba(255, 255, 255, 0.3);
 }
 
 .sc-panel {
@@ -17,8 +19,10 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--sc-bg);
-  border-top: 1px solid var(--sc-border);
+  background: rgba(200, 210, 220, 0.12);
+  backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
+  -webkit-backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
   z-index: 500;
   max-height: 420px;
   overflow-y: auto;
