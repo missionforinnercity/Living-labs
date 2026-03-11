@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Map, { Source, Layer, Popup } from 'react-map-gl'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import * as turf from '@turf/turf'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { isBusinessOpen } from '../../utils/timeUtils'
 import { colorScales } from '../../utils/dataLoader'
@@ -36,6 +37,10 @@ const ExplorerMap = ({
   greeneryAndSkyview,
   treeCanopyData,
   parksData,
+  envCurrentData,
+  envHistoryData,
+  envIndex = 'uaqi',
+  onEnvGridDetail,
   visibleLayers,
   layerStack = [],
   activeCategory,
@@ -61,6 +66,149 @@ const ExplorerMap = ({
     // Check if this category is in the layer stack (either as active or locked)
     return layerStack.some(layer => layer.id === categoryId) || activeCategory === categoryId
   }
+
+  // ─── Per-metric air quality config ──────────────────────────────────────────
+  const ENV_METRICS = {
+    uaqi:             { field: 'uaqi',             label: 'UAQI',  unit: '' },
+    poll_o3_value:    { field: 'poll_o3_value',    label: 'O₃',    unit: 'µg/m³' },
+    poll_no2_value:   { field: 'poll_no2_value',   label: 'NO₂',   unit: 'µg/m³' },
+    poll_pm10_value:  { field: 'poll_pm10_value',  label: 'PM10',  unit: 'µg/m³' },
+    poll_co_value:    { field: 'poll_co_value',    label: 'CO',    unit: 'µg/m³' },
+    poll_so2_value:   { field: 'poll_so2_value',   label: 'SO₂',   unit: 'µg/m³' },
+  }
+
+  // 7-stop gradient: cool blue → teal → green → lime → amber → orange → red
+  const AQ_PALETTE = ['#2563eb', '#0891b2', '#059669', '#65a30d', '#ca8a04', '#ea580c', '#dc2626']
+
+  // Build interpolation that stretches across actual data range for max differentiation
+  const buildEnvColorExpr = (idx, currentRows, histRows) => {
+    // "avg" mode: use historic averages per location to show spatial hotspots
+    if (idx === 'avg') {
+      // Compute per-grid-cell mean UAQI from history
+      const byLoc = {}
+      ;(histRows || []).forEach(r => {
+        if (r.uaqi != null) {
+          if (!byLoc[r.grid_id]) byLoc[r.grid_id] = []
+          byLoc[r.grid_id].push(r.uaqi)
+        }
+      })
+      const avgs = Object.values(byLoc).map(arr => arr.reduce((s, v) => s + v, 0) / arr.length)
+      if (avgs.length === 0) return AQ_PALETTE[3]
+      const min = Math.min(...avgs), max = Math.max(...avgs), range = max - min
+      if (range < 0.001) return AQ_PALETTE[3]
+      const lo = min - range * 0.05, hi = max + range * 0.05, span = hi - lo
+      const expr = ['interpolate', ['linear'], ['coalesce', ['get', 'avg_uaqi'], lo]]
+      AQ_PALETTE.forEach((c, i) => { expr.push(lo + (i / (AQ_PALETTE.length - 1)) * span); expr.push(c) })
+      return expr
+    }
+    const metric = ENV_METRICS[idx] || ENV_METRICS.uaqi
+    const vals = (currentRows || []).map(r => r[metric.field]).filter(v => v != null && !isNaN(v))
+    if (vals.length === 0) {
+      return ['interpolate', ['linear'], ['coalesce', ['get', metric.field], 0],
+        0, AQ_PALETTE[0], 50, AQ_PALETTE[3], 100, AQ_PALETTE[6]]
+    }
+    const min = Math.min(...vals)
+    const max = Math.max(...vals)
+    const range = max - min
+    if (range < 0.001) return AQ_PALETTE[3]
+    const lo = min - range * 0.05
+    const hi = max + range * 0.05
+    const span = hi - lo
+    const expr = ['interpolate', ['linear'], ['coalesce', ['get', metric.field], lo]]
+    AQ_PALETTE.forEach((c, i) => { expr.push(lo + (i / (AQ_PALETTE.length - 1)) * span); expr.push(c) })
+    return expr
+  }
+
+  const envColorExpr = useMemo(
+    () => buildEnvColorExpr(envIndex || 'uaqi', envCurrentData?.rows, envHistoryData?.rows),
+    [envIndex, envCurrentData, envHistoryData]
+  )
+
+  // Data range for legend / labels
+  const envDataRange = useMemo(() => {
+    const metric = ENV_METRICS[envIndex] || ENV_METRICS.uaqi
+    const vals = (envCurrentData?.rows || []).map(r => r[metric.field]).filter(v => v != null && !isNaN(v))
+    if (vals.length === 0) return null
+    return { min: Math.min(...vals), max: Math.max(...vals), field: metric.field, label: metric.label, unit: metric.unit }
+  }, [envIndex, envCurrentData])
+
+  // ─── Per-grid-cell historic averages (for "avg" mode) ────────────────────
+  const histAvgByLocation = useMemo(() => {
+    const rows = envHistoryData?.rows
+    if (!rows) return {}
+    const buckets = {}
+    rows.forEach(r => {
+      if (!buckets[r.grid_id]) buckets[r.grid_id] = { uaqi: [], o3: [], no2: [], pm10: [], co: [], so2: [] }
+      const b = buckets[r.grid_id]
+      if (r.uaqi != null) b.uaqi.push(r.uaqi)
+      if (r.poll_o3 != null) b.o3.push(parseFloat(r.poll_o3))
+      if (r.poll_no2 != null) b.no2.push(parseFloat(r.poll_no2))
+      if (r.poll_pm10 != null) b.pm10.push(parseFloat(r.poll_pm10))
+      if (r.poll_co != null) b.co.push(parseFloat(r.poll_co))
+      if (r.poll_so2 != null) b.so2.push(parseFloat(r.poll_so2))
+    })
+    const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null
+    const result = {}
+    Object.entries(buckets).forEach(([loc, b]) => {
+      result[loc] = {
+        avg_uaqi: avg(b.uaqi), avg_o3: avg(b.o3), avg_no2: avg(b.no2),
+        avg_pm10: avg(b.pm10), avg_co: avg(b.co), avg_so2: avg(b.so2)
+      }
+    })
+    return result
+  }, [envHistoryData])
+
+  // ─── 500m grid cells — choropleth squares centred on each sample point ───
+  const gridGeoJSON = useMemo(() => {
+    const rows = envCurrentData?.rows
+    if (!rows || rows.length === 0) return null
+
+    const validRows = rows.filter(r => r.latitude != null && r.longitude != null)
+    if (validRows.length === 0) return null
+
+    // Detect grid spacing from data (fallback to ~500m)
+    const lats = [...new Set(validRows.map(r => r.latitude))].sort((a, b) => a - b)
+    const lngs = [...new Set(validRows.map(r => r.longitude))].sort((a, b) => a - b)
+    const latStep = lats.length > 1 ? Math.abs(lats[1] - lats[0]) : 0.0045
+    const lngStep = lngs.length > 1 ? Math.abs(lngs[1] - lngs[0]) : 0.0054
+    const halfLat = latStep / 2
+    const halfLng = lngStep / 2
+
+    const cells = validRows.map(r => {
+      const props = {
+        ...r,
+        ...(histAvgByLocation[r.grid_id] || {}),
+        name: (r.grid_id || '').replace(/_/g, ' ')
+      }
+      // Build exact square polygon
+      const cell = turf.polygon([[
+        [r.longitude - halfLng, r.latitude - halfLat],
+        [r.longitude + halfLng, r.latitude - halfLat],
+        [r.longitude + halfLng, r.latitude + halfLat],
+        [r.longitude - halfLng, r.latitude + halfLat],
+        [r.longitude - halfLng, r.latitude - halfLat]
+      ]], props)
+      return cell
+    })
+
+    return turf.featureCollection(cells)
+  }, [envCurrentData, histAvgByLocation])
+
+  // ─── History data grouped by grid cell (for popup charts) ──────────────────
+  const historyByLocation = useMemo(() => {
+    const rows = envHistoryData?.rows
+    if (!rows) return {}
+    const map = {}
+    rows.forEach(r => {
+      if (!map[r.grid_id]) map[r.grid_id] = []
+      map[r.grid_id].push(r)
+    })
+    Object.values(map).forEach(arr => arr.sort((a, b) => new Date(a.hour_utc) - new Date(b.hour_utc)))
+    return map
+  }, [envHistoryData])
+
+  // ─── Environment popup state ───────────────────────────────────────────────
+  const [envPopup, setEnvPopup] = useState(null) // { lng, lat, props }
   
   // Debug logging for mission interventions
   useEffect(() => {
@@ -275,6 +423,22 @@ const ExplorerMap = ({
         return
       }
       
+      // For environment Voronoi layers or station dots, show env popup
+      if (feature.source === 'env-grid') {
+        // Toggle off if clicking the same grid cell
+        const clickedId = feature.properties?.grid_id
+        if (envPopup && envPopup.props?.grid_id === clickedId) {
+          setEnvPopup(null)
+        } else {
+          setEnvPopup({
+            longitude: event.lngLat.lng,
+            latitude: event.lngLat.lat,
+            props: feature.properties
+          })
+        }
+        return
+      }
+
       setSelectedFeature(feature)
       setPopupInfo({
         longitude: event.lngLat.lng,
@@ -369,6 +533,7 @@ const ExplorerMap = ({
           'greenery-skyview-layer',
           'tree-canopy-layer',
           'parks-nearby-layer',
+          'env-grid-fill',
           'traffic-layer',
           'events-points-layer'
         ]}
@@ -1294,6 +1459,64 @@ const ExplorerMap = ({
           </Source>
         )}
         
+        {/* ── Environment: 3D extruded grid cells ─────────────────────── */}
+        {shouldRenderCategory('airQuality') && gridGeoJSON && (
+          <Source id="env-grid" type="geojson" data={gridGeoJSON}>
+            {/* 3D extruded fill — height based on metric value */}
+            <Layer
+              id="env-grid-extrusion"
+              type="fill-extrusion"
+              paint={{
+                'fill-extrusion-color': envColorExpr,
+                'fill-extrusion-height': [
+                  'interpolate', ['linear'],
+                  ['coalesce', ['get', envIndex === 'avg' ? 'avg_uaqi' : (ENV_METRICS[envIndex] || ENV_METRICS.uaqi).field], 0],
+                  0, 20,
+                  50, 200,
+                  100, 600
+                ],
+                'fill-extrusion-base': 0,
+                'fill-extrusion-opacity': 0.82
+              }}
+            />
+            {/* Flat fill underneath for 2D clarity at low pitch */}
+            <Layer
+              id="env-grid-fill"
+              type="fill"
+              paint={{
+                'fill-color': envColorExpr,
+                'fill-opacity': 0.35
+              }}
+            />
+            {/* Cell outlines */}
+            <Layer
+              id="env-grid-outline"
+              type="line"
+              paint={{
+                'line-color': 'rgba(255,255,255,0.5)',
+                'line-width': 1.2
+              }}
+            />
+            {/* Value label centred on each cell */}
+            <Layer
+              id="env-grid-label"
+              type="symbol"
+              minzoom={13}
+              layout={{
+                'text-field': ['to-string', ['round', ['coalesce', ['get', envIndex === 'avg' ? 'avg_uaqi' : (ENV_METRICS[envIndex] || ENV_METRICS.uaqi).field], 0]]],
+                'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+                'text-size': 14,
+                'text-allow-overlap': true
+              }}
+              paint={{
+                'text-color': '#ffffff',
+                'text-halo-color': 'rgba(0,0,0,0.85)',
+                'text-halo-width': 2
+              }}
+            />
+          </Source>
+        )}
+
         {/* Greenery Layers */}
         {/* Greenery & Sky View Factor Layer */}
         {shouldRenderCategory('greeneryIndex') && greeneryAndSkyview && (
@@ -2116,7 +2339,7 @@ const ExplorerMap = ({
                 )
               })()}
 
-              {dashboardMode === 'greenery' && (() => {
+              {(dashboardMode === 'environment' || dashboardMode === 'greenery') && (() => {
                 const p = popupInfo.feature.properties
                 const vegIndex = parseFloat(p.vegetation_index)
                 const svf = parseFloat(p.sky_view_factor)
@@ -2142,6 +2365,142 @@ const ExplorerMap = ({
             </div>
           </Popup>
         )}
+
+        {/* ── Environment Grid Cell Popup (with historical charts) ───── */}
+        {envPopup && (() => {
+          const p = envPopup.props
+          const locHistory = historyByLocation[p.grid_id] || []
+          const uaqiBand = (() => {
+            const v = p.uaqi ?? 0
+            if (v <= 25) return { label: 'Excellent', color: '#22d3ee' }
+            if (v <= 50) return { label: 'Good', color: '#34d399' }
+            if (v <= 75) return { label: 'Moderate', color: '#facc15' }
+            if (v <= 100) return { label: 'Poor', color: '#f97316' }
+            return { label: 'Very Poor', color: '#ef4444' }
+          })()
+
+          const MiniAreaChart = ({ values, color, height = 40 }) => {
+            if (!values || values.length < 2) return null
+            const w = 220
+            const mn = Math.min(...values), mx = Math.max(...values), r = mx - mn || 1
+            const pts = values.map((v, i) => ({
+              x: (i / (values.length - 1)) * w,
+              y: height - 3 - ((v - mn) / r) * (height - 6)
+            }))
+            const lineD = pts.map((pt, i) => `${i ? 'L' : 'M'}${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join('')
+            const areaD = `${lineD}L${w},${height}L0,${height}Z`
+            const last = pts[pts.length - 1]
+            return (
+              <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height} style={{ display: 'block' }}>
+                <path d={areaD} fill={color} opacity="0.15" />
+                <path d={lineD} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+                <circle cx={last.x} cy={last.y} r="2.5" fill={color} />
+              </svg>
+            )
+          }
+
+          const uaqiHistory = locHistory.map(h => h.uaqi).filter(v => v != null)
+          const pollutants = [
+            { key: 'poll_o3_value', label: 'O₃', safe: 100, hKey: 'poll_o3', tip: 'Ground-level ozone — respiratory irritant' },
+            { key: 'poll_no2_value', label: 'NO₂', safe: 40, hKey: 'poll_no2', tip: 'Vehicle & industrial exhaust — lung inflammation' },
+            { key: 'poll_pm10_value', label: 'PM10', safe: 50, hKey: 'poll_pm10', tip: 'Coarse dust & construction particles' },
+            { key: 'poll_co_value', label: 'CO', safe: 500, hKey: 'poll_co', tip: 'Carbon monoxide — reduces blood oxygen' },
+            { key: 'poll_so2_value', label: 'SO₂', safe: 20, hKey: 'poll_so2', tip: 'Fossil fuel emissions — throat irritation' },
+          ]
+
+          return (
+            <Popup
+              longitude={envPopup.longitude}
+              latitude={envPopup.latitude}
+              onClose={() => setEnvPopup(null)}
+              closeButton={true}
+              anchor="bottom"
+              maxWidth="310px"
+              className="env-rich-popup"
+            >
+              <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', color: '#e2e8f0', padding: '2px 0' }}>
+                {/* Header */}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{(p.grid_id || '').replace(/_/g, ' ')}</div>
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>500m Grid Cell</div>
+                </div>
+
+                {/* UAQI hero */}
+                {p.uaqi != null && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.04)', borderRadius: 8, border: `1px solid ${uaqiBand.color}33` }}>
+                    <div style={{ fontSize: 34, fontWeight: 800, color: uaqiBand.color, lineHeight: 1, letterSpacing: -2 }}>{p.uaqi}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: uaqiBand.color }}>{uaqiBand.label}</div>
+                      {p.uaqi_dominant && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Dominant: <strong style={{ color: '#cbd5e1' }}>{p.uaqi_dominant.toUpperCase()}</strong></div>}
+                    </div>
+                  </div>
+                )}
+
+                {/* UAQI history chart */}
+                {uaqiHistory.length > 2 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+                      <span>UAQI History</span>
+                      <span style={{ color: '#94a3b8', textTransform: 'none', letterSpacing: 0 }}>
+                        {Math.min(...uaqiHistory)}–{Math.max(...uaqiHistory)}
+                      </span>
+                    </div>
+                    <MiniAreaChart values={uaqiHistory} color={uaqiBand.color} />
+                  </div>
+                )}
+
+                {/* Pollutant rows with inline sparklines */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {pollutants.map(({ key, label, safe, hKey, tip }) => {
+                    const val = parseFloat(p[key])
+                    if (isNaN(val)) return null
+                    const pct = Math.min((val / (safe * 2)) * 100, 100)
+                    const ok = val <= safe
+                    const barColor = ok ? '#34d399' : '#f87171'
+                    const hVals = locHistory.map(h => parseFloat(h[hKey])).filter(v => !isNaN(v))
+                    return (
+                      <div key={key}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 44px', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }} title={tip}>{label}</span>
+                          <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 3, transition: 'width 0.6s ease' }} />
+                            <div style={{ position: 'absolute', top: -1, left: '50%', width: 1, height: 7, background: 'rgba(255,255,255,0.2)' }} title={`Safe: ${safe}`} />
+                          </div>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: barColor, textAlign: 'right' }}>{val.toFixed(1)}</span>
+                        </div>
+                        <div style={{ fontSize: 9, color: '#64748b', marginLeft: 42, marginTop: 1, lineHeight: 1.3 }}>{tip}</div>
+                        {hVals.length > 2 && (
+                          <div style={{ marginLeft: 42, marginTop: 2 }}>
+                            <MiniAreaChart values={hVals} color={barColor} height={22} />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Health advice */}
+                {p.health_general && (
+                  <div style={{ fontSize: 10, color: '#facc15', padding: '6px 8px', background: 'rgba(250,204,21,0.06)', borderRadius: 6, border: '1px solid rgba(250,204,21,0.15)', lineHeight: 1.5, marginTop: 8 }}>
+                    ℹ {p.health_general}
+                  </div>
+                )}
+
+                {/* View detailed analysis button */}
+                {onEnvGridDetail && (
+                  <button
+                    onClick={() => { onEnvGridDetail(p.grid_id); setEnvPopup(null) }}
+                    style={{ width: '100%', marginTop: 8, padding: '7px 0', background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', borderRadius: 6, color: '#22d3ee', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em', transition: 'background 0.2s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(34,211,238,0.22)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(34,211,238,0.12)'}
+                  >
+                    📊 View Detailed Analysis
+                  </button>
+                )}
+              </div>
+            </Popup>
+          )
+        })()}
       </Map>
     </div>
   )

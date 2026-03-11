@@ -252,6 +252,26 @@
   animation: slideUp 0.3s ease-out;
 }
 
+.bottom-panel.env-bottom-panel {
+  height: 420px;
+  transition: height 0.25s ease;
+}
+
+.bottom-panel.env-bottom-panel.env-minimized {
+  height: auto;
+}
+
+.bottom-panel.env-bottom-panel.env-minimized .charts-container {
+  display: none;
+}
+
+.bottom-panel.env-bottom-panel .charts-container::-webkit-scrollbar {
+  width: 4px; height: 4px;
+}
+.bottom-panel.env-bottom-panel .charts-container::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12); border-radius: 4px;
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(100%);

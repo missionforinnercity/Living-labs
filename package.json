@@ -5,15 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "api": "node api/server.js",
+    "dev:full": "concurrently --kill-others-on-fail \"npm run api\" \"npm run dev\"",
     "build": "vite build",
     "preview": "vite preview",
     "preprocess": "node scripts/preprocess.js"
   },
   "dependencies": {
     "@turf/turf": "^6.5.0",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.0",
     "mapbox-gl": "^3.1.2",
+    "pg": "^8.20.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-map-gl": "^7.1.7",

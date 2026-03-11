@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import proj4 from 'proj4'
 import ExplorerMap from './ExplorerMap'
 import BusinessAnalytics from './BusinessAnalytics'
@@ -7,6 +7,7 @@ import WalkabilityAnalytics from './WalkabilityAnalytics'
 import LightingAnalytics from './LightingAnalytics'
 import TemperatureAnalytics from './TemperatureAnalytics'
 import GreeneryAnalytics from './GreeneryAnalytics'
+import EnvironmentAnalytics from './EnvironmentAnalytics'
 import TrafficAnalytics, { TRAFFIC_SCENARIOS } from './TrafficAnalytics'
 import { generateReport } from '../../utils/reportGenerator'
 import './UnifiedDataExplorer.css'
@@ -79,7 +80,7 @@ const DASHBOARD_MODES = [
   { id: 'walkability', label: 'Walkability & Cycling' },
   { id: 'lighting', label: 'Street Lighting' },
   { id: 'temperature', label: 'Surface Temperature' },
-  { id: 'greenery', label: 'Greenery' },
+  { id: 'environment', label: 'Environment' },
   { id: 'traffic', label: 'Traffic' }
 ]
 
@@ -104,10 +105,11 @@ const LAYER_CATEGORIES = [
   { id: 'missionInterventions', label: 'Mission Interventions', dashboard: 'lighting', dataKey: 'missionInterventions' },
   // Temperature layers
   { id: 'surfaceTemperature', label: 'Surface Temperature', dashboard: 'temperature', dataKey: 'temperatureSegments' },
-  // Greenery layers
-  { id: 'greeneryIndex', label: 'Greenery Index', dashboard: 'greenery', dataKey: 'greenerySegments' },
-  { id: 'treeCanopy', label: 'Tree Canopy', dashboard: 'greenery', dataKey: 'treeCanopy' },
-  { id: 'parksNearby', label: 'Parks Nearby', dashboard: 'greenery', dataKey: 'parksNearby' },
+  // Environment layers (greenery + air quality)
+  { id: 'airQuality',   label: 'Air Quality',  dashboard: 'environment', dataKey: 'airQualityVoronoi' },
+  { id: 'greeneryIndex', label: 'Greenery Index', dashboard: 'environment', dataKey: 'greenerySegments' },
+  { id: 'treeCanopy', label: 'Tree Canopy', dashboard: 'environment', dataKey: 'treeCanopy' },
+  { id: 'parksNearby', label: 'Parks Nearby', dashboard: 'environment', dataKey: 'parksNearby' },
   // Traffic layers
   { id: 'trafficFlow', label: 'Traffic Flow', dashboard: 'traffic', dataKey: 'trafficSegments' }
 ]
@@ -179,6 +181,14 @@ const UnifiedDataExplorer = () => {
   const [treeCanopyData, setTreeCanopyData] = useState(null)
   const [parksData, setParksData] = useState(null)
 
+  // Environment / air quality state (fetched from API)
+  const [envCurrentData, setEnvCurrentData] = useState(null)
+  const [envHistoryData, setEnvHistoryData] = useState(null)
+  const [envIndex, setEnvIndex] = useState('uaqi') // which metric to display on the map
+  const envLastFetch = useRef(0)
+  const [envDetailGrid, setEnvDetailGrid] = useState(null) // grid_id for bottom detail panel
+  const [envPanelMinimized, setEnvPanelMinimized] = useState(false)
+
   // Traffic dashboard state
   const [trafficData, setTrafficData] = useState(null)
   const [trafficScenario, setTrafficScenario] = useState('WORK_MORNING')
@@ -212,7 +222,8 @@ const UnifiedDataExplorer = () => {
     missionInterventions: false,
     // Temperature layers
     temperatureSegments: false,
-    // Greenery layers
+    // Environment / greenery layers
+    airQualityVoronoi: false,
     greenerySegments: false,
     treeCanopy: false,
     parksNearby: false,
@@ -537,18 +548,16 @@ const UnifiedDataExplorer = () => {
     }
   }, [dashboardMode, lockedLayers])
   
-  // Load shade/greenery data
+  // Load shade/greenery/environment data
   useEffect(() => {
     const loadShadeData = async () => {
       try {
-        // Map season to the correct date in the file path
         const seasonDates = {
           summer: '2024-12-21',
           autumn: '2025-03-20',
           winter: '2025-06-21',
           spring: '2025-09-22'
         }
-        
         const date = seasonDates[season] || '2024-12-21'
         const response = await fetch(`/data/processed/shade/${season}/${date}_${timeOfDay}.geojson`)
         const data = await response.json()
@@ -566,16 +575,12 @@ const UnifiedDataExplorer = () => {
           fetch('/data/greenery/tree_canopy.geojson'),
           fetch('/data/greenery/parks_nearby.geojson')
         ])
-        
         const [greeneryData, treeCanopyData, parksData] = await Promise.all([
           greeneryResp.json(),
           treeCanopyResp.json(),
           parksResp.json()
         ])
-        
-        // Transform tree canopy from EPSG:3857 to EPSG:4326 if needed
         const transformedTreeCanopy = transformGeoJSON(treeCanopyData, 'EPSG:3857', 'EPSG:4326')
-        
         setGreeneryAndSkyview(greeneryData)
         setTreeCanopyData(transformedTreeCanopy)
         setParksData(parksData)
@@ -584,12 +589,36 @@ const UnifiedDataExplorer = () => {
         console.error('Error loading greenery data:', error)
       }
     }
+
+    const loadEnvData = async () => {
+      // Throttle: only re-fetch if more than 3 minutes have passed
+      const now = Date.now()
+      if (now - envLastFetch.current < 3 * 60 * 1000 && envCurrentData) return
+      try {
+        const [currentResp, historyResp] = await Promise.all([
+          fetch('/api/environment/current'),
+          fetch('/api/environment/history')
+        ])
+        if (currentResp.ok) {
+          const data = await currentResp.json()
+          setEnvCurrentData(data)
+        }
+        if (historyResp.ok) {
+          const data = await historyResp.json()
+          setEnvHistoryData(data)
+        }
+        envLastFetch.current = Date.now()
+        console.log('Loaded environment data from DB')
+      } catch (error) {
+        console.error('Error loading environment data:', error)
+      }
+    }
     
-    // Load greenery data when dashboard is greenery OR when any greenery layer is locked
-    const hasLockedGreeneryLayer = ['greeneryIndex', 'treeCanopy', 'parksNearby'].some(id => lockedLayers.has(id))
-    if (dashboardMode === 'greenery' || hasLockedGreeneryLayer) {
+    const hasLockedEnvLayer = ['greeneryIndex', 'treeCanopy', 'parksNearby', 'airQuality'].some(id => lockedLayers.has(id))
+    if (dashboardMode === 'environment' || hasLockedEnvLayer) {
       loadShadeData()
       loadGreeneryData()
+      loadEnvData()
     }
   }, [dashboardMode, season, timeOfDay, lockedLayers])
 
@@ -704,6 +733,8 @@ const UnifiedDataExplorer = () => {
       if (modeMap[categoryId]) {
         setWalkabilityMode(modeMap[categoryId])
       }
+    } else if (category.dashboard === 'environment') {
+      if (categoryId === 'airQuality') setEnvIndex('uaqi')
     }
     
     // Switch to the appropriate dashboard
@@ -1010,7 +1041,7 @@ const UnifiedDataExplorer = () => {
       {/* Category sub-nav — horizontal pill bar below mode tabs */}
       <div className="category-subnav">
         {/* All Layers toggle — only for dashboards with multiple layer types */}
-        {['greenery'].includes(dashboardMode) && (() => {
+        {['environment'].includes(dashboardMode) && (() => {
           const dashCats = getCurrentDashboardCategories()
           const allActive = dashCats.every(c => layerStack.some(l => l.id === c.id))
           return (
@@ -1204,15 +1235,23 @@ const UnifiedDataExplorer = () => {
             />
           )}
           
-          {dashboardMode === 'greenery' && (
-            <GreeneryAnalytics
-              shadeData={shadeData}
-              greeneryAndSkyview={greeneryAndSkyview}
-              treeCanopyData={treeCanopyData}
-              parksData={parksData}
-              hideLayerControls={true}
-              allLayersActive={LAYER_CATEGORIES.filter(c => c.dashboard === 'greenery').every(c => layerStack.some(l => l.id === c.id))}
-            />
+          {dashboardMode === 'environment' && (
+            <>
+              <EnvironmentAnalytics
+                currentData={envCurrentData}
+                historyData={envHistoryData}
+                envIndex={envIndex}
+                onEnvIndexChange={setEnvIndex}
+              />
+              <GreeneryAnalytics
+                shadeData={shadeData}
+                greeneryAndSkyview={greeneryAndSkyview}
+                treeCanopyData={treeCanopyData}
+                parksData={parksData}
+                hideLayerControls={true}
+                allLayersActive={LAYER_CATEGORIES.filter(c => c.dashboard === 'environment').every(c => layerStack.some(l => l.id === c.id))}
+              />
+            </>
           )}
 
           {dashboardMode === 'traffic' && (
@@ -1279,6 +1318,10 @@ const UnifiedDataExplorer = () => {
             greeneryAndSkyview={greeneryAndSkyview}
             treeCanopyData={treeCanopyData}
             parksData={parksData}
+            envCurrentData={envCurrentData}
+            envHistoryData={envHistoryData}
+            envIndex={envIndex}
+            onEnvGridDetail={setEnvDetailGrid}
             visibleLayers={visibleLayers}
             layerStack={layerStack}
             activeCategory={activeCategory}
@@ -1405,6 +1448,157 @@ const UnifiedDataExplorer = () => {
               </div>
             </div>
           )}
+
+          {/* ── Environment detail bottom panel ── */}
+          {dashboardMode === 'environment' && envDetailGrid && (() => {
+            const gridRow = envCurrentData?.rows?.find(r => r.grid_id === envDetailGrid)
+            const histRows = (envHistoryData?.rows || []).filter(r => r.grid_id === envDetailGrid)
+            if (!gridRow || histRows.length === 0) return null
+
+            const POLL_DESC = {
+              poll_o3:  { label: 'O\u2083 (Ozone)', desc: 'Ground-level ozone formed by sunlight reacting with vehicle & industrial emissions. Irritates airways and worsens asthma.', safe: 100, color: '#4fc3f7', unit: '\u00b5g/m\u00b3' },
+              poll_no2: { label: 'NO\u2082 (Nitrogen Dioxide)', desc: 'Produced mainly by traffic and power plants. Inflames the lining of the lungs and reduces immunity to infections.', safe: 40, color: '#ce93d8', unit: '\u00b5g/m\u00b3' },
+              poll_pm10:{ label: 'PM10 (Coarse Particles)', desc: 'Dust, pollen, and construction debris \u226410\u00b5m. Can penetrate the upper airways and trigger coughing and breathing difficulties.', safe: 50, color: '#ffcc80', unit: '\u00b5g/m\u00b3' },
+              poll_co:  { label: 'CO (Carbon Monoxide)', desc: 'Colourless, odourless gas from incomplete combustion. Reduces oxygen delivery in the blood; dangerous at high levels.', safe: 500, color: '#a5d6a7', unit: '\u00b5g/m\u00b3' },
+              poll_so2: { label: 'SO\u2082 (Sulphur Dioxide)', desc: 'Released by burning fossil fuels containing sulphur. Causes throat and eye irritation and aggravates respiratory conditions.', safe: 20, color: '#fff176', unit: '\u00b5g/m\u00b3' },
+            }
+            const POLLUTANT_KEYS = Object.keys(POLL_DESC)
+
+            // Sort history by time
+            const sorted = [...histRows].sort((a, b) => new Date(a.hour_utc) - new Date(b.hour_utc))
+
+            // Group by day for daily aggregation
+            const byDay = {}
+            sorted.forEach(r => {
+              const day = new Date(r.hour_utc).toISOString().slice(0, 10)
+              if (!byDay[day]) byDay[day] = []
+              byDay[day].push(r)
+            })
+            const dailyData = Object.entries(byDay)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([day, rows]) => {
+                const avg = (arr) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null
+                const max = (arr) => arr.length ? Math.max(...arr) : null
+                const uaqiVals = rows.map(r => r.uaqi).filter(v => v != null)
+                const entry = {
+                  day,
+                  displayDay: new Date(day + 'T12:00:00Z').toLocaleDateString('en-ZA', { weekday: 'short', month: 'short', day: 'numeric' }),
+                  uaqi_avg: avg(uaqiVals),
+                  uaqi_max: max(uaqiVals),
+                  hours: rows.length,
+                }
+                POLLUTANT_KEYS.forEach(pk => {
+                  const vals = rows.map(r => parseFloat(r[pk])).filter(v => !isNaN(v))
+                  entry[pk + '_avg'] = avg(vals)
+                  entry[pk + '_max'] = max(vals)
+                })
+                return entry
+              })
+
+            // UAQI band helper
+            const uaqiBand = (v) => {
+              if (v <= 25) return { label: 'Excellent', color: '#22d3ee' }
+              if (v <= 50) return { label: 'Good', color: '#34d399' }
+              if (v <= 75) return { label: 'Moderate', color: '#facc15' }
+              if (v <= 100) return { label: 'Poor', color: '#f97316' }
+              return { label: 'Very Poor', color: '#ef4444' }
+            }
+            const band = uaqiBand(gridRow.uaqi ?? 0)
+
+            // Peak day
+            const peakDay = dailyData.reduce((best, d) => (!best || (d.uaqi_max || 0) > (best.uaqi_max || 0)) ? d : best, null)
+
+            return (
+              <div className={`bottom-panel env-bottom-panel ${envPanelMinimized ? 'env-minimized' : ''}`} style={{ marginRight: sidebarWidth + 32 }}>
+                <div className="panel-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 28, fontWeight: 800, color: band.color }}>{gridRow.uaqi}</span>
+                    <div>
+                      <h3 style={{ margin: 0 }}>{(gridRow.grid_id || '').replace(/_/g, ' ')} — Air Quality Detail</h3>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{band.label} · {sorted.length} hourly readings · {dailyData.length} days</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <button
+                      onClick={() => setEnvPanelMinimized(m => !m)}
+                      className="close-btn"
+                      title={envPanelMinimized ? 'Expand' : 'Minimize'}
+                    >{envPanelMinimized ? '▲' : '▼'}</button>
+                    <button onClick={() => { setEnvDetailGrid(null); setEnvPanelMinimized(false) }} className="close-btn">✕</button>
+                  </div>
+                </div>
+
+                {!envPanelMinimized && <div className="charts-container" style={{ display: 'flex', gap: 16, padding: '12px 16px', overflow: 'auto' }}>
+                  {/* Left: Daily UAQI chart */}
+                  <div style={{ flex: '1 1 340px', minWidth: 280 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Daily UAQI (Avg & Peak)</span>
+                      {peakDay && (
+                        <span style={{ fontSize: 10, color: '#f97316', background: 'rgba(249,115,22,0.12)', padding: '2px 8px', borderRadius: 4 }}>
+                          Peak: {peakDay.displayDay} ({Math.round(peakDay.uaqi_max)})
+                        </span>
+                      )}
+                    </div>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <LineChart data={dailyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                        <XAxis dataKey="displayDay" stroke="#64748b" tick={{ fontSize: 10 }} />
+                        <YAxis stroke="#64748b" tick={{ fontSize: 10 }} domain={['dataMin - 2', 'dataMax + 5']} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 6, fontSize: 11, color: '#e2e8f0' }}
+                          formatter={(v, name) => [Math.round(v), name === 'uaqi_avg' ? 'Avg' : 'Peak']}
+                        />
+                        <Line type="monotone" dataKey="uaqi_avg" stroke="#22d3ee" strokeWidth={2} dot={{ r: 3 }} name="uaqi_avg" />
+                        <Line type="monotone" dataKey="uaqi_max" stroke="#f97316" strokeWidth={2} strokeDasharray="4 2" dot={{ r: 3 }} name="uaqi_max" />
+                        <Legend
+                          formatter={(value) => value === 'uaqi_avg' ? 'Daily Average' : 'Daily Peak'}
+                          wrapperStyle={{ fontSize: 10, color: '#94a3b8' }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Right: Pollutant cards with descriptions + daily bars */}
+                  <div style={{ flex: '1 1 420px', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>Pollutant Breakdown</span>
+                    {POLLUTANT_KEYS.map(pk => {
+                      const meta = POLL_DESC[pk]
+                      const currentVal = parseFloat(gridRow[pk + '_value'])
+                      const safe = !isNaN(currentVal) && currentVal <= meta.safe
+                      return (
+                        <div key={pk} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '8px 10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: meta.color }}>{meta.label}</span>
+                            {!isNaN(currentVal) && (
+                              <span style={{ fontSize: 12, fontWeight: 700, color: safe ? meta.color : '#f87171' }}>
+                                {currentVal.toFixed(1)} {meta.unit}
+                                <span style={{ fontSize: 9, marginLeft: 4, color: '#64748b' }}>safe: {meta.safe}</span>
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#94a3b8', lineHeight: 1.45, marginBottom: 6 }}>{meta.desc}</div>
+                          {/* Mini daily chart */}
+                          <ResponsiveContainer width="100%" height={50}>
+                            <LineChart data={dailyData} margin={{ top: 2, right: 4, left: -20, bottom: 0 }}>
+                              <XAxis dataKey="displayDay" hide />
+                              <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
+                              <Tooltip
+                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 4, fontSize: 10, color: '#e2e8f0' }}
+                                formatter={(v) => [v != null ? v.toFixed(1) : '—', meta.label]}
+                                labelFormatter={(l) => l}
+                              />
+                              <Line type="monotone" dataKey={pk + '_avg'} stroke={meta.color} strokeWidth={1.5} dot={{ r: 2 }} />
+                              <Line type="monotone" dataKey={pk + '_max'} stroke="#f87171" strokeWidth={1} strokeDasharray="3 2" dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>}
+              </div>
+            )
+          })()}
         </main>
 
         {/* Business bottom panel */}
