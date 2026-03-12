@@ -11,6 +11,112 @@
   font-size: 13px;
 }
 
+/* ── date scrubber ── */
+.env-date-scrubber {
+  padding: 10px 16px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.env-date-scrubber-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.env-date-scrubber-title {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #475569;
+  font-weight: 600;
+}
+.env-date-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.04em;
+}
+.env-date-badge.live {
+  background: rgba(0,230,118,0.15);
+  color: #00e676;
+  border: 1px solid rgba(0,230,118,0.3);
+}
+.env-date-badge.historic {
+  background: rgba(99,179,237,0.15);
+  color: #63b3ed;
+  border: 1px solid rgba(99,179,237,0.3);
+}
+.env-date-scrubber-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.env-date-step {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.env-date-step:hover {
+  background: rgba(255,255,255,0.1);
+  color: #e2e8f0;
+}
+.env-date-track-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.env-date-track {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    rgba(99,179,237,0.5) 0%,
+    rgba(0,230,118,0.5) 100%
+  );
+  outline: none;
+  cursor: pointer;
+}
+.env-date-track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #63b3ed;
+  border: 2px solid #1e293b;
+  box-shadow: 0 0 6px rgba(99,179,237,0.6), 0 0 12px rgba(99,179,237,0.3);
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.env-date-track::-webkit-slider-thumb:hover {
+  background: #90cdf4;
+  box-shadow: 0 0 10px rgba(99,179,237,0.8), 0 0 20px rgba(99,179,237,0.4);
+}
+.env-date-tick-labels {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  color: #475569;
+  padding: 0 1px;
+}
+
 /* ── index selector ── */
 .env-index-selector {
   padding: 10px 16px 8px;

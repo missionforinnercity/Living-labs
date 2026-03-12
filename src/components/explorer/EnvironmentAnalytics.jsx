@@ -1,16 +1,16 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useCallback } from 'react'
 import './EnvironmentAnalytics.css'
 
 // ─── Index definitions ────────────────────────────────────────────────────────
 
 const ENV_INDICES = [
-  { id: 'uaqi',             label: 'UAQI',    icon: '🌡', group: 'air' },
-  { id: 'poll_o3_value',    label: 'O₃',      icon: '🌫', group: 'air' },
-  { id: 'poll_no2_value',   label: 'NO₂',     icon: '🏭', group: 'air' },
-  { id: 'poll_pm10_value',  label: 'PM10',    icon: '💨', group: 'air' },
-  { id: 'poll_co_value',    label: 'CO',      icon: '🚗', group: 'air' },
-  { id: 'poll_so2_value',   label: 'SO₂',    icon: '⚗️', group: 'air' },
-  { id: 'avg',              label: 'Avg',     icon: '📊', group: 'air' },
+  { id: 'uaqi',             label: 'UAQI',    icon: '', group: 'air' },
+  { id: 'poll_o3_value',    label: 'O₃',      icon: '', group: 'air' },
+  { id: 'poll_no2_value',   label: 'NO₂',     icon: '', group: 'air' },
+  { id: 'poll_pm10_value',  label: 'PM10',    icon: '', group: 'air' },
+  { id: 'poll_co_value',    label: 'CO',      icon: '', group: 'air' },
+  { id: 'poll_so2_value',   label: 'SO₂',    icon: '', group: 'air' },
+  { id: 'avg',              label: 'Avg',     icon: '', group: 'air' },
 ]
 
 const INDEX_FIELD_MAP = Object.fromEntries(ENV_INDICES.map(i => [i.id, i.id]))
@@ -28,11 +28,11 @@ const AQI_BANDS = [
 
 
 const POLLUTANT_META = {
-  poll_o3_value:    { label: 'O₃',    unit: 'µg/m³', maxSafe: 100, color: '#4fc3f7', icon: '🌫', desc: 'Ground-level ozone — respiratory irritant' },
-  poll_no2_value:   { label: 'NO₂',   unit: 'µg/m³', maxSafe: 40,  color: '#ce93d8', icon: '🏭', desc: 'Vehicle & industrial exhaust — lung inflammation' },
-  poll_pm10_value:  { label: 'PM10',  unit: 'µg/m³', maxSafe: 50,  color: '#ffcc80', icon: '💨', desc: 'Coarse dust & construction particles' },
-  poll_co_value:    { label: 'CO',    unit: 'µg/m³', maxSafe: 500, color: '#a5d6a7', icon: '🚗', desc: 'Carbon monoxide — reduces blood oxygen' },
-  poll_so2_value:   { label: 'SO₂',   unit: 'µg/m³', maxSafe: 20,  color: '#fff176', icon: '⚗️', desc: 'Fossil fuel emissions — throat irritation' }
+  poll_o3_value:    { label: 'O₃',    unit: 'µg/m³', maxSafe: 100, color: '#4fc3f7', icon: '', desc: 'Ground-level ozone — respiratory irritant' },
+  poll_no2_value:   { label: 'NO₂',   unit: 'µg/m³', maxSafe: 40,  color: '#ce93d8', icon: '', desc: 'Vehicle & industrial exhaust — lung inflammation' },
+  poll_pm10_value:  { label: 'PM10',  unit: 'µg/m³', maxSafe: 50,  color: '#ffcc80', icon: '', desc: 'Coarse dust & construction particles' },
+  poll_co_value:    { label: 'CO',    unit: 'µg/m³', maxSafe: 500, color: '#a5d6a7', icon: '', desc: 'Carbon monoxide — reduces blood oxygen' },
+  poll_so2_value:   { label: 'SO₂',   unit: 'µg/m³', maxSafe: 20,  color: '#fff176', icon: '', desc: 'Fossil fuel emissions — throat irritation' }
 }
 
 function aqiBand(uaqi) {
@@ -94,8 +94,38 @@ function Sparkline({ data, color }) {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-const EnvironmentAnalytics = ({ currentData, historyData, envIndex = 'uaqi', onEnvIndexChange }) => {
+const EnvironmentAnalytics = ({ currentData, historyData, envIndex = 'uaqi', onEnvIndexChange, envDate, onEnvDateChange }) => {
   const [selectedLocation, setSelectedLocation] = useState(null)
+
+  // Extract sorted unique calendar dates from history
+  const historyDates = useMemo(() => {
+    const rows = historyData?.rows
+    if (!rows) return []
+    const days = [...new Set(rows.map(r => r.hour_utc?.slice(0, 10)).filter(Boolean))].sort()
+    return days
+  }, [historyData])
+
+  // Slider: 0..historyDates.length-1 = historical, historyDates.length = LIVE
+  const sliderMax = historyDates.length
+  const currentSliderVal = envDate ? historyDates.indexOf(envDate) : sliderMax
+
+  const handleSlider = useCallback((e) => {
+    const val = +e.target.value
+    onEnvDateChange?.(val >= sliderMax ? null : historyDates[val])
+  }, [sliderMax, historyDates, onEnvDateChange])
+
+  const stepDate = useCallback((delta) => {
+    const cur = envDate ? historyDates.indexOf(envDate) : sliderMax
+    const next = Math.max(0, Math.min(sliderMax, cur + delta))
+    onEnvDateChange?.(next >= sliderMax ? null : historyDates[next])
+  }, [envDate, historyDates, sliderMax, onEnvDateChange])
+
+  const fmtSliderLabel = (dateStr) => {
+    if (!dateStr) return 'Live'
+    try {
+      return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    } catch { return dateStr }
+  }
 
   // Aggregate stats across all monitoring points
   const stats = useMemo(() => {
@@ -188,6 +218,44 @@ const EnvironmentAnalytics = ({ currentData, historyData, envIndex = 'uaqi', onE
         </div>
         <span className="env-updated">Updated {fmtTime(stats.updatedAt)}</span>
       </div>
+
+      {/* ── Date scrubber ── */}
+      {historyDates.length > 0 && (
+        <div className="env-date-scrubber">
+          <div className="env-date-scrubber-header">
+            <span className="env-date-scrubber-title">Time</span>
+            <span className={`env-date-badge ${!envDate ? 'live' : 'historic'}`}>
+              {envDate ? fmtSliderLabel(envDate) : 'Live'}
+            </span>
+          </div>
+          <div className="env-date-scrubber-controls">
+            <button className="env-date-step" onClick={() => stepDate(-1)} title="Previous day">‹</button>
+            <div className="env-date-track-wrap">
+              <input
+                type="range"
+                className="env-date-track"
+                min={0}
+                max={sliderMax}
+                step={1}
+                value={currentSliderVal < 0 ? sliderMax : currentSliderVal}
+                onChange={handleSlider}
+              />
+              <div className="env-date-tick-labels">
+                {historyDates.length > 0 && (
+                  <span>{fmtSliderLabel(historyDates[0])}</span>
+                )}
+                {historyDates.length > 3 && (
+                  <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+                    {fmtSliderLabel(historyDates[Math.floor(historyDates.length / 2)])}
+                  </span>
+                )}
+                <span>Live</span>
+              </div>
+            </div>
+            <button className="env-date-step" onClick={() => stepDate(1)} title="Next day">›</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Index selector ── */}
       <div className="env-index-selector">

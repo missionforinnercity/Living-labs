@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import proj4 from 'proj4'
 import ExplorerMap from './ExplorerMap'
@@ -185,9 +185,44 @@ const UnifiedDataExplorer = () => {
   const [envCurrentData, setEnvCurrentData] = useState(null)
   const [envHistoryData, setEnvHistoryData] = useState(null)
   const [envIndex, setEnvIndex] = useState('uaqi') // which metric to display on the map
+  const [envDate, setEnvDate] = useState(null)     // null = live; 'YYYY-MM-DD' = historical day
   const envLastFetch = useRef(0)
   const [envDetailGrid, setEnvDetailGrid] = useState(null) // grid_id for bottom detail panel
   const [envPanelMinimized, setEnvPanelMinimized] = useState(false)
+
+  // Derive the rows shown on the map — either live current data or a historical day average
+  const envDisplayData = useMemo(() => {
+    if (!envDate || !envHistoryData?.rows) return envCurrentData
+    const dayRows = envHistoryData.rows.filter(r => r.hour_utc?.slice(0, 10) === envDate)
+    if (dayRows.length === 0) return envCurrentData
+    // Average all hours of that day per grid cell
+    const byGrid = {}
+    dayRows.forEach(r => {
+      if (!byGrid[r.grid_id]) byGrid[r.grid_id] = {
+        grid_id: r.grid_id, latitude: r.latitude, longitude: r.longitude,
+        uaqi: [], poll_co_value: [], poll_no2_value: [],
+        poll_o3_value: [], poll_pm10_value: [], poll_so2_value: []
+      }
+      const b = byGrid[r.grid_id]
+      if (r.uaqi      != null) b.uaqi.push(+r.uaqi)
+      if (r.poll_co   != null) b.poll_co_value.push(+r.poll_co)
+      if (r.poll_no2  != null) b.poll_no2_value.push(+r.poll_no2)
+      if (r.poll_o3   != null) b.poll_o3_value.push(+r.poll_o3)
+      if (r.poll_pm10 != null) b.poll_pm10_value.push(+r.poll_pm10)
+      if (r.poll_so2  != null) b.poll_so2_value.push(+r.poll_so2)
+    })
+    const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null
+    const rows = Object.values(byGrid).map(b => ({
+      grid_id: b.grid_id, latitude: b.latitude, longitude: b.longitude,
+      uaqi:           avg(b.uaqi),
+      poll_co_value:  avg(b.poll_co_value),
+      poll_no2_value: avg(b.poll_no2_value),
+      poll_o3_value:  avg(b.poll_o3_value),
+      poll_pm10_value: avg(b.poll_pm10_value),
+      poll_so2_value: avg(b.poll_so2_value),
+    }))
+    return { rows, fetchedAt: envDate }
+  }, [envDate, envCurrentData, envHistoryData])
 
   // Traffic dashboard state
   const [trafficData, setTrafficData] = useState(null)
@@ -1242,6 +1277,8 @@ const UnifiedDataExplorer = () => {
                 historyData={envHistoryData}
                 envIndex={envIndex}
                 onEnvIndexChange={setEnvIndex}
+                envDate={envDate}
+                onEnvDateChange={setEnvDate}
               />
               <GreeneryAnalytics
                 shadeData={shadeData}
@@ -1318,7 +1355,7 @@ const UnifiedDataExplorer = () => {
             greeneryAndSkyview={greeneryAndSkyview}
             treeCanopyData={treeCanopyData}
             parksData={parksData}
-            envCurrentData={envCurrentData}
+            envCurrentData={envDisplayData}
             envHistoryData={envHistoryData}
             envIndex={envIndex}
             onEnvGridDetail={setEnvDetailGrid}

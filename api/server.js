@@ -48,7 +48,7 @@ app.get('/api/environment/current', async (_req, res) => {
         poll_co_value, poll_no2_value, poll_o3_value,
         poll_pm10_value, poll_so2_value,
         health_general
-      FROM environment.grid_current
+      FROM environment.airquality_current
       ORDER BY grid_id
     `)
     res.json({ rows, fetchedAt: new Date().toISOString() })
@@ -73,7 +73,7 @@ app.get('/api/environment/history', async (_req, res) => {
         poll_so2_value  AS poll_so2,
         uaqi_category,
         health_general
-      FROM environment.grid_history
+      FROM environment.airquality_history
       ORDER BY grid_id, datetime_utc
     `)
     res.json({ rows, fetchedAt: new Date().toISOString() })

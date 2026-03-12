@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Map, { Source, Layer, Popup } from 'react-map-gl'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import * as turf from '@turf/turf'
+import { latLngToCell, cellToBoundary } from 'h3-js'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { isBusinessOpen } from '../../utils/timeUtils'
 import { colorScales } from '../../utils/dataLoader'
@@ -60,7 +61,18 @@ const ExplorerMap = ({
   ratingFilter = null   // null = all, array of floor values e.g. [4,5]
 }) => {
   const mapRef = useRef()
-  
+
+  // ─── Hex layer opacity — fades to 0 and back when envCurrentData changes ──
+  const [hexOpacity, setHexOpacity] = useState(0)
+  const hexFadeTimer = useRef(null)
+  useEffect(() => {
+    // Fade out instantly, then fade back in after the GeoJSON has a render frame
+    setHexOpacity(0)
+    clearTimeout(hexFadeTimer.current)
+    hexFadeTimer.current = setTimeout(() => setHexOpacity(1), 80)
+    return () => clearTimeout(hexFadeTimer.current)
+  }, [envCurrentData])
+
   // Helper function to check if a category should be rendered
   const shouldRenderCategory = (categoryId) => {
     // Check if this category is in the layer stack (either as active or locked)
@@ -80,11 +92,10 @@ const ExplorerMap = ({
   // 7-stop gradient: cool blue → teal → green → lime → amber → orange → red
   const AQ_PALETTE = ['#2563eb', '#0891b2', '#059669', '#65a30d', '#ca8a04', '#ea580c', '#dc2626']
 
-  // Build interpolation that stretches across actual data range for max differentiation
+  // Build interpolation across actual per-metric data range for colour differentiation
   const buildEnvColorExpr = (idx, currentRows, histRows) => {
     // "avg" mode: use historic averages per location to show spatial hotspots
     if (idx === 'avg') {
-      // Compute per-grid-cell mean UAQI from history
       const byLoc = {}
       ;(histRows || []).forEach(r => {
         if (r.uaqi != null) {
@@ -102,21 +113,21 @@ const ExplorerMap = ({
       return expr
     }
     const metric = ENV_METRICS[idx] || ENV_METRICS.uaqi
-    const vals = (currentRows || []).map(r => r[metric.field]).filter(v => v != null && !isNaN(v))
+    // Use the normalised 0-1 field stored per feature so every metric maps correctly
+    const normField = `_norm_${metric.field}`
+    // Fallback: if normField isn't available yet, use raw values with proper range
+    const vals = (currentRows || []).map(r => r[metric.field]).filter(v => v != null && !isNaN(+v))
     if (vals.length === 0) {
-      return ['interpolate', ['linear'], ['coalesce', ['get', metric.field], 0],
-        0, AQ_PALETTE[0], 50, AQ_PALETTE[3], 100, AQ_PALETTE[6]]
+      return ['interpolate', ['linear'], ['coalesce', ['get', normField], 0.5],
+        0, AQ_PALETTE[0], 0.5, AQ_PALETTE[3], 1, AQ_PALETTE[6]]
     }
-    const min = Math.min(...vals)
-    const max = Math.max(...vals)
-    const range = max - min
-    if (range < 0.001) return AQ_PALETTE[3]
-    const lo = min - range * 0.05
-    const hi = max + range * 0.05
-    const span = hi - lo
-    const expr = ['interpolate', ['linear'], ['coalesce', ['get', metric.field], lo]]
-    AQ_PALETTE.forEach((c, i) => { expr.push(lo + (i / (AQ_PALETTE.length - 1)) * span); expr.push(c) })
-    return expr
+    // Always interpolate over the normalised 0-1 range; null → grey "no data"
+    const interpolate = ['interpolate', ['linear'], ['get', normField]]
+    AQ_PALETTE.forEach((c, i) => {
+      interpolate.push(i / (AQ_PALETTE.length - 1))
+      interpolate.push(c)
+    })
+    return ['case', ['==', ['get', normField], null], '#374151', interpolate]
   }
 
   const envColorExpr = useMemo(
@@ -158,7 +169,8 @@ const ExplorerMap = ({
     return result
   }, [envHistoryData])
 
-  // ─── 500m grid cells — choropleth squares centred on each sample point ───
+  // ─── H3 hexagons — each sample point mapped to its H3 res-8 hex ───────────
+  const H3_RES = 8
   const gridGeoJSON = useMemo(() => {
     const rows = envCurrentData?.rows
     if (!rows || rows.length === 0) return null
@@ -166,29 +178,70 @@ const ExplorerMap = ({
     const validRows = rows.filter(r => r.latitude != null && r.longitude != null)
     if (validRows.length === 0) return null
 
-    // Detect grid spacing from data (fallback to ~500m)
-    const lats = [...new Set(validRows.map(r => r.latitude))].sort((a, b) => a - b)
-    const lngs = [...new Set(validRows.map(r => r.longitude))].sort((a, b) => a - b)
-    const latStep = lats.length > 1 ? Math.abs(lats[1] - lats[0]) : 0.0045
-    const lngStep = lngs.length > 1 ? Math.abs(lngs[1] - lngs[0]) : 0.0054
-    const halfLat = latStep / 2
-    const halfLng = lngStep / 2
+    // When multiple rows fall into the same hex, average their values
+    const hexBuckets = {}
+    validRows.forEach(r => {
+      const h3Index = latLngToCell(r.latitude, r.longitude, H3_RES)
+      if (!hexBuckets[h3Index]) hexBuckets[h3Index] = []
+      hexBuckets[h3Index].push(r)
+    })
 
-    const cells = validRows.map(r => {
-      const props = {
-        ...r,
-        ...(histAvgByLocation[r.grid_id] || {}),
-        name: (r.grid_id || '').replace(/_/g, ' ')
+    // Pre-compute per-metric min/max using rounded integers — same precision as the displayed label
+    // This ensures tiles showing the same number always get the same colour
+    const allMetricFields = Object.values(ENV_METRICS).map(m => m.field)
+    const metricRange = {}
+    allMetricFields.forEach(f => {
+      const vals = validRows
+        .map(r => r[f])
+        .filter(v => v != null && v !== '' && !isNaN(+v))
+        .map(v => Math.round(+v))   // round to integer, same as label display
+      if (vals.length) {
+        metricRange[f] = { min: Math.min(...vals), max: Math.max(...vals) }
       }
-      // Build exact square polygon
-      const cell = turf.polygon([[
-        [r.longitude - halfLng, r.latitude - halfLat],
-        [r.longitude + halfLng, r.latitude - halfLat],
-        [r.longitude + halfLng, r.latitude + halfLat],
-        [r.longitude - halfLng, r.latitude + halfLat],
-        [r.longitude - halfLng, r.latitude - halfLat]
-      ]], props)
-      return cell
+    })
+
+    const cells = Object.entries(hexBuckets).map(([h3Index, bucket]) => {
+      // Average each numeric field across rows that share this hex (null-safe)
+      const merged = { ...bucket[0] }
+      if (bucket.length > 1) {
+        allMetricFields.forEach(f => {
+          const nums = bucket
+            .map(r => r[f])
+            .filter(v => v != null && v !== '' && !isNaN(+v))
+            .map(v => +v)
+          if (nums.length) merged[f] = nums.reduce((s, v) => s + v, 0) / nums.length
+        })
+      }
+
+      // Add normalised 0-1 value per metric for colour mapping
+      // Normalise using the rounded integer (= what the user sees) so same label → same colour
+      allMetricFields.forEach(f => {
+        const rawVal = merged[f]
+        const hasValue = rawVal != null && rawVal !== '' && !isNaN(+rawVal)
+        const range = metricRange[f]
+        const spread = range ? range.max - range.min : 0
+        if (!hasValue) {
+          merged[`_norm_${f}`] = null
+        } else if (!range || spread === 0) {
+          // All tiles have the same rounded value → all same colour
+          merged[`_norm_${f}`] = 0.5
+        } else {
+          merged[`_norm_${f}`] = (Math.round(+rawVal) - range.min) / spread
+        }
+      })
+
+      const props = {
+        ...merged,
+        ...(histAvgByLocation[merged.grid_id] || {}),
+        name: (merged.grid_id || '').replace(/_/g, ' '),
+        h3Index
+      }
+
+      // Build hex polygon from H3 boundary (returns [lat, lng] pairs → swap to [lng, lat])
+      const boundary = cellToBoundary(h3Index)
+      const ring = boundary.map(([lat, lng]) => [lng, lat])
+      ring.push(ring[0]) // close the ring
+      return turf.polygon([ring], props)
     })
 
     return turf.featureCollection(cells)
@@ -1459,45 +1512,65 @@ const ExplorerMap = ({
           </Source>
         )}
         
-        {/* ── Environment: 3D extruded grid cells ─────────────────────── */}
+        {/* ── Environment: H3 hexagon grid with bloom glow ──────────── */}
         {shouldRenderCategory('airQuality') && gridGeoJSON && (
           <Source id="env-grid" type="geojson" data={gridGeoJSON}>
-            {/* 3D extruded fill — height based on metric value */}
+            {/* Outer bloom glow — wide blurred halo */}
             <Layer
-              id="env-grid-extrusion"
-              type="fill-extrusion"
+              id="env-hex-glow-outer"
+              type="fill"
               paint={{
-                'fill-extrusion-color': envColorExpr,
-                'fill-extrusion-height': [
-                  'interpolate', ['linear'],
-                  ['coalesce', ['get', envIndex === 'avg' ? 'avg_uaqi' : (ENV_METRICS[envIndex] || ENV_METRICS.uaqi).field], 0],
-                  0, 20,
-                  50, 200,
-                  100, 600
-                ],
-                'fill-extrusion-base': 0,
-                'fill-extrusion-opacity': 0.82
+                'fill-color': envColorExpr,
+                'fill-opacity': 0.12 * hexOpacity,
+                'fill-opacity-transition': { duration: 600, delay: 0 }
               }}
             />
-            {/* Flat fill underneath for 2D clarity at low pitch */}
+            {/* Hex outline glow — soft wide bloom border */}
+            <Layer
+              id="env-hex-bloom"
+              type="line"
+              paint={{
+                'line-color': envColorExpr,
+                'line-width': 14,
+                'line-blur': 12,
+                'line-opacity': 0.35 * hexOpacity,
+                'line-opacity-transition': { duration: 600, delay: 0 }
+              }}
+            />
+            {/* Inner glow ring — tighter bloom */}
+            <Layer
+              id="env-hex-bloom-inner"
+              type="line"
+              paint={{
+                'line-color': envColorExpr,
+                'line-width': 6,
+                'line-blur': 5,
+                'line-opacity': 0.5 * hexOpacity,
+                'line-opacity-transition': { duration: 600, delay: 0 }
+              }}
+            />
+            {/* Core hex fill */}
             <Layer
               id="env-grid-fill"
               type="fill"
               paint={{
                 'fill-color': envColorExpr,
-                'fill-opacity': 0.35
+                'fill-opacity': 0.6 * hexOpacity,
+                'fill-opacity-transition': { duration: 600, delay: 0 }
               }}
             />
-            {/* Cell outlines */}
+            {/* Crisp hex outline */}
             <Layer
               id="env-grid-outline"
               type="line"
               paint={{
-                'line-color': 'rgba(255,255,255,0.5)',
-                'line-width': 1.2
+                'line-color': 'rgba(255,255,255,0.45)',
+                'line-width': 1,
+                'line-opacity': hexOpacity,
+                'line-opacity-transition': { duration: 600, delay: 0 }
               }}
             />
-            {/* Value label centred on each cell */}
+            {/* Value label centred on each hex */}
             <Layer
               id="env-grid-label"
               type="symbol"
@@ -1505,13 +1578,15 @@ const ExplorerMap = ({
               layout={{
                 'text-field': ['to-string', ['round', ['coalesce', ['get', envIndex === 'avg' ? 'avg_uaqi' : (ENV_METRICS[envIndex] || ENV_METRICS.uaqi).field], 0]]],
                 'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
-                'text-size': 14,
+                'text-size': 13,
                 'text-allow-overlap': true
               }}
               paint={{
                 'text-color': '#ffffff',
-                'text-halo-color': 'rgba(0,0,0,0.85)',
-                'text-halo-width': 2
+                'text-halo-color': 'rgba(0,0,0,0.9)',
+                'text-halo-width': 2,
+                'text-opacity': hexOpacity,
+                'text-opacity-transition': { duration: 600, delay: 0 }
               }}
             />
           </Source>
