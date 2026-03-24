@@ -1,7 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts'
 import proj4 from 'proj4'
 import TrafficAnalytics, { TRAFFIC_SCENARIOS } from './TrafficAnalytics'
+import {
+  buildRouteHistory,
+  buildStravaActivityLayers,
+  filterStravaAnomaliesByMonth,
+  formatStravaDaypartLabel,
+  getStravaAvailableMonths,
+  loadWalkabilityData as loadActiveMobilityData,
+  summarizeStravaDayparts
+} from '../../utils/dataLoader'
 import './UnifiedDataExplorer.css'
 
 const ExplorerMap = lazy(() => import('./ExplorerMap'))
@@ -105,7 +133,7 @@ const parseEcologySelectionKey = (value) => {
 
 const DASHBOARD_MODES = [
   { id: 'business', label: 'Business Analytics' },
-  { id: 'walkability', label: 'Walkability & Cycling' },
+  { id: 'walkability', label: 'Active Mobility' },
   { id: 'lighting', label: 'Street Lighting' },
   { id: 'temperature', label: 'Surface Temperature' },
   { id: 'environment', label: 'Environment' },
@@ -123,8 +151,8 @@ const LAYER_CATEGORIES = [
   { id: 'propertySales', label: 'Property Sales', dashboard: 'business', dataKey: 'properties' },
   { id: 'cityEvents', label: 'City Events', dashboard: 'business', dataKey: 'eventsData' },
   // Walkability layers
-  { id: 'pedestrianRoutes', label: 'Pedestrian Routes', dashboard: 'walkability', dataKey: 'pedestrianActivity' },
-  { id: 'cyclingRoutes', label: 'Cycling Routes', dashboard: 'walkability', dataKey: 'cyclingActivity' },
+  { id: 'activeMobility', label: 'Walking, Running & Cycling', dashboard: 'walkability', dataKey: 'activeMobility' },
+  { id: 'mobilityAnomalies', label: 'Mobility Anomalies', dashboard: 'walkability', dataKey: 'activeMobilityAnomalies' },
   { id: 'networkAnalysis', label: 'Network Analysis', dashboard: 'walkability', dataKey: 'network' },
   { id: 'transitAccessibility', label: 'Transit Accessibility', dashboard: 'walkability', dataKey: 'transitData' },
   // Lighting layers
@@ -190,16 +218,28 @@ const UnifiedDataExplorer = () => {
   const [expandedGroups, setExpandedGroups] = useState({})
   
   // Walkability dashboard state
-  const [walkabilityMode, setWalkabilityMode] = useState('pedestrian') // 'pedestrian', 'cycling', 'network', 'transit'
+  const [walkabilityMode, setWalkabilityMode] = useState('activity') // 'activity', 'network', 'transit'
+  const [routeLayerMode, setRouteLayerMode] = useState('combined') // 'combined' | 'walking' | 'cycling' | 'anomalies'
+  const [showPopularRoutesOnly, setShowPopularRoutesOnly] = useState(false)
   const [networkMetric, setNetworkMetric] = useState('betweenness_800') // betweenness metric to display
   const [transitView, setTransitView] = useState('combined') // 'combined', 'bus', 'train'
   const [networkData, setNetworkData] = useState(null)
   const [pedestrianData, setPedestrianData] = useState(null)
   const [cyclingData, setCyclingData] = useState(null)
+  const [stravaAggregated, setStravaAggregated] = useState(null)
+  const [walkabilityMonths, setWalkabilityMonths] = useState([])
+  const [selectedWalkabilityMonth, setSelectedWalkabilityMonth] = useState(null)
+  const [stravaAnomalies, setStravaAnomalies] = useState(null)
+  const [filteredStravaAnomalies, setFilteredStravaAnomalies] = useState(null)
+  const [selectedAnomalySegment, setSelectedAnomalySegment] = useState(null)
   const [transitData, setTransitData] = useState(null)
   const [busStopsData, setBusStopsData] = useState(null)
   const [trainStationData, setTrainStationData] = useState(null)
   const [selectedRouteSegment, setSelectedRouteSegment] = useState(null)
+  const [compareRouteSegment, setCompareRouteSegment] = useState(null)
+  const [selectedRouteHistory, setSelectedRouteHistory] = useState(null)
+  const [compareRouteHistory, setCompareRouteHistory] = useState(null)
+  const [routePanelMinimized, setRoutePanelMinimized] = useState(false)
   
   // Lighting dashboard state
   const [lightingSegments, setLightingSegments] = useState(null)
@@ -540,22 +580,14 @@ const UnifiedDataExplorer = () => {
   
   // Load walkability data
   useEffect(() => {
-    const loadWalkabilityData = async () => {
+    const loadWalkability = async () => {
       try {
-        // Load network data and other walkability datasets
-        console.log('Loading walkability files...')
-        
-        const [network, pedestrian, cycling, transit, busStops, trainStation] = await Promise.all([
-          fetch('/data/processed/walkability/network_connectivity.geojson').then(async r => {
-            if (!r.ok) throw new Error(`Network file failed: ${r.status} ${r.statusText}`)
-            return r.json()
-          }),
-          fetch('/data/processed/walkability/pedestrian_month_all.geojson').then(async r => {
-            if (!r.ok) throw new Error(`Pedestrian file failed: ${r.status} ${r.statusText}`)
-            return r.json()
-          }),
-          fetch('/data/processed/walkability/cycling_month_all.geojson').then(async r => {
-            if (!r.ok) throw new Error(`Cycling file failed: ${r.status} ${r.statusText}`)
+        console.log('Loading active mobility files...')
+
+        const [walkability, anomalies, transit, busStops, trainStation] = await Promise.all([
+          loadActiveMobilityData(),
+          fetch('/data/walkabilty/strava_metro_anomalies.geojson').then(async r => {
+            if (!r.ok) throw new Error(`Anomalies file failed: ${r.status} ${r.statusText}`)
             return r.json()
           }),
           fetch('/data/walkabilty/roads_with_walking_times.geojson').then(async r => {
@@ -571,6 +603,8 @@ const UnifiedDataExplorer = () => {
             return r.json()
           })
         ])
+        const { network, pedestrian, cycling, stravaAggregated: rawStrava } = walkability
+        const availableMonths = getStravaAvailableMonths(rawStrava)
 
         // Calculate percentiles for pedestrian data
         if (pedestrian.features) {
@@ -614,7 +648,7 @@ const UnifiedDataExplorer = () => {
           })
         }
 
-        console.log('Walkability data loaded:', {
+        console.log('Active mobility data loaded:', {
           network: network.features?.length,
           pedestrian: pedestrian.features?.length,
           cycling: cycling.features?.length,
@@ -632,6 +666,10 @@ const UnifiedDataExplorer = () => {
         setNetworkData(transformedNetwork)
         setPedestrianData(pedestrian)
         setCyclingData(cycling)
+        setStravaAggregated(rawStrava)
+        setStravaAnomalies(anomalies)
+        setWalkabilityMonths(availableMonths)
+        setSelectedWalkabilityMonth(current => current || availableMonths[availableMonths.length - 1]?.key || null)
         setTransitData(transit)
         setBusStopsData(busStops)
         setTrainStationData(trainStation)
@@ -641,11 +679,39 @@ const UnifiedDataExplorer = () => {
     }
     
     // Load walkability data when dashboard is walkability OR when any walkability layer is locked
-    const hasLockedWalkabilityLayer = ['pedestrianRoutes', 'cyclingRoutes', 'networkAnalysis', 'transitAccessibility'].some(id => lockedLayers.has(id))
+    const hasLockedWalkabilityLayer = ['activeMobility', 'mobilityAnomalies', 'networkAnalysis', 'transitAccessibility'].some(id => lockedLayers.has(id))
     if (dashboardMode === 'walkability' || hasLockedWalkabilityLayer) {
-      loadWalkabilityData()
+      loadWalkability()
     }
   }, [dashboardMode, lockedLayers])
+
+  useEffect(() => {
+    if (!stravaAggregated || !selectedWalkabilityMonth) return
+    const { pedestrian, cycling } = buildStravaActivityLayers(stravaAggregated, { months: selectedWalkabilityMonth })
+    setPedestrianData(pedestrian)
+    setCyclingData(cycling)
+  }, [stravaAggregated, selectedWalkabilityMonth])
+
+  useEffect(() => {
+    if (!stravaAnomalies) return
+    setFilteredStravaAnomalies(filterStravaAnomaliesByMonth(stravaAnomalies, selectedWalkabilityMonth))
+  }, [stravaAnomalies, selectedWalkabilityMonth])
+
+  useEffect(() => {
+    if (!selectedRouteSegment || !stravaAggregated) {
+      setSelectedRouteHistory(null)
+      return
+    }
+    setSelectedRouteHistory(buildRouteHistory(stravaAggregated, selectedRouteSegment.edge_uid))
+  }, [selectedRouteSegment, stravaAggregated])
+
+  useEffect(() => {
+    if (!compareRouteSegment || !stravaAggregated) {
+      setCompareRouteHistory(null)
+      return
+    }
+    setCompareRouteHistory(buildRouteHistory(stravaAggregated, compareRouteSegment.edge_uid))
+  }, [compareRouteSegment, stravaAggregated])
   
   // Load lighting data
   useEffect(() => {
@@ -888,6 +954,9 @@ const UnifiedDataExplorer = () => {
   useEffect(() => {
     const handleClearSelection = () => {
       setSelectedRouteSegment(null)
+      setCompareRouteSegment(null)
+      setSelectedAnomalySegment(null)
+      setRoutePanelMinimized(false)
     }
     window.addEventListener('clearSegmentSelection', handleClearSelection)
     return () => window.removeEventListener('clearSegmentSelection', handleClearSelection)
@@ -968,8 +1037,8 @@ const UnifiedDataExplorer = () => {
       }
     } else if (category.dashboard === 'walkability') {
       const modeMap = {
-        pedestrianRoutes: 'pedestrian',
-        cyclingRoutes: 'cycling',
+        activeMobility: 'activity',
+        mobilityAnomalies: 'activity',
         networkAnalysis: 'network',
         transitAccessibility: 'transit'
       }
@@ -1064,7 +1133,10 @@ const UnifiedDataExplorer = () => {
   
   // Get categories for current dashboard
   const getCurrentDashboardCategories = () => {
-    return LAYER_CATEGORIES.filter(c => c.dashboard === dashboardMode)
+    return LAYER_CATEGORIES.filter(c => (
+      c.dashboard === dashboardMode
+      && !(dashboardMode === 'walkability' && c.id === 'mobilityAnomalies')
+    ))
   }
 
   // Get businesses matching the current category/filters for bottom panel
@@ -1227,6 +1299,50 @@ const UnifiedDataExplorer = () => {
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }, [sidebarWidth])
+
+  const routeCompareData = useMemo(() => {
+    if (!selectedRouteHistory) return null
+
+    const monthLookup = new Map()
+    ;(selectedRouteHistory.monthly || []).forEach(item => {
+      monthLookup.set(item.month, {
+        month: item.month,
+        monthLabel: item.monthLabel,
+        aTrips: item.totalTrips,
+        bTrips: 0,
+        aPeople: item.totalPeople,
+        bPeople: 0
+      })
+    })
+    ;(compareRouteHistory?.monthly || []).forEach(item => {
+      const existing = monthLookup.get(item.month) || {
+        month: item.month,
+        monthLabel: item.monthLabel,
+        aTrips: 0,
+        bTrips: 0,
+        aPeople: 0,
+        bPeople: 0
+      }
+      existing.bTrips = item.totalTrips
+      existing.bPeople = item.totalPeople
+      monthLookup.set(item.month, existing)
+    })
+
+    return {
+      monthly: [...monthLookup.values()].sort((a, b) => a.month.localeCompare(b.month)),
+      gender: [
+        { label: 'Male', a: selectedRouteHistory.summary.male, b: compareRouteHistory?.summary.male || 0 },
+        { label: 'Female', a: selectedRouteHistory.summary.female, b: compareRouteHistory?.summary.female || 0 },
+        { label: 'Unspecified', a: selectedRouteHistory.summary.unspecified, b: compareRouteHistory?.summary.unspecified || 0 }
+      ],
+      ages: [
+        { label: '18-34', a: selectedRouteHistory.summary.age18to34, b: compareRouteHistory?.summary.age18to34 || 0 },
+        { label: '35-54', a: selectedRouteHistory.summary.age35to54, b: compareRouteHistory?.summary.age35to54 || 0 },
+        { label: '55-64', a: selectedRouteHistory.summary.age55to64, b: compareRouteHistory?.summary.age55to64 || 0 },
+        { label: '65+', a: selectedRouteHistory.summary.age65plus, b: compareRouteHistory?.summary.age65plus || 0 }
+      ]
+    }
+  }, [selectedRouteHistory, compareRouteHistory])
 
   return (
     <div className="unified-data-explorer">
@@ -1441,8 +1557,7 @@ const UnifiedDataExplorer = () => {
                   setWalkabilityMode(mode)
                   // Map walkability mode back to category
                   const categoryMap = {
-                    pedestrian: 'pedestrianRoutes',
-                    cycling: 'cyclingRoutes',
+                    activity: 'activeMobility',
                     network: 'networkAnalysis',
                     transit: 'transitAccessibility'
                   }
@@ -1454,8 +1569,19 @@ const UnifiedDataExplorer = () => {
                 onNetworkMetricChange={setNetworkMetric}
                 transitView={transitView}
                 onTransitViewChange={setTransitView}
+                routeLayerMode={routeLayerMode}
+                onRouteLayerModeChange={(mode) => {
+                  setRouteLayerMode(mode)
+                  selectCategory(mode === 'anomalies' ? 'mobilityAnomalies' : 'activeMobility')
+                }}
+                showPopularRoutesOnly={showPopularRoutesOnly}
+                onShowPopularRoutesOnlyChange={setShowPopularRoutesOnly}
+                walkabilityMonths={walkabilityMonths}
+                selectedMonth={selectedWalkabilityMonth}
+                onMonthChange={setSelectedWalkabilityMonth}
                 pedestrianData={pedestrianData}
                 cyclingData={cyclingData}
+                anomaliesData={filteredStravaAnomalies}
                 networkData={networkData}
                 transitData={transitData}
                 hideLayerControls={true}
@@ -1559,6 +1685,8 @@ const UnifiedDataExplorer = () => {
               dashboardMode={dashboardMode}
               businessMode={businessMode}
               walkabilityMode={walkabilityMode}
+              routeLayerMode={routeLayerMode}
+              showPopularRoutesOnly={showPopularRoutesOnly}
               networkMetric={networkMetric}
               transitView={transitView}
               dayOfWeek={dayOfWeek}
@@ -1570,6 +1698,7 @@ const UnifiedDataExplorer = () => {
               networkData={networkData}
               pedestrianData={pedestrianData}
               cyclingData={cyclingData}
+              anomaliesData={filteredStravaAnomalies}
               transitData={transitData}
               busStopsData={busStopsData}
               trainStationData={trainStationData}
@@ -1607,22 +1736,386 @@ const UnifiedDataExplorer = () => {
               ratingFilter={ratingFilter ? Array.from(ratingFilter) : null}
               selectedSegment={selectedSegment}
               onSegmentSelect={setSelectedSegment}
-              onRouteSegmentClick={(segment, mode) => {
-                setSelectedRouteSegment(segment)
-                if (mode !== walkabilityMode) {
-                  setWalkabilityMode(mode)
+              onRouteSegmentClick={(segment) => {
+                if (segment?.anomaly_score != null) {
+                  setSelectedAnomalySegment(segment)
+                  setSelectedRouteSegment(null)
+                  setCompareRouteSegment(null)
+                  setRoutePanelMinimized(false)
+                  return
                 }
+                setSelectedAnomalySegment(null)
+                if (!selectedRouteSegment || Number(selectedRouteSegment.edge_uid) === Number(segment.edge_uid)) {
+                  setSelectedRouteSegment(segment)
+                } else if (!compareRouteSegment || Number(compareRouteSegment.edge_uid) === Number(segment.edge_uid)) {
+                  setCompareRouteSegment(segment)
+                } else {
+                  setCompareRouteSegment(segment)
+                }
+                setRoutePanelMinimized(false)
               }}
             />
           </Suspense>
-          
-          {/* Listen for clear segment selection event */}
-          {React.useEffect(() => {
-            const handleClear = () => setSelectedRouteSegment(null)
-            window.addEventListener('clearSegmentSelection', handleClear)
-            return () => window.removeEventListener('clearSegmentSelection', handleClear)
-          }, [])}
-          
+
+          {dashboardMode === 'walkability' && selectedRouteSegment && selectedRouteHistory && (
+            <div
+              className={`bottom-panel route-history-panel ${routePanelMinimized ? 'route-history-panel--minimized' : ''}`}
+              style={{ right: `${sidebarWidth + 32}px` }}
+            >
+              <div className="panel-header">
+                <h3>Route Compare: A {selectedRouteHistory.edgeUid}{compareRouteHistory ? ` vs B ${compareRouteHistory.edgeUid}` : ''}</h3>
+                <div className="panel-header-actions">
+                  <button onClick={() => setRoutePanelMinimized(value => !value)} className="close-btn" title={routePanelMinimized ? 'Expand panel' : 'Minimize panel'}>
+                    {routePanelMinimized ? '▢' : '–'}
+                  </button>
+                  <button onClick={() => { setCompareRouteSegment(null) }} className="close-btn" title="Clear route B">B</button>
+                  <button onClick={() => { setSelectedRouteSegment(null); setCompareRouteSegment(null); setRoutePanelMinimized(false) }} className="close-btn">✕</button>
+                </div>
+              </div>
+              {!routePanelMinimized && (
+              <>
+              <div className="route-history-meta">
+                <div className="route-history-chip">
+                  <span>Route A Trips</span>
+                  <strong>{selectedRouteHistory.summary.totalTrips.toLocaleString()}</strong>
+                </div>
+                <div className="route-history-chip">
+                  <span>Route B Trips</span>
+                  <strong>{compareRouteHistory ? compareRouteHistory.summary.totalTrips.toLocaleString() : 'Select route B'}</strong>
+                </div>
+                <div className="route-history-chip">
+                  <span>Trip Delta</span>
+                  <strong>{compareRouteHistory ? (selectedRouteHistory.summary.totalTrips - compareRouteHistory.summary.totalTrips).toLocaleString() : '—'}</strong>
+                </div>
+                <div className="route-history-chip">
+                  <span>People Delta</span>
+                  <strong>{compareRouteHistory ? (selectedRouteHistory.summary.totalPeople - compareRouteHistory.summary.totalPeople).toLocaleString() : '—'}</strong>
+                </div>
+                <div className="route-history-chip">
+                  <span>Current Filter Month</span>
+                  <strong>{walkabilityMonths.find(m => m.key === selectedWalkabilityMonth)?.label ?? 'All'}</strong>
+                </div>
+              </div>
+              <div className="charts-container route-history-charts">
+                <div className="chart-panel">
+                  <h4>Monthly Trip Comparison</h4>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={routeCompareData?.monthly || []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="monthLabel" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Line type="monotone" dataKey="aTrips" name="Route A" stroke="#f97316" strokeWidth={3} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="bTrips" name="Route B" stroke="#60a5fa" strokeWidth={3} dot={{ r: 3 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="chart-panel">
+                  <h4>Monthly People Comparison</h4>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={routeCompareData?.monthly || []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="monthLabel" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="aPeople" name="Route A" fill="#f97316" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="bPeople" name="Route B" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="chart-panel">
+                  <h4>Monthly Mode Split</h4>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={selectedRouteHistory.monthly}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="monthLabel" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="walkingTrips" name="Walking / Running" fill="#f97316" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="cyclingTrips" name="Cycling" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="chart-panel">
+                  <h4>Gender Distribution A vs B</h4>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={routeCompareData?.gender || []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="a" name="Route A" fill="#f97316" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="b" name="Route B" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="chart-panel">
+                  <h4>Purpose Split</h4>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Walk Leisure', value: selectedRouteHistory.summary.walkingLeisure },
+                          { name: 'Walk Commute', value: selectedRouteHistory.summary.walkingCommute },
+                          { name: 'Cycle Leisure', value: selectedRouteHistory.summary.cyclingLeisure },
+                          { name: 'Cycle Commute', value: selectedRouteHistory.summary.cyclingCommute }
+                        ].filter(item => item.value > 0)}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={38}
+                        outerRadius={82}
+                        paddingAngle={2}
+                      >
+                        {['#fdba74', '#f97316', '#93c5fd', '#2563eb'].map((color, index) => <Cell key={color + index} fill={color} />)}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="chart-panel">
+                  <h4>Daypart Distribution</h4>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={selectedRouteHistory.daypartTotals}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="walkingTrips" name="Walking / Running" fill="#fb923c" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="cyclingTrips" name="Cycling" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="chart-panel">
+                  <h4>Age Profile A vs B</h4>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={routeCompareData?.ages || []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="a" name="Route A" fill="#f97316" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="b" name="Route B" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="chart-panel chart-panel--radar">
+                  <h4>Route Profile A vs B</h4>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <RadarChart
+                      data={[
+                        {
+                          metric: 'Walk Trips',
+                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.walkingTrips), 0),
+                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.walkingTrips), 0)
+                        },
+                        {
+                          metric: 'Cycle Trips',
+                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.cyclingTrips), 0),
+                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.cyclingTrips), 0)
+                        },
+                        {
+                          metric: 'Walk Speed',
+                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.walkingAvgSpeed * 40), 0),
+                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.walkingAvgSpeed * 40), 0)
+                        },
+                        {
+                          metric: 'Cycle Speed',
+                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.cyclingAvgSpeed * 20), 0),
+                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.cyclingAvgSpeed * 20), 0)
+                        },
+                        {
+                          metric: 'Walk Commute',
+                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.walkingCommute), 0),
+                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.walkingCommute), 0)
+                        },
+                        {
+                          metric: 'Cycle Commute',
+                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.cyclingCommute), 0),
+                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.cyclingCommute), 0)
+                        }
+                      ]}
+                    >
+                      <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                      <PolarAngleAxis dataKey="metric" tick={{ fill: 'rgba(255,255,255,0.72)', fontSize: 11 }} />
+                      <PolarRadiusAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                      <Radar
+                        name="Route A"
+                        dataKey="value"
+                        stroke="#f97316"
+                        fill="#f97316"
+                        fillOpacity={0.24}
+                      />
+                      {compareRouteHistory && (
+                        <Radar
+                          name="Route B"
+                          dataKey="compare"
+                          stroke="#60a5fa"
+                          fill="#60a5fa"
+                          fillOpacity={0.18}
+                        />
+                      )}
+                      <Tooltip />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="chart-panel chart-panel--facts">
+                  <h4>Quick Reads A vs B</h4>
+                  <div className="route-facts-grid">
+                    <div className="route-fact route-fact--orange">
+                      <span>A Walk / Run Trips</span>
+                      <strong>{selectedRouteHistory.summary.walkingTrips.toLocaleString()}</strong>
+                    </div>
+                    <div className="route-fact route-fact--blue">
+                      <span>B Walk / Run Trips</span>
+                      <strong>{compareRouteHistory ? compareRouteHistory.summary.walkingTrips.toLocaleString() : '—'}</strong>
+                    </div>
+                    <div className="route-fact route-fact--green">
+                      <span>A Cycling Trips</span>
+                      <strong>{selectedRouteHistory.summary.cyclingTrips.toLocaleString()}</strong>
+                    </div>
+                    <div className="route-fact route-fact--pink">
+                      <span>B Cycling Trips</span>
+                      <strong>{compareRouteHistory ? compareRouteHistory.summary.cyclingTrips.toLocaleString() : '—'}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              </>
+              )}
+            </div>
+          )}
+
+          {dashboardMode === 'walkability' && selectedAnomalySegment && (
+            <div
+              className={`bottom-panel route-history-panel ${routePanelMinimized ? 'route-history-panel--minimized' : ''}`}
+              style={{ right: `${sidebarWidth + 32}px` }}
+            >
+              <div className="panel-header">
+                <h3>Anomaly Detail: edge {selectedAnomalySegment.edge_uid}</h3>
+                <div className="panel-header-actions">
+                  <button onClick={() => setRoutePanelMinimized(value => !value)} className="close-btn" title={routePanelMinimized ? 'Expand panel' : 'Minimize panel'}>
+                    {routePanelMinimized ? '▢' : '–'}
+                  </button>
+                  <button onClick={() => { setSelectedAnomalySegment(null); setRoutePanelMinimized(false) }} className="close-btn">✕</button>
+                </div>
+              </div>
+              {!routePanelMinimized && (
+                <>
+                  <div className="route-history-meta">
+                    <div className="route-history-chip">
+                      <span>Likely Cause</span>
+                      <strong>{selectedAnomalySegment.likely_reason || 'Unknown'}</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>Confidence</span>
+                      <strong>{selectedAnomalySegment.confidence || '—'}</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>Event Date</span>
+                      <strong>{selectedAnomalySegment.event_date || selectedAnomalySegment.date || '—'}</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>Event Type</span>
+                      <strong>{selectedAnomalySegment.event_type || 'unknown'}</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>Anomaly Score</span>
+                      <strong>{Number(selectedAnomalySegment.anomaly_score || 0).toFixed(2)}</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>Status</span>
+                      <strong>{selectedAnomalySegment.status || '—'}</strong>
+                    </div>
+                  </div>
+                  <div className="charts-container route-history-charts">
+                    <div className="chart-panel chart-panel--facts">
+                      <h4>Anomaly Snapshot</h4>
+                      <div className="route-facts-grid">
+                        <div className="route-fact route-fact--orange">
+                          <span>Observed Total</span>
+                          <strong>{Number(selectedAnomalySegment.observed_total || 0).toLocaleString()}</strong>
+                        </div>
+                        <div className="route-fact route-fact--blue">
+                          <span>Baseline Total</span>
+                          <strong>{Number(selectedAnomalySegment.baseline_total || 0).toLocaleString()}</strong>
+                        </div>
+                        <div className="route-fact route-fact--green">
+                          <span>Percent Delta</span>
+                          <strong>{`${(Number(selectedAnomalySegment.percent_delta || 0) * 100).toFixed(1)}%`}</strong>
+                        </div>
+                        <div className="route-fact route-fact--pink">
+                          <span>Daypart Trips</span>
+                          <strong>{Number(selectedAnomalySegment.route_daypart_trip_count || 0).toLocaleString()}</strong>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="chart-panel">
+                      <h4>Observed vs Baseline</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={[
+                          { label: 'Observed', value: Number(selectedAnomalySegment.observed_total || 0) },
+                          { label: 'Baseline', value: Number(selectedAnomalySegment.baseline_total || 0) },
+                          { label: 'Route Total', value: Number(selectedAnomalySegment.route_total_trip_count || 0) }
+                        ]}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                          <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                          <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#c084fc" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="chart-panel">
+                      <h4>Top Dayparts</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={summarizeStravaDayparts(selectedAnomalySegment.top_dayparts)}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                          <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                          <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#f472b6" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="chart-panel chart-panel--facts">
+                      <h4>Context</h4>
+                      <div className="anomaly-context-grid">
+                        <div className="anomaly-context-item">
+                          <span>Dataset</span>
+                          <strong>{selectedAnomalySegment.dataset_name}</strong>
+                        </div>
+                        <div className="anomaly-context-item">
+                          <span>Month</span>
+                          <strong>{selectedAnomalySegment.month_label}</strong>
+                        </div>
+                        <div className="anomaly-context-item">
+                          <span>Daypart</span>
+                          <strong>{formatStravaDaypartLabel(selectedAnomalySegment.daypart)}</strong>
+                        </div>
+                        <div className="anomaly-context-item">
+                          <span>Event</span>
+                          <strong>{selectedAnomalySegment.event_name || 'unknown'}</strong>
+                        </div>
+                        <div className="anomaly-context-item anomaly-context-item--wide">
+                          <span>Source Summary</span>
+                          <strong>{selectedAnomalySegment.source_summary || 'No summary attached'}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Bottom panel for temperature seasonal charts */}
           {dashboardMode === 'temperature' && selectedSegment && (
             <div className="bottom-panel">
@@ -1995,7 +2488,7 @@ const UnifiedDataExplorer = () => {
         {(() => {
           const businesses = getActiveBusinesses()
           if (businesses.length === 0) return null
-          const categoryLabel = getCurrentDashboardCategories().find(c => c.id === activeCategory)?.label || 'Businesses'
+          const categoryLabel = LAYER_CATEGORIES.find(c => c.id === activeCategory)?.label || 'Businesses'
           return (
             <div className="biz-bottom-panel">
               <div className="bbp-header">

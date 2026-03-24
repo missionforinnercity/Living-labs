@@ -2,6 +2,505 @@
  * Data loading utilities
  */
 
+const STRAVA_AGGREGATED_PATH = '/data/walkabilty/strava_metro_monthly_aggregated.geojson'
+
+function sumValues(values) {
+  return values.reduce((sum, value) => sum + (Number(value) || 0), 0)
+}
+
+function weightedAverage(entries, valueKey, weightKey = 'total_trip_count') {
+  const weighted = entries.reduce((sum, entry) => {
+    const value = Number(entry?.[valueKey])
+    const weight = Number(entry?.[weightKey]) || 0
+    if (!Number.isFinite(value) || weight <= 0) return sum
+    return sum + (value * weight)
+  }, 0)
+
+  const totalWeight = entries.reduce((sum, entry) => sum + (Number(entry?.[weightKey]) || 0), 0)
+  return totalWeight > 0 ? weighted / totalWeight : 0
+}
+
+function sortStrings(values) {
+  return [...values].sort((a, b) => a.localeCompare(b))
+}
+
+const VISUAL_PROMINENCE_THRESHOLDS = {
+  ped: 150,
+  ride: 160
+}
+
+function formatMonthLabel(monthKey) {
+  const [year, month] = String(monthKey).split('-').map(Number)
+  if (!year || !month) return String(monthKey)
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC'
+  })
+}
+
+const STRAVA_DAYPART_LABELS = {
+  morning: 'Morning',
+  afternoon: 'Afternoon',
+  evening: 'Evening',
+  other: 'Other'
+}
+
+function titleCaseLabel(value) {
+  return String(value)
+    .replace(/_/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+export function normalizeStravaDaypart(daypartKey) {
+  const value = String(daypartKey || '').trim().toLowerCase()
+  if (!value) return 'other'
+  if (value.includes('morning')) return 'morning'
+  if (value.includes('midday') || value.includes('afternoon')) return 'afternoon'
+  if (value.includes('evening') || value.includes('night')) return 'evening'
+  return value
+}
+
+export function formatStravaDaypartLabel(daypartKey) {
+  const normalized = normalizeStravaDaypart(daypartKey)
+  return STRAVA_DAYPART_LABELS[normalized] || titleCaseLabel(daypartKey)
+}
+
+export function summarizeStravaDayparts(daypartValues = {}) {
+  const totals = new Map()
+
+  Object.entries(daypartValues || {}).forEach(([daypartKey, value]) => {
+    const normalized = normalizeStravaDaypart(daypartKey)
+    const existing = totals.get(normalized) || 0
+    totals.set(normalized, existing + (Number(value) || 0))
+  })
+
+  return ['morning', 'afternoon', 'evening', 'other']
+    .filter(key => (totals.get(key) || 0) > 0)
+    .map(key => ({
+      key,
+      label: formatStravaDaypartLabel(key),
+      value: totals.get(key) || 0
+    }))
+}
+
+function annotatePopularCorridors(features) {
+  if (!features.length) return features
+
+  const sorted = [...features].sort((a, b) => (
+    (Number(b.properties?.total_trip_count) || 0) - (Number(a.properties?.total_trip_count) || 0)
+  ))
+  const mode = String(features[0]?.properties?.source_mode || '').toLowerCase() === 'cycling' ? 'ride' : 'ped'
+  const visualThreshold = VISUAL_PROMINENCE_THRESHOLDS[mode] || 0
+  const topCount = Math.max(1, Math.ceil(sorted.length * 0.1))
+  const topTripThreshold = Number(sorted[topCount - 1]?.properties?.total_trip_count) || 0
+  const rankLookup = new Map()
+  let previousTripCount = null
+  let currentRank = 0
+
+  sorted.forEach((feature, index) => {
+    const tripCount = Number(feature.properties?.total_trip_count) || 0
+    if (tripCount !== previousTripCount) {
+      currentRank = index + 1
+      previousTripCount = tripCount
+    }
+    rankLookup.set(Number(feature.properties?.edge_uid), currentRank)
+  })
+
+  return features.map((feature) => {
+    const rank = rankLookup.get(Number(feature.properties?.edge_uid)) || sorted.length
+    const tripCount = Number(feature.properties?.total_trip_count) || 0
+    const percentile = sorted.length > 1
+      ? Math.max(0, 100 - ((rank - 1) / (sorted.length - 1)) * 100)
+      : 100
+    const meetsTopDecile = tripCount >= topTripThreshold
+    const meetsVisualThreshold = tripCount >= visualThreshold
+    const isPopular = tripCount > 0 && (meetsTopDecile || meetsVisualThreshold)
+
+    return {
+      ...feature,
+      properties: {
+        ...feature.properties,
+        corridor_rank: rank,
+        corridor_percentile: Number(percentile.toFixed(1)),
+        corridor_threshold_trip_count: topTripThreshold,
+        corridor_visual_threshold_trip_count: visualThreshold,
+        corridor_selection_method: 'inclusive_top_decile_or_visual_prominence',
+        popular_corridor_flag: isPopular ? 1 : 0
+      }
+    }
+  })
+}
+
+function buildActivityFeature(feature, statsEntries, mode) {
+  const totalTripCount = sumValues(statsEntries.map(entry => entry.total_trip_count))
+  if (totalTripCount <= 0) return null
+
+  const forwardTripCount = sumValues(statsEntries.map(entry => entry.forward_trip_count))
+  const reverseTripCount = sumValues(statsEntries.map(entry => entry.reverse_trip_count))
+  const male = sumValues(statsEntries.map(entry => entry.male_people_count))
+  const female = sumValues(statsEntries.map(entry => entry.female_people_count))
+  const unknownGender = sumValues(statsEntries.map(entry => entry.unspecified_people_count))
+  const commute = sumValues(statsEntries.map(entry => entry.commute_trip_count))
+  const recreation = sumValues(statsEntries.map(entry => entry.leisure_trip_count))
+  const totalPeople = sumValues(statsEntries.map(entry => entry.total_people_count))
+  const overallAvgSpeed = weightedAverage(statsEntries, 'overall_avg_speed_mps')
+  const forwardAvgSpeed = weightedAverage(statsEntries, 'forward_avg_speed_mps', 'forward_trip_count')
+  const reverseAvgSpeed = weightedAverage(statsEntries, 'reverse_avg_speed_mps', 'reverse_trip_count')
+  const rideCount = sumValues(statsEntries.map(entry => entry.ride_count))
+  const ebikeRideCount = sumValues(statsEntries.map(entry => entry.ebike_ride_count))
+  const sourceMonths = sortStrings(new Set(statsEntries.map(entry => entry._month)))
+  const sourceDayparts = sortStrings(new Set(statsEntries.map(entry => entry._daypart)))
+
+  return {
+    type: 'Feature',
+    geometry: feature.geometry,
+    properties: {
+      edgeUID: feature.properties?.edge_uid,
+      osmId: feature.properties?.osm_reference_id,
+      edge_uid: feature.properties?.edge_uid,
+      total_trip_count: totalTripCount,
+      forward_trip_count: forwardTripCount,
+      reverse_trip_count: reverseTripCount,
+      avg_speed: overallAvgSpeed,
+      forward_average_speed_meters_per_second: forwardAvgSpeed || overallAvgSpeed,
+      reverse_average_speed_meters_per_second: reverseAvgSpeed || overallAvgSpeed,
+      total_trips: totalTripCount,
+      total_people_count: totalPeople,
+      male,
+      female,
+      unknown_gender: unknownGender,
+      age_13_19: 0,
+      age_20_34: sumValues(statsEntries.map(entry => entry.age_18_34_people_count)),
+      age_35_54: sumValues(statsEntries.map(entry => entry.age_35_54_people_count)),
+      age_55_64: sumValues(statsEntries.map(entry => entry.age_55_64_people_count)),
+      age_65_plus: sumValues(statsEntries.map(entry => entry.age_65_plus_people_count)),
+      commute,
+      recreation,
+      ride_count: mode === 'ride' ? rideCount : 0,
+      ebike_ride_count: mode === 'ride' ? ebikeRideCount : 0,
+      source_months: sourceMonths,
+      source_dayparts: sourceDayparts,
+      source_mode: mode === 'ride' ? 'cycling' : 'pedestrian'
+    }
+  }
+}
+
+export function buildStravaActivityLayers(stravaData, options = {}) {
+  const features = stravaData?.features ?? []
+  const requestedMonths = options.months && options.months !== 'all'
+    ? new Set(Array.isArray(options.months) ? options.months : [options.months])
+    : null
+  const requestedDayparts = options.dayparts && options.dayparts !== 'all'
+    ? new Set(Array.isArray(options.dayparts) ? options.dayparts : [options.dayparts])
+    : null
+
+  const selectedMonths = new Set()
+  const selectedDayparts = new Set()
+  const pedestrianFeatures = []
+  const cyclingFeatures = []
+  let pedestrianTrips = 0
+  let cyclingTrips = 0
+
+  features.forEach(feature => {
+    const monthlyStats = feature.properties?.monthly_stats ?? {}
+    const pedEntries = []
+    const rideEntries = []
+
+    Object.entries(monthlyStats).forEach(([monthKey, monthValue]) => {
+      if (requestedMonths && !requestedMonths.has(monthKey)) return
+      const dayparts = monthValue?.dayparts ?? {}
+
+      Object.entries(dayparts).forEach(([daypartKey, daypartValue]) => {
+        if (requestedDayparts && !requestedDayparts.has(daypartKey)) return
+        selectedMonths.add(monthKey)
+        selectedDayparts.add(daypartKey)
+
+        if (daypartValue?.ped) pedEntries.push({ ...daypartValue.ped, _month: monthKey, _daypart: daypartKey })
+        if (daypartValue?.ride) rideEntries.push({ ...daypartValue.ride, _month: monthKey, _daypart: daypartKey })
+      })
+    })
+
+    const pedestrianFeature = buildActivityFeature(feature, pedEntries, 'ped')
+    if (pedestrianFeature) {
+      pedestrianTrips += pedestrianFeature.properties.total_trip_count
+      pedestrianFeatures.push(pedestrianFeature)
+    }
+
+    const cyclingFeature = buildActivityFeature(feature, rideEntries, 'ride')
+    if (cyclingFeature) {
+      cyclingTrips += cyclingFeature.properties.total_trip_count
+      cyclingFeatures.push(cyclingFeature)
+    }
+  })
+
+  const months = sortStrings(selectedMonths)
+  const dayparts = sortStrings(selectedDayparts)
+  const enrichedPedestrianFeatures = annotatePopularCorridors(pedestrianFeatures)
+  const enrichedCyclingFeatures = annotatePopularCorridors(cyclingFeatures)
+
+  const peakStats = {
+    source: 'strava_metro_monthly_aggregated.geojson',
+    months,
+    dayparts,
+    pedestrian: {
+      total_trips: pedestrianTrips,
+      active_segments: pedestrianFeatures.length,
+      popular_segments: enrichedPedestrianFeatures.filter(feature => feature.properties?.popular_corridor_flag === 1).length
+    },
+    cycling: {
+      total_trips: cyclingTrips,
+      active_segments: cyclingFeatures.length,
+      popular_segments: enrichedCyclingFeatures.filter(feature => feature.properties?.popular_corridor_flag === 1).length
+    }
+  }
+
+  return {
+    pedestrian: { type: 'FeatureCollection', features: enrichedPedestrianFeatures },
+    cycling: { type: 'FeatureCollection', features: enrichedCyclingFeatures },
+    peakStats,
+    meta: {
+      months,
+      dayparts
+    }
+  }
+}
+
+export function getStravaAvailableMonths(stravaData) {
+  const months = new Set()
+  ;(stravaData?.features ?? []).forEach(feature => {
+    Object.keys(feature.properties?.monthly_stats ?? {}).forEach(month => months.add(month))
+  })
+  return sortStrings(months).map(month => ({
+    key: month,
+    label: formatMonthLabel(month)
+  }))
+}
+
+export function filterStravaAnomaliesByMonth(anomaliesData, monthKey) {
+  const features = (anomaliesData?.features ?? []).filter(feature => {
+    if (!monthKey) return true
+    return feature.properties?.month_start?.slice(0, 7) === monthKey
+  })
+
+  return {
+    type: 'FeatureCollection',
+    features
+  }
+}
+
+export function buildRouteHistory(stravaData, edgeUid) {
+  if (edgeUid == null) return null
+  const feature = (stravaData?.features ?? []).find(item => Number(item.properties?.edge_uid) === Number(edgeUid))
+  if (!feature) return null
+
+  const monthly = []
+  const dayparts = []
+  const daypartTotalsMap = new Map()
+
+  Object.entries(feature.properties?.monthly_stats ?? {}).forEach(([monthKey, monthValue]) => {
+    let pedTrips = 0
+    let cyclingTrips = 0
+    let pedCommute = 0
+    let pedLeisure = 0
+    let cyclingCommute = 0
+    let cyclingLeisure = 0
+    let pedSpeedWeighted = 0
+    let pedSpeedWeight = 0
+    let cyclingSpeedWeighted = 0
+    let cyclingSpeedWeight = 0
+    let walkingPeople = 0
+    let cyclingPeople = 0
+    let male = 0
+    let female = 0
+    let unspecified = 0
+    let age18to34 = 0
+    let age35to54 = 0
+    let age55to64 = 0
+    let age65plus = 0
+    let rideCount = 0
+    let ebikeRideCount = 0
+
+    Object.entries(monthValue?.dayparts ?? {}).forEach(([daypartKey, daypartValue]) => {
+      const ped = daypartValue?.ped ?? {}
+      const ride = daypartValue?.ride ?? {}
+      const pedTripsValue = Number(ped.total_trip_count) || 0
+      const cyclingTripsValue = Number(ride.total_trip_count) || 0
+      const pedPeople = Number(ped.total_people_count) || 0
+      const cyclingPeopleValue = Number(ride.total_people_count) || 0
+      const maleValue = (Number(ped.male_people_count) || 0) + (Number(ride.male_people_count) || 0)
+      const femaleValue = (Number(ped.female_people_count) || 0) + (Number(ride.female_people_count) || 0)
+      const unspecifiedValue = (Number(ped.unspecified_people_count) || 0) + (Number(ride.unspecified_people_count) || 0)
+
+      dayparts.push({
+        month: monthKey,
+        monthLabel: formatMonthLabel(monthKey),
+        daypart: daypartKey,
+        daypartLabel: formatStravaDaypartLabel(daypartKey),
+        walkingTrips: pedTripsValue,
+        cyclingTrips: cyclingTripsValue,
+        walkingPeople: pedPeople,
+        cyclingPeople: cyclingPeopleValue,
+        totalTrips: pedTripsValue + cyclingTripsValue,
+        totalPeople: pedPeople + cyclingPeopleValue,
+        male: maleValue,
+        female: femaleValue,
+        unspecified: unspecifiedValue,
+        walkingCommute: Number(ped.commute_trip_count) || 0,
+        walkingLeisure: Number(ped.leisure_trip_count) || 0,
+        cyclingCommute: Number(ride.commute_trip_count) || 0,
+        cyclingLeisure: Number(ride.leisure_trip_count) || 0
+      })
+
+      const normalizedDaypart = normalizeStravaDaypart(daypartKey)
+      const existingDaypart = daypartTotalsMap.get(normalizedDaypart) || {
+        key: normalizedDaypart,
+        label: formatStravaDaypartLabel(normalizedDaypart),
+        walkingTrips: 0,
+        cyclingTrips: 0,
+        totalTrips: 0,
+        walkingPeople: 0,
+        cyclingPeople: 0,
+        totalPeople: 0
+      }
+      existingDaypart.walkingTrips += pedTripsValue
+      existingDaypart.cyclingTrips += cyclingTripsValue
+      existingDaypart.totalTrips += pedTripsValue + cyclingTripsValue
+      existingDaypart.walkingPeople += pedPeople
+      existingDaypart.cyclingPeople += cyclingPeopleValue
+      existingDaypart.totalPeople += pedPeople + cyclingPeopleValue
+      daypartTotalsMap.set(normalizedDaypart, existingDaypart)
+
+      pedTrips += pedTripsValue
+      cyclingTrips += cyclingTripsValue
+      pedCommute += Number(ped.commute_trip_count) || 0
+      pedLeisure += Number(ped.leisure_trip_count) || 0
+      cyclingCommute += Number(ride.commute_trip_count) || 0
+      cyclingLeisure += Number(ride.leisure_trip_count) || 0
+      walkingPeople += pedPeople
+      cyclingPeople += cyclingPeopleValue
+      male += maleValue
+      female += femaleValue
+      unspecified += unspecifiedValue
+      age18to34 += (Number(ped.age_18_34_people_count) || 0) + (Number(ride.age_18_34_people_count) || 0)
+      age35to54 += (Number(ped.age_35_54_people_count) || 0) + (Number(ride.age_35_54_people_count) || 0)
+      age55to64 += (Number(ped.age_55_64_people_count) || 0) + (Number(ride.age_55_64_people_count) || 0)
+      age65plus += (Number(ped.age_65_plus_people_count) || 0) + (Number(ride.age_65_plus_people_count) || 0)
+      rideCount += Number(ride.ride_count) || 0
+      ebikeRideCount += Number(ride.ebike_ride_count) || 0
+
+      if (Number.isFinite(Number(ped.overall_avg_speed_mps)) && pedTripsValue > 0) {
+        pedSpeedWeighted += Number(ped.overall_avg_speed_mps) * pedTripsValue
+        pedSpeedWeight += pedTripsValue
+      }
+      if (Number.isFinite(Number(ride.overall_avg_speed_mps)) && cyclingTripsValue > 0) {
+        cyclingSpeedWeighted += Number(ride.overall_avg_speed_mps) * cyclingTripsValue
+        cyclingSpeedWeight += cyclingTripsValue
+      }
+    })
+
+    monthly.push({
+      month: monthKey,
+      monthLabel: formatMonthLabel(monthKey),
+      walkingTrips: pedTrips,
+      cyclingTrips,
+      totalTrips: pedTrips + cyclingTrips,
+      walkingPeople,
+      cyclingPeople,
+      totalPeople: walkingPeople + cyclingPeople,
+      male,
+      female,
+      unspecified,
+      age18to34,
+      age35to54,
+      age55to64,
+      age65plus,
+      walkingCommute: pedCommute,
+      walkingLeisure: pedLeisure,
+      cyclingCommute,
+      cyclingLeisure,
+      rideCount,
+      ebikeRideCount,
+      walkingAvgSpeed: pedSpeedWeight > 0 ? pedSpeedWeighted / pedSpeedWeight : 0,
+      cyclingAvgSpeed: cyclingSpeedWeight > 0 ? cyclingSpeedWeighted / cyclingSpeedWeight : 0
+    })
+  })
+
+  monthly.sort((a, b) => a.month.localeCompare(b.month))
+  dayparts.sort((a, b) => {
+    if (a.month !== b.month) return a.month.localeCompare(b.month)
+    return a.daypart.localeCompare(b.daypart)
+  })
+  const daypartTotals = ['morning', 'afternoon', 'evening', 'other']
+    .map(key => daypartTotalsMap.get(key))
+    .filter(item => item && item.totalTrips > 0)
+
+  const totals = monthly.reduce((acc, item) => ({
+    walkingTrips: acc.walkingTrips + item.walkingTrips,
+    cyclingTrips: acc.cyclingTrips + item.cyclingTrips,
+    totalTrips: acc.totalTrips + item.totalTrips,
+    walkingPeople: acc.walkingPeople + item.walkingPeople,
+    cyclingPeople: acc.cyclingPeople + item.cyclingPeople,
+    totalPeople: acc.totalPeople + item.totalPeople,
+    male: acc.male + item.male,
+    female: acc.female + item.female,
+    unspecified: acc.unspecified + item.unspecified,
+    walkingCommute: acc.walkingCommute + item.walkingCommute,
+    walkingLeisure: acc.walkingLeisure + item.walkingLeisure,
+    cyclingCommute: acc.cyclingCommute + item.cyclingCommute,
+    cyclingLeisure: acc.cyclingLeisure + item.cyclingLeisure,
+    rideCount: acc.rideCount + item.rideCount,
+    ebikeRideCount: acc.ebikeRideCount + item.ebikeRideCount,
+    age18to34: acc.age18to34 + item.age18to34,
+    age35to54: acc.age35to54 + item.age35to54,
+    age55to64: acc.age55to64 + item.age55to64,
+    age65plus: acc.age65plus + item.age65plus
+  }), {
+    walkingTrips: 0,
+    cyclingTrips: 0,
+    totalTrips: 0,
+    walkingPeople: 0,
+    cyclingPeople: 0,
+    totalPeople: 0,
+    male: 0,
+    female: 0,
+    unspecified: 0,
+    walkingCommute: 0,
+    walkingLeisure: 0,
+    cyclingCommute: 0,
+    cyclingLeisure: 0,
+    rideCount: 0,
+    ebikeRideCount: 0,
+    age18to34: 0,
+    age35to54: 0,
+    age55to64: 0,
+    age65plus: 0
+  })
+
+  const strongestMonth = monthly.reduce((best, item) => {
+    if (!best || item.totalTrips > best.totalTrips) return item
+    return best
+  }, null)
+
+  return {
+    edgeUid: feature.properties?.edge_uid,
+    osmReferenceId: feature.properties?.osm_reference_id,
+    geometry: feature.geometry,
+    monthly,
+    dayparts,
+    daypartTotals,
+    summary: {
+      ...totals,
+      strongestMonth: strongestMonth?.monthLabel || null,
+      strongestMonthTrips: strongestMonth?.totalTrips || 0,
+      monthsTracked: monthly.length
+    }
+  }
+}
+
 export async function loadShadeData(season, timeOfDay) {
   const path = `/data/processed/shade/${season}/2025-${getSeasonDate(season)}_${timeOfDay}.geojson`
   const response = await fetch(path)
@@ -44,18 +543,20 @@ export async function loadBusinessData() {
 }
 
 export async function loadWalkabilityData() {
-  const [network, pedestrian, cycling, peakStats] = await Promise.all([
+  const [network, stravaAggregated] = await Promise.all([
     fetch('/data/processed/walkability/network_connectivity.geojson').then(r => r.json()),
-    fetch('/data/processed/walkability/pedestrian_month_all.geojson').then(r => r.json()),
-    fetch('/data/processed/walkability/cycling_month_all.geojson').then(r => r.json()),
-    fetch('/data/processed/walkability/peak_statistics.json').then(r => r.json())
+    fetch(STRAVA_AGGREGATED_PATH).then(r => r.json())
   ])
+
+  const { pedestrian, cycling, peakStats, meta } = buildStravaActivityLayers(stravaAggregated)
   
   return { 
     network,      // Network connectivity - street segments with analysis
-    pedestrian,   // Strava pedestrian activity by segment
-    cycling,      // Strava cycling activity by segment
-    peakStats     // Peak activity statistics
+    pedestrian,   // Aggregated walking/running activity derived from Strava source
+    cycling,      // Aggregated cycling activity derived from Strava source
+    peakStats,    // Source summary for available active-mobility data
+    stravaAggregated,
+    meta
   }
 }
 

@@ -250,6 +250,8 @@ const ExplorerMap = ({
   dashboardMode,
   businessMode,
   walkabilityMode,
+  routeLayerMode = 'combined',
+  showPopularRoutesOnly = false,
   networkMetric,
   transitView = 'combined',
   dayOfWeek,
@@ -261,6 +263,7 @@ const ExplorerMap = ({
   networkData,
   pedestrianData,
   cyclingData,
+  anomaliesData,
   transitData,
   busStopsData,
   trainStationData,
@@ -315,6 +318,19 @@ const ExplorerMap = ({
 
   // Helper function to check if a category should be rendered
   const shouldRenderCategory = (categoryId) => {
+    const hasMobilityContext = (
+      layerStack.some(layer => layer.id === 'activeMobility' || layer.id === 'mobilityAnomalies')
+      || activeCategory === 'activeMobility'
+      || activeCategory === 'mobilityAnomalies'
+    )
+
+    if ((categoryId === 'pedestrianRoutes' || categoryId === 'cyclingRoutes' || categoryId === 'mobilityAnomalies') && hasMobilityContext) {
+      if (walkabilityMode !== 'activity') return false
+      if (routeLayerMode === 'walking') return categoryId === 'pedestrianRoutes'
+      if (routeLayerMode === 'cycling') return categoryId === 'cyclingRoutes'
+      if (routeLayerMode === 'anomalies') return categoryId === 'mobilityAnomalies'
+      return true
+    }
     // Check if this category is in the layer stack (either as active or locked)
     return layerStack.some(layer => layer.id === categoryId) || activeCategory === categoryId
   }
@@ -769,7 +785,17 @@ const ExplorerMap = ({
   
   // Handle map click
   const handleMapClick = (event) => {
-    const feature = event.features?.[0]
+    const walkabilityFeature = dashboardMode === 'walkability'
+      ? (
+        event.features?.find(item => item.source === 'anomaly-routes')
+        || event.features?.find(item => (
+          item.source === 'pedestrian-routes'
+          || item.source === 'cycling-routes'
+          || item.source === 'transit-accessibility'
+        ))
+      )
+      : null
+    const feature = walkabilityFeature || event.features?.[0]
     console.log('Map clicked:', { feature, source: feature?.source, layerId: feature?.layer?.id })
     if (feature) {
       // For temperature dashboard, set selected segment for bottom panel
@@ -778,13 +804,8 @@ const ExplorerMap = ({
       }
       
       // For walkability dashboard, set selected route segment (no popup)
-      if (dashboardMode === 'walkability' && (feature.source === 'pedestrian-routes' || feature.source === 'cycling-routes' || feature.source === 'transit-accessibility')) {
-        const modeMap = {
-          'pedestrian-routes': 'pedestrian',
-          'cycling-routes': 'cycling',
-          'transit-accessibility': 'transit'
-        }
-        onRouteSegmentClick?.(feature.properties, modeMap[feature.source])
+      if (dashboardMode === 'walkability' && (feature.source === 'pedestrian-routes' || feature.source === 'cycling-routes' || feature.source === 'transit-accessibility' || feature.source === 'anomaly-routes')) {
+        onRouteSegmentClick?.(feature.properties, feature.source === 'transit-accessibility' ? 'transit' : 'activity')
         return // Don't show popup for route segments
       }
       
@@ -911,6 +932,7 @@ const ExplorerMap = ({
           'cycling-layer',
           'pedestrian-routes-layer',
           'cycling-routes-layer',
+          'anomaly-routes-layer',
           'transit-accessibility-layer',
           'bus-stops-layer',
           'train-station-fill',
@@ -1418,23 +1440,22 @@ const ExplorerMap = ({
                 <Layer
                   id="pedestrian-routes-layer"
                   type="line"
+                  filter={showPopularRoutesOnly
+                    ? ['==', ['coalesce', ['get', 'popular_corridor_flag'], 0], 1]
+                    : ['>=', ['coalesce', ['get', 'total_trip_count'], 0], 1]
+                  }
                   paint={{
                     'line-color': [
                       'interpolate',
                       ['linear'],
                       ['coalesce', ['get', 'total_trip_count'], 0],
-                      0, '#08519c',
-                      5, '#3182bd',
-                      10, '#6baed6',
-                      20, '#9ecae1',
-                      30, '#fee391',
-                      50, '#fec44f',
-                      75, '#fe9929',
-                      100, '#ec7014',
-                      150, '#cc4c02',
-                      200, '#d62828',
-                      350, '#9d0208',
-                      500, '#6a040f'
+                      0, '#7c2d12',
+                      10, '#9a3412',
+                      20, '#c2410c',
+                      40, '#ea580c',
+                      80, '#f97316',
+                      150, '#fb923c',
+                      250, '#fdba74'
                     ],
                     'line-width': [
                       'interpolate',
@@ -1459,26 +1480,24 @@ const ExplorerMap = ({
             type="geojson"
             data={cyclingData}
           >
-            <Layer
-              id="cycling-routes-layer"
-              type="line"
-              paint={{
+                <Layer
+                  id="cycling-routes-layer"
+                  type="line"
+                  filter={showPopularRoutesOnly
+                    ? ['==', ['coalesce', ['get', 'popular_corridor_flag'], 0], 1]
+                    : ['>=', ['coalesce', ['get', 'total_trip_count'], 0], 1]
+                  }
+                  paint={{
                 'line-color': [
                   'interpolate',
                   ['linear'],
                   ['coalesce', ['get', 'total_trip_count'], 0],
-                  0, '#08519c',
-                  5, '#3182bd',
-                  10, '#6baed6',
-                  20, '#9ecae1',
-                  30, '#fee391',
-                  50, '#fec44f',
-                  75, '#fe9929',
-                  100, '#ec7014',
-                  150, '#cc4c02',
-                  200, '#d62828',
-                  350, '#9d0208',
-                  500, '#6a040f'
+                  0, '#1d4ed8',
+                  20, '#2563eb',
+                  40, '#3b82f6',
+                  80, '#60a5fa',
+                  160, '#93c5fd',
+                  320, '#bfdbfe'
                 ],
                 'line-width': [
                   'interpolate',
@@ -1491,6 +1510,36 @@ const ExplorerMap = ({
                   800, 8
                 ],
                 'line-opacity': 0.85
+              }}
+            />
+          </Source>
+        )}
+
+        {shouldRenderCategory('mobilityAnomalies') && anomaliesData?.features?.length > 0 && (
+          <Source id="anomaly-routes" type="geojson" data={anomaliesData}>
+            <Layer
+              id="anomaly-routes-layer"
+              type="line"
+              paint={{
+                'line-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'anomaly_score'], 0],
+                  0, '#f9a8d4',
+                  1.2, '#f472b6',
+                  1.8, '#e879f9',
+                  2.4, '#a855f7'
+                ],
+                'line-width': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'anomaly_score'], 0],
+                  0, 2,
+                  1.5, 4,
+                  2.5, 6
+                ],
+                'line-dasharray': [1.2, 1.2],
+                'line-opacity': 0.92
               }}
             />
           </Source>

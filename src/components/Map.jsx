@@ -37,7 +37,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
   const [currentShadeMetric, setCurrentShadeMetric] = useState('shade_coverage_pct')
   const [lightingData, setLightingData] = useState(null)
   const [netWalkData, setNetWalkData] = useState(null)
-  const [walkabilityMode, setWalkabilityMode] = useState('network') // 'network', 'pedestrian', 'cycling'
+  const [walkabilityMode, setWalkabilityMode] = useState('activity') // 'activity', 'network', 'pedestrian', 'cycling'
   const [businessData, setBusinessData] = useState(null)
   const [isLoadingLayer, setIsLoadingLayer] = useState(null)
   const [poiFilter, setPOIFilter] = useState('all') // Filter for POI types in Data Explorer
@@ -469,6 +469,96 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           }
         })
 
+        const addPedestrianLayers = () => {
+          if (map.current.getSource('walkability-pedestrian-source')) {
+            map.current.removeSource('walkability-pedestrian-source')
+          }
+
+          map.current.addSource('walkability-pedestrian-source', {
+            type: 'geojson',
+            data: data.pedestrian
+          })
+
+          map.current.addLayer({
+            id: 'walkability-pedestrian-glow',
+            type: 'line',
+            source: 'walkability-pedestrian-source',
+            paint: {
+              'line-color': '#f97316',
+              'line-width': [
+                'interpolate', ['linear'], ['get', 'total_trip_count'],
+                0, 7,
+                100, 12,
+                200, 18,
+                300, 24
+              ],
+              'line-opacity': 0.14,
+              'line-blur': 8,
+            }
+          })
+          map.current.addLayer({
+            id: 'walkability-pedestrian',
+            type: 'line',
+            source: 'walkability-pedestrian-source',
+            paint: {
+              'line-color': '#fb923c',
+              'line-width': [
+                'interpolate', ['linear'], ['get', 'total_trip_count'],
+                0, 1.5,
+                100, 3,
+                200, 4.5,
+                300, 6
+              ],
+              'line-opacity': 0.82
+            }
+          })
+        }
+
+        const addCyclingLayers = () => {
+          if (map.current.getSource('walkability-cycling-source')) {
+            map.current.removeSource('walkability-cycling-source')
+          }
+
+          map.current.addSource('walkability-cycling-source', {
+            type: 'geojson',
+            data: data.cycling
+          })
+
+          map.current.addLayer({
+            id: 'walkability-cycling-glow',
+            type: 'line',
+            source: 'walkability-cycling-source',
+            paint: {
+              'line-color': '#2563eb',
+              'line-width': [
+                'interpolate', ['linear'], ['get', 'total_trip_count'],
+                0, 8,
+                100, 14,
+                200, 20,
+                400, 26
+              ],
+              'line-opacity': 0.16,
+              'line-blur': 8,
+            }
+          })
+          map.current.addLayer({
+            id: 'walkability-cycling',
+            type: 'line',
+            source: 'walkability-cycling-source',
+            paint: {
+              'line-color': '#60a5fa',
+              'line-width': [
+                'interpolate', ['linear'], ['get', 'total_trip_count'],
+                0, 2,
+                100, 4,
+                200, 6,
+                400, 8
+              ],
+              'line-opacity': 0.82
+            }
+          })
+        }
+
         if (walkabilityMode === 'network') {
           // Network centrality view
           if (map.current.getSource('walkability-network-source')) {
@@ -537,55 +627,11 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
               .addTo(map.current)
           })
 
+        } else if (walkabilityMode === 'activity') {
+          addPedestrianLayers()
+          addCyclingLayers()
         } else if (walkabilityMode === 'pedestrian') {
-          // Pedestrian flows
-          if (map.current.getSource('walkability-pedestrian-source')) {
-            map.current.removeSource('walkability-pedestrian-source')
-          }
-
-          map.current.addSource('walkability-pedestrian-source', {
-            type: 'geojson',
-            data: data.pedestrian
-          })
-
-          const tripColorExpression = createColorExpression(
-            'total_trip_count',
-            colorScales.walkability.trip_count
-          )
-
-          map.current.addLayer({
-            id: 'walkability-pedestrian-glow',
-            type: 'line',
-            source: 'walkability-pedestrian-source',
-            paint: {
-              'line-color': tripColorExpression,
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'total_trip_count'],
-                0, 8,
-                100, 14,
-                200, 20,
-                300, 26
-              ],
-              'line-opacity': 0.15,
-              'line-blur': 8,
-            }
-          })
-          map.current.addLayer({
-            id: 'walkability-pedestrian',
-            type: 'line',
-            source: 'walkability-pedestrian-source',
-            paint: {
-              'line-color': tripColorExpression,
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'total_trip_count'],
-                0, 2,
-                100, 4,
-                200, 6,
-                300, 8
-              ],
-              'line-opacity': 0.8
-            }
-          })
+          addPedestrianLayers()
 
           map.current.on('click', 'walkability-pedestrian', (e) => {
             const props = e.features[0].properties
@@ -593,7 +639,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div style="padding: 8px;">
-                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">Pedestrian Activity</h3>
+                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">Walking / Running Activity</h3>
                   <div style="font-size: 12px;">
                     <strong>Total Trips:</strong> ${props.total_trip_count || 0}<br/>
                     <strong>Forward:</strong> ${props.forward_trip_count || 0}<br/>
@@ -608,54 +654,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           })
 
         } else if (walkabilityMode === 'cycling') {
-          // Cycling flows
-          if (map.current.getSource('walkability-cycling-source')) {
-            map.current.removeSource('walkability-cycling-source')
-          }
-
-          map.current.addSource('walkability-cycling-source', {
-            type: 'geojson',
-            data: data.cycling
-          })
-
-          const cyclingColorExpression = createColorExpression(
-            'total_trip_count',
-            colorScales.walkability.trip_count
-          )
-
-          map.current.addLayer({
-            id: 'walkability-cycling-glow',
-            type: 'line',
-            source: 'walkability-cycling-source',
-            paint: {
-              'line-color': cyclingColorExpression,
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'total_trip_count'],
-                0, 8,
-                100, 14,
-                200, 20,
-                400, 26
-              ],
-              'line-opacity': 0.15,
-              'line-blur': 8,
-            }
-          })
-          map.current.addLayer({
-            id: 'walkability-cycling',
-            type: 'line',
-            source: 'walkability-cycling-source',
-            paint: {
-              'line-color': cyclingColorExpression,
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'total_trip_count'],
-                0, 2,
-                100, 4,
-                200, 6,
-                400, 8
-              ],
-              'line-opacity': 0.8
-            }
-          })
+          addCyclingLayers()
 
           map.current.on('click', 'walkability-cycling', (e) => {
             const props = e.features[0].properties
@@ -687,6 +686,40 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
             map.current.getCanvas().style.cursor = ''
           })
         })
+
+        if (walkabilityMode === 'activity') {
+          map.current.on('click', 'walkability-pedestrian', (e) => {
+            const props = e.features[0].properties
+            new mapboxgl.Popup()
+              .setLngLat(e.lngLat)
+              .setHTML(`
+                <div style="padding: 8px;">
+                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">Walking / Running Activity</h3>
+                  <div style="font-size: 12px;">
+                    <strong>Total Trips:</strong> ${props.total_trip_count || 0}<br/>
+                    <strong>Avg Speed:</strong> ${parseFloat(props.avg_speed || 0).toFixed(2)} m/s
+                  </div>
+                </div>
+              `)
+              .addTo(map.current)
+          })
+
+          map.current.on('click', 'walkability-cycling', (e) => {
+            const props = e.features[0].properties
+            new mapboxgl.Popup()
+              .setLngLat(e.lngLat)
+              .setHTML(`
+                <div style="padding: 8px;">
+                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">Cycling Activity</h3>
+                  <div style="font-size: 12px;">
+                    <strong>Total Trips:</strong> ${props.total_trip_count || 0}<br/>
+                    <strong>E-Bikes:</strong> ${props.ebike_ride_count || 0}
+                  </div>
+                </div>
+              `)
+              .addTo(map.current)
+          })
+        }
 
         console.log(`Loaded walkability data: ${walkabilityMode} mode`)
         setIsLoadingLayer(null)
@@ -1529,9 +1562,10 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
               value={walkabilityMode} 
               onChange={(e) => setWalkabilityMode(e.target.value)}
             >
+              <option value="activity">Active Mobility</option>
               <option value="network">Network Centrality</option>
-              <option value="pedestrian">Pedestrian Flows</option>
-              <option value="cycling">Cycling Flows</option>
+              <option value="pedestrian">Walking / Running</option>
+              <option value="cycling">Cycling</option>
             </select>
           </div>
         </div>
@@ -1652,7 +1686,15 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
                   ? 'linear-gradient(to right, #f7fbff, #084594)' 
                   : 'linear-gradient(to right, #08519c, #6baed6, #fee391, #ec7014, #d62828, #6a040f)'
               }}></span>
-              <span style={{fontSize: '11px'}}>{walkabilityMode === 'network' ? 'Network Centrality' : walkabilityMode === 'pedestrian' ? 'Pedestrian: Blue (Low) → Yellow → Red (High)' : 'Cycling: Blue (Low) → Yellow → Red (High)'}</span>
+              <span style={{fontSize: '11px'}}>
+                {walkabilityMode === 'activity'
+                  ? 'Active Mobility: Orange = walking/running, Blue = cycling'
+                  : walkabilityMode === 'network'
+                    ? 'Network Centrality'
+                    : walkabilityMode === 'pedestrian'
+                      ? 'Walking / Running: Orange intensity = trip volume'
+                      : 'Cycling: Blue intensity = trip volume'}
+              </span>
             </div>
           )}
           {activeLayers.business && (

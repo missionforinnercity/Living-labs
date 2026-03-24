@@ -194,8 +194,10 @@ function processWalkabilityData() {
   const files = [
     'network_analysis.geojson',
     'network_connectivity.geojson',
-    'pedestrian_month_all.geojson',
-    'cycling_month_all.geojson'
+    'strava_metro_monthly_aggregated.geojson',
+    'roads_with_walking_times.geojson',
+    'bus stops.geojson',
+    'trainStation.geojson'
   ]
   
   files.forEach(file => {
@@ -231,16 +233,8 @@ function processWalkabilityData() {
  */
 function aggregateCSVData() {
   console.log('\n📊 Aggregating CSV data...')
-  console.log('  ℹ️  CSV files are >50MB - aggregation skipped for now')
-  console.log('  ℹ️  Use peak_statistics.json and monthly aggregates instead')
-  
-  // Copy peak statistics to processed
-  const peakStatsPath = path.join(DATA_DIR, 'walkabilty/processed/peak_statistics.json')
-  if (fs.existsSync(peakStatsPath)) {
-    const outputPath = path.join(PROCESSED_DIR, 'walkability', 'peak_statistics.json')
-    fs.copyFileSync(peakStatsPath, outputPath)
-    console.log('  ✅ Copied peak_statistics.json')
-  }
+  console.log('  ℹ️  Legacy CSV aggregation removed')
+  console.log('  ℹ️  Active mobility now reads directly from strava_metro_monthly_aggregated.geojson')
 }
 
 /**

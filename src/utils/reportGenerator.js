@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf'
 import * as turf from '@turf/turf'
 import proj4 from 'proj4'
+import { loadWalkabilityData } from './dataLoader'
 
 // Register projections for tree canopy (stored as EPSG:3857)
 proj4.defs('EPSG:3857', '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
@@ -330,9 +331,14 @@ async function ensureAllData(data) {
   if (!data.treeCanopyData?.features?.length) loads.push(fetchGeoJSON('/data/greenery/tree_canopy.geojson').then(d => { if (d) data.treeCanopyData = reprojectGeoJSON3857to4326(d) }))
   if (!data.parksData?.features?.length) loads.push(fetchGeoJSON('/data/greenery/parks_nearby.geojson').then(d => { if (d) data.parksData = d }))
   if (!data.trafficData?.features?.length) loads.push(fetchGeoJSON('/data/Traffic/traffic_analysis.geojson').then(d => { if (d) data.trafficData = d }))
-  if (!data.pedestrianData?.features?.length) loads.push(fetchGeoJSON('/data/processed/walkability/pedestrian_month_all.geojson').then(d => { if (d) data.pedestrianData = d }))
-  if (!data.cyclingData?.features?.length) loads.push(fetchGeoJSON('/data/processed/walkability/cycling_month_all.geojson').then(d => { if (d) data.cyclingData = d }))
-  if (!data.networkData?.features?.length) loads.push(fetchGeoJSON('/data/walkabilty/network_analysis.geojson').then(d => { if (d) data.networkData = d }))
+  if (!data.pedestrianData?.features?.length || !data.cyclingData?.features?.length || !data.networkData?.features?.length) {
+    loads.push(loadWalkabilityData().then(d => {
+      if (!d) return
+      if (!data.pedestrianData?.features?.length) data.pedestrianData = d.pedestrian
+      if (!data.cyclingData?.features?.length) data.cyclingData = d.cycling
+      if (!data.networkData?.features?.length) data.networkData = d.network
+    }))
+  }
   if (!data.roadsData?.features?.length) loads.push(fetchGeoJSON('/data/roads/segments.geojson').then(d => { if (d) data.roadsData = d }))
   if (!data.busStops?.features?.length) loads.push(fetchGeoJSON('/data/walkabilty/bus stops.geojson').then(d => { if (d) data.busStops = d }))
   if (!data.trainStations?.features?.length) loads.push(fetchGeoJSON('/data/walkabilty/trainStation.geojson').then(d => { if (d) data.trainStations = d }))

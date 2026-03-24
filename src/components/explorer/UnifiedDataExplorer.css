@@ -252,6 +252,186 @@
   animation: slideUp 0.3s ease-out;
 }
 
+.route-history-panel {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  height: min(430px, 44vh);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 36%),
+    linear-gradient(160deg, rgba(148, 163, 184, 0.17), rgba(71, 85, 105, 0.26));
+  backdrop-filter: blur(32px) saturate(1.04);
+  -webkit-backdrop-filter: blur(32px) saturate(1.04);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  z-index: 110;
+}
+
+.route-history-panel.route-history-panel--minimized {
+  height: 68px;
+}
+
+.route-history-panel .panel-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.route-history-meta {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem 0;
+  flex-wrap: wrap;
+}
+
+.route-history-chip {
+  min-width: 120px;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.route-history-chip span {
+  display: block;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.route-history-chip strong {
+  display: block;
+  margin-top: 0.35rem;
+  color: #fff;
+  font-size: 0.98rem;
+}
+
+.route-history-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.route-history-charts .chart-panel {
+  min-height: 260px;
+  padding: 0.9rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.route-history-charts .chart-panel--radar {
+  grid-column: 1 / -1;
+}
+
+.route-history-charts .chart-panel--facts {
+  grid-column: 1 / -1;
+}
+
+.route-history-charts .chart-panel h4 {
+  margin: 0 0 0.8rem;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.route-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.route-fact {
+  padding: 0.95rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.route-fact span {
+  display: block;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.route-fact strong {
+  display: block;
+  margin-top: 0.45rem;
+  color: #fff;
+  font-size: 1.25rem;
+}
+
+.route-fact--orange {
+  background: linear-gradient(145deg, rgba(124, 45, 18, 0.75), rgba(249, 115, 22, 0.18));
+}
+
+.route-fact--blue {
+  background: linear-gradient(145deg, rgba(30, 64, 175, 0.75), rgba(59, 130, 246, 0.18));
+}
+
+.route-fact--green {
+  background: linear-gradient(145deg, rgba(20, 83, 45, 0.75), rgba(52, 211, 153, 0.18));
+}
+
+.route-fact--pink {
+  background: linear-gradient(145deg, rgba(131, 24, 67, 0.75), rgba(244, 114, 182, 0.18));
+}
+
+.anomaly-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.anomaly-context-item {
+  padding: 0.9rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.anomaly-context-item--wide {
+  grid-column: 1 / -1;
+}
+
+.anomaly-context-item span {
+  display: block;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.anomaly-context-item strong {
+  display: block;
+  margin-top: 0.45rem;
+  color: #fff;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 1200px) {
+  .route-history-charts {
+    grid-template-columns: 1fr;
+  }
+
+  .route-facts-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .bottom-panel.env-bottom-panel {
   height: min(500px, 58vh);
   transition: height 0.25s ease;
