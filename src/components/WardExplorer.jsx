@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
-import mapboxgl from 'mapbox-gl'
 import {
   ResponsiveContainer,
   BarChart,
@@ -14,8 +13,6 @@ import {
 } from 'recharts'
 import { MAPBOX_TOKEN } from '../utils/mapboxToken'
 import './WardExplorer.css'
-
-mapboxgl.accessToken = MAPBOX_TOKEN
 
 const BASE_MAP_VIEW = {
   center: [18.56, -33.95],
@@ -566,6 +563,7 @@ function DetailRow({ label, value, delta }) {
 export default function WardExplorer({ onEnterDashboard }) {
   const mapRef = useRef(null)
   const mapEl = useRef(null)
+  const mapboxglRef = useRef(null)
   const hoveredFeatureIdRef = useRef(null)
   const selectedFeatureIdRef = useRef(null)
   const initialHashRef = useRef(null)
@@ -959,11 +957,17 @@ export default function WardExplorer({ onEnterDashboard }) {
     let cancelled = false
     let map = null
 
-    const initializeMap = () => {
+    const initializeMap = async () => {
       if (cancelled || mapRef.current || !mapEl.current) return
 
       const { clientWidth, clientHeight } = mapEl.current
       if (clientWidth <= 0 || clientHeight <= 0) return
+
+      const mapboxModule = await import('mapbox-gl')
+      const mapboxgl = mapboxModule.default ?? mapboxModule
+      mapboxgl.accessToken = MAPBOX_TOKEN
+      mapboxglRef.current = mapboxgl
+      if (cancelled || mapRef.current || !mapEl.current) return
 
       map = new mapboxgl.Map({
         container: mapEl.current,

@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState } from 'react'
-import mapboxgl from 'mapbox-gl'
 import { 
   loadShadeData, 
   loadLightingData, 
@@ -28,11 +27,10 @@ import {
 import { MAPBOX_TOKEN } from '../utils/mapboxToken'
 import './Map.css'
 
-mapboxgl.accessToken = MAPBOX_TOKEN
-
 const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour, districtGeoJSON, selectedDistrictId, districtBounds, onDistrictClick, compareDistricts, showDistricts, walkabilityData: walkabilityIndexData, onSegmentClick, compareSegments, focusedSegment }) => {
   const mapContainer = useRef(null)
   const map = useRef(null)
+  const mapboxglRef = useRef(null)
   const [mapLoaded, setMapLoaded] = useState(false)
   const [currentShadeMetric, setCurrentShadeMetric] = useState('shade_coverage_pct')
   const [lightingData, setLightingData] = useState(null)
@@ -49,53 +47,59 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
     console.log('Initializing Mapbox map...')
     console.log('Map container:', mapContainer.current)
-    console.log('Mapbox token:', mapboxgl.accessToken ? 'Set' : 'Missing')
-
     let isCleanedUp = false
 
-    try {
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/dark-v11',
-        center: [18.4241, -33.9249], // Cape Town CBD
-        zoom: 14,
-        pitch: 0,
-        bearing: 0
-      })
+    const initializeMap = async () => {
+      try {
+        const mapboxModule = await import('mapbox-gl')
+        const mapboxgl = mapboxModule.default ?? mapboxModule
+        mapboxgl.accessToken = MAPBOX_TOKEN
+        mapboxglRef.current = mapboxgl
 
-      map.current.on('load', () => {
-        if (!isCleanedUp) {
-          setMapLoaded(true)
-          console.log('Map loaded successfully')
-        }
-      })
+        console.log('Mapbox token:', mapboxgl.accessToken ? 'Set' : 'Missing')
+        if (isCleanedUp || !mapContainer.current) return
 
-      map.current.on('error', (e) => {
-        console.error('Map error:', e.error)
-        console.error('Error details:', {
-          message: e.error?.message,
-          status: e.error?.status,
-          url: e.error?.url
+        map.current = new mapboxgl.Map({
+          container: mapContainer.current,
+          style: 'mapbox://styles/mapbox/dark-v11',
+          center: [18.4241, -33.9249], // Cape Town CBD
+          zoom: 14,
+          pitch: 0,
+          bearing: 0
         })
-      })
 
-      // Timeout check
-      setTimeout(() => {
-        if (map.current && !isCleanedUp && !map.current.loaded()) {
-          console.warn('Map still loading after 10 seconds...')
-          console.log('Map loaded status:', map.current.loaded())
-          console.log('Map style loaded:', map.current.isStyleLoaded())
-        }
-      }, 10000)
+        map.current.on('load', () => {
+          if (!isCleanedUp) {
+            setMapLoaded(true)
+            console.log('Map loaded successfully')
+          }
+        })
 
-      // Add navigation controls
-      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
-      
-      // Add scale control
-      map.current.addControl(new mapboxgl.ScaleControl(), 'bottom-left')
-    } catch (error) {
-      console.error('Error initializing map:', error)
+        map.current.on('error', (e) => {
+          console.error('Map error:', e.error)
+          console.error('Error details:', {
+            message: e.error?.message,
+            status: e.error?.status,
+            url: e.error?.url
+          })
+        })
+
+        setTimeout(() => {
+          if (map.current && !isCleanedUp && !map.current.loaded()) {
+            console.warn('Map still loading after 10 seconds...')
+            console.log('Map loaded status:', map.current.loaded())
+            console.log('Map style loaded:', map.current.isStyleLoaded())
+          }
+        }, 10000)
+
+        map.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
+        map.current.addControl(new mapboxgl.ScaleControl(), 'bottom-left')
+      } catch (error) {
+        console.error('Error initializing map:', error)
+      }
     }
+
+    initializeMap()
 
     return () => {
       isCleanedUp = true
@@ -186,7 +190,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           const props = e.features[0].properties
           const coordinates = e.lngLat
           
-          new mapboxgl.Popup()
+          new mapboxglRef.current.Popup()
             .setLngLat(coordinates)
             .setHTML(`
               <div style="padding: 8px;">
@@ -362,7 +366,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
         // Add popups for KPIs
         map.current.on('click', 'lighting-kpis', (e) => {
           const props = e.features[0].properties
-          new mapboxgl.Popup()
+          new mapboxglRef.current.Popup()
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 8px;">
@@ -382,7 +386,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
         // Add popups for fixtures
         map.current.on('click', 'lighting-fixtures', (e) => {
           const props = e.features[0].properties
-          new mapboxgl.Popup()
+          new mapboxglRef.current.Popup()
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 8px;">
@@ -402,7 +406,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
         // Add popups for projects (narrative)
         map.current.on('click', 'lighting-projects', (e) => {
           const props = e.features[0].properties
-          new mapboxgl.Popup()
+          new mapboxglRef.current.Popup()
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 12px; max-width: 300px;">
@@ -611,7 +615,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
           map.current.on('click', 'walkability-network', (e) => {
             const props = e.features[0].properties
-            new mapboxgl.Popup()
+            new mapboxglRef.current.Popup()
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div style="padding: 8px;">
@@ -635,7 +639,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
           map.current.on('click', 'walkability-pedestrian', (e) => {
             const props = e.features[0].properties
-            new mapboxgl.Popup()
+            new mapboxglRef.current.Popup()
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div style="padding: 8px;">
@@ -658,7 +662,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
           map.current.on('click', 'walkability-cycling', (e) => {
             const props = e.features[0].properties
-            new mapboxgl.Popup()
+            new mapboxglRef.current.Popup()
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div style="padding: 8px;">
@@ -690,7 +694,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
         if (walkabilityMode === 'activity') {
           map.current.on('click', 'walkability-pedestrian', (e) => {
             const props = e.features[0].properties
-            new mapboxgl.Popup()
+            new mapboxglRef.current.Popup()
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div style="padding: 8px;">
@@ -706,7 +710,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
           map.current.on('click', 'walkability-cycling', (e) => {
             const props = e.features[0].properties
-            new mapboxgl.Popup()
+            new mapboxglRef.current.Popup()
               .setLngLat(e.lngLat)
               .setHTML(`
                 <div style="padding: 8px;">
@@ -896,7 +900,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           const rating = parseFloat(props.rating || 0)
           const stars = '★'.repeat(Math.round(rating))
           
-          new mapboxgl.Popup()
+          new mapboxglRef.current.Popup()
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 10px; max-width: 300px;">
@@ -915,7 +919,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
         // Add popup for properties
         map.current.on('click', 'business-properties', (e) => {
           const props = e.features[0].properties
-          new mapboxgl.Popup()
+          new mapboxglRef.current.Popup()
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 10px;">
@@ -1093,7 +1097,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           const score = props.narrative_score || 0
           const category = props.narrative_category || 'N/A'
           
-          new mapboxgl.Popup()
+          new mapboxglRef.current.Popup()
             .setLngLat(e.lngLat)
             .setHTML(`
               <div style="padding: 12px; min-width: 250px;">

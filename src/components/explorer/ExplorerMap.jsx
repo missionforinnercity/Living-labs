@@ -312,6 +312,7 @@ const ExplorerMap = ({
   ratingFilter = null   // null = all, array of floor values e.g. [4,5]
 }) => {
   const mapRef = useRef()
+  const mapLib = useMemo(() => import('mapbox-gl'), [])
 
   // ─── Hex layer opacity — fades to 0 and back when envCurrentData changes ──
   const [hexOpacity, setHexOpacity] = useState(0)
@@ -975,6 +976,7 @@ const ExplorerMap = ({
         ref={mapRef}
         {...viewState}
         onMove={(evt) => setViewState(evt.viewState)}
+        mapLib={mapLib}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle="mapbox://styles/mapbox/dark-v11"
         preserveDrawingBuffer={true}
