@@ -37,6 +37,49 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+function buildEventsFeatureCollection(rows) {
+  const features = rows
+    .filter((row) => Number.isFinite(row.longitude) && Number.isFinite(row.latitude))
+    .map((row) => ({
+      type: 'Feature',
+      properties: {
+        name: row.event_name || 'Untitled event',
+        venue: row.venue || 'Unknown venue',
+        date: row.event_date || null,
+        time: row.event_time || null,
+        url: row.event_url || null,
+        source_url: row.source_url || null,
+        first_seen_at: row.first_seen_at || null,
+        updated_at: row.updated_at || null
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: [row.longitude, row.latitude]
+      }
+    }))
+
+  const timestamps = rows.flatMap((row) => [row.first_seen_at, row.updated_at]).filter(Boolean)
+  const eventDates = rows.map((row) => row.event_date).filter(Boolean).sort()
+  const venues = new Set(rows.map((row) => row.venue).filter(Boolean))
+
+  return {
+    type: 'FeatureCollection',
+    features,
+    metadata: {
+      totalRows: rows.length,
+      totalFeatures: features.length,
+      venueCount: venues.size,
+      firstSeenAt: timestamps.length ? timestamps.reduce((min, value) => (value < min ? value : min)) : null,
+      lastUpdatedAt: timestamps.length ? timestamps.reduce((max, value) => (value > max ? value : max)) : null,
+      eventDateRange: eventDates.length
+        ? { start: eventDates[0], end: eventDates[eventDates.length - 1] }
+        : null,
+      fetchedAt: new Date().toISOString(),
+      source: 'planning.event_features_geojson'
+    }
+  }
+}
+
 // Current environment grid data — returns all grid cells
 app.get('/api/environment/current', async (_req, res) => {
   try {
@@ -79,6 +122,34 @@ app.get('/api/environment/history', async (_req, res) => {
     res.json({ rows, fetchedAt: new Date().toISOString() })
   } catch (err) {
     console.error('[API] /environment/history error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/planning/events', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        event_url,
+        source_url,
+        event_name,
+        venue,
+        event_date,
+        event_time,
+        latitude,
+        longitude,
+        first_seen_at,
+        updated_at
+      FROM planning.event_features_geojson
+      ORDER BY
+        NULLIF(event_date, '') NULLS LAST,
+        NULLIF(event_time, '') NULLS LAST,
+        event_name NULLS LAST
+    `)
+
+    res.json(buildEventsFeatureCollection(rows))
+  } catch (err) {
+    console.error('[API] /planning/events error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })

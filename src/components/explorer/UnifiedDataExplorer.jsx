@@ -19,8 +19,10 @@ import {
   Pie,
   Cell
 } from 'recharts'
+import * as turf from '@turf/turf'
 import proj4 from 'proj4'
 import TrafficAnalytics, { TRAFFIC_SCENARIOS } from './TrafficAnalytics'
+import EventInsightsPanel from './EventInsightsPanel'
 import {
   buildRouteHistory,
   buildStravaActivityLayers,
@@ -28,6 +30,7 @@ import {
   formatStravaDaypartLabel,
   getStravaAvailableMonths,
   loadWalkabilityData as loadActiveMobilityData,
+  loadCCIDBoundary,
   summarizeStravaDayparts
 } from '../../utils/dataLoader'
 import './UnifiedDataExplorer.css'
@@ -199,6 +202,11 @@ const UnifiedDataExplorer = () => {
   // Events state
   const [eventsData, setEventsData] = useState(null)
   const [eventsMonth, setEventsMonth] = useState(null) // null = all months, 1-12 for specific month
+  const [eventsScope, setEventsScope] = useState('cbd')
+  const [ccidBoundary, setCcidBoundary] = useState(null)
+  const [eventsPanelMinimized, setEventsPanelMinimized] = useState(false)
+  const [eventsPanelHeight, setEventsPanelHeight] = useState(520)
+  const eventsPanelDrag = useRef({ active: false, startY: 0, startHeight: 520 })
 
   // Opinion mode state
   const [opinionSource, setOpinionSource] = useState('both') // 'formal', 'informal', 'both'
@@ -277,6 +285,36 @@ const UnifiedDataExplorer = () => {
   const [envDetailGrid, setEnvDetailGrid] = useState(null) // grid_id for bottom detail panel
   const [envPanelMinimized, setEnvPanelMinimized] = useState(false)
   const envDetailPanelRef = useRef(null)
+
+  const filteredEventsData = useMemo(() => {
+    if (!eventsData?.features) return eventsData
+    if (eventsScope === 'all' || !ccidBoundary?.features?.length) return eventsData
+
+    const boundaryFeatures = ccidBoundary.features.filter((feature) => {
+      const type = feature?.geometry?.type
+      return type === 'Polygon' || type === 'MultiPolygon'
+    })
+
+    if (!boundaryFeatures.length) return eventsData
+
+    const features = eventsData.features.filter((feature) => {
+      const coordinates = feature?.geometry?.coordinates
+      if (!Array.isArray(coordinates) || coordinates.length < 2) return false
+      const point = turf.point(coordinates)
+      return boundaryFeatures.some((boundaryFeature) => turf.booleanPointInPolygon(point, boundaryFeature))
+    })
+
+    return {
+      ...eventsData,
+      features,
+      metadata: {
+        ...(eventsData.metadata || {}),
+        filteredFeatures: features.length,
+        geographyMode: eventsScope,
+        geographyLabel: 'Cape Town CBD'
+      }
+    }
+  }, [ccidBoundary, eventsData, eventsScope])
 
   const envHistoryDates = useMemo(() => {
     if (!envHistoryData?.rows) return []
@@ -508,14 +546,40 @@ const UnifiedDataExplorer = () => {
   
   // Load business data
   useEffect(() => {
+    loadCCIDBoundary()
+      .then(setCcidBoundary)
+      .catch((error) => console.error('Error loading CCID boundary:', error))
+  }, [])
+
+  useEffect(() => {
     const loadBusinessData = async () => {
       try {
-        const [businesses, stalls, properties, survey, events] = await Promise.all([
+        const [businesses, stalls, properties, survey, liveEventsPayload] = await Promise.all([
           fetch('/data/business/POI_enriched_20260120_185944.geojson').then(r => r.json()),
           fetch('/data/business/streetStalls.geojson').then(r => r.json()),
           fetch('/data/business/properties_consolidated.geojson').then(r => r.json()),
           fetch('/data/business/survey_data.geojson').then(r => r.json()),
-          fetch('/data/business/events.geojson').then(r => r.json()).catch(() => ({ type: 'FeatureCollection', features: [] }))
+          fetch('/api/planning/events')
+            .then(async (r) => {
+              if (!r.ok) throw new Error(`Events API failed: ${r.status} ${r.statusText}`)
+              return r.json()
+            })
+            .catch(async () => {
+              const fallback = await fetch('/data/business/events.geojson')
+                .then(r => r.json())
+                .catch(() => ({ type: 'FeatureCollection', features: [] }))
+              return {
+                ...fallback,
+                metadata: {
+                  totalRows: fallback.features?.length || 0,
+                  totalFeatures: fallback.features?.length || 0,
+                  venueCount: new Set((fallback.features || []).map(f => f.properties?.venue).filter(Boolean)).size,
+                  fetchedAt: new Date().toISOString(),
+                  source: 'static fallback /data/business/events.geojson',
+                  fallback: true
+                }
+              }
+            })
         ])
         
         // Process properties data to calculate transfer_count and total_value
@@ -565,7 +629,7 @@ const UnifiedDataExplorer = () => {
         setStreetStallsData(stalls)
         setPropertiesData(processedProperties)
         setSurveyData(survey)
-        setEventsData(events)
+        setEventsData(liveEventsPayload)
       } catch (error) {
         console.error('Error loading business data:', error)
       }
@@ -1145,7 +1209,7 @@ const UnifiedDataExplorer = () => {
 
     let features = []
     if (activeCategory === 'cityEvents') {
-      features = eventsData?.features || []
+      features = filteredEventsData?.features || []
     } else if (activeCategory === 'propertySales') {
       features = propertiesData?.features || []
     } else if (activeCategory === 'vendorOpinions') {
@@ -1261,7 +1325,7 @@ const UnifiedDataExplorer = () => {
         businessesData,
         streetStallsData,
         propertiesData,
-        eventsData,
+        eventsData: filteredEventsData,
         pedestrianData,
         cyclingData,
         networkData,
@@ -1280,7 +1344,7 @@ const UnifiedDataExplorer = () => {
     } finally {
       setIsExporting(false)
     }
-  }, [map, layerStack, businessesData, streetStallsData, propertiesData, eventsData, pedestrianData, cyclingData, networkData, transitData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
+  }, [map, layerStack, businessesData, streetStallsData, propertiesData, filteredEventsData, pedestrianData, cyclingData, networkData, transitData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
 
   // Resize drag handlers
   const startSidebarDrag = useCallback((e) => {
@@ -1299,6 +1363,33 @@ const UnifiedDataExplorer = () => {
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }, [sidebarWidth])
+
+  const startEventsPanelDrag = useCallback((event) => {
+    event.preventDefault()
+    eventsPanelDrag.current = {
+      active: true,
+      startY: event.clientY,
+      startHeight: eventsPanelHeight
+    }
+
+    const onMove = (moveEvent) => {
+      if (!eventsPanelDrag.current.active) return
+      const delta = eventsPanelDrag.current.startY - moveEvent.clientY
+      const maxHeight = Math.max(window.innerHeight - 180, 360)
+      const nextHeight = Math.min(maxHeight, Math.max(280, eventsPanelDrag.current.startHeight + delta))
+      setEventsPanelHeight(nextHeight)
+      setEventsPanelMinimized(false)
+    }
+
+    const onUp = () => {
+      eventsPanelDrag.current.active = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [eventsPanelHeight])
 
   const routeCompareData = useMemo(() => {
     if (!selectedRouteHistory) return null
@@ -1466,9 +1557,12 @@ const UnifiedDataExplorer = () => {
                 onCategoriesFiltersChange={setCategoriesFilters}
                 expandedGroups={expandedGroups}
                 onExpandedGroupsChange={setExpandedGroups}
-                eventsData={eventsData}
+                eventsData={filteredEventsData}
                 eventsMonth={eventsMonth}
                 onEventsMonthChange={setEventsMonth}
+                eventsScope={eventsScope}
+                onEventsScopeChange={setEventsScope}
+                renderEventsInline={businessMode !== 'events'}
                 hideLayerControls={true}
               />
             )}
@@ -1729,8 +1823,9 @@ const UnifiedDataExplorer = () => {
               opinionSource={opinionSource}
               amenitiesFilters={amenitiesFilters}
               categoriesFilters={categoriesFilters}
-              eventsData={eventsData}
+              eventsData={filteredEventsData}
               eventsMonth={eventsMonth}
+              eventsScope={eventsScope}
               trafficData={trafficData}
               trafficScenario={trafficScenario}
               ratingFilter={ratingFilter ? Array.from(ratingFilter) : null}
@@ -2485,7 +2580,43 @@ const UnifiedDataExplorer = () => {
         </main>
 
         {/* Business bottom panel */}
-        {(() => {
+        {dashboardMode === 'business' && businessMode === 'events' ? (
+          <div
+            className={`biz-bottom-panel events-bottom-panel ${eventsPanelMinimized ? 'events-bottom-panel--minimized' : ''}`}
+            style={{ right: `${sidebarWidth + 32}px`, height: eventsPanelMinimized ? 92 : `${eventsPanelHeight}px` }}
+          >
+            <div className="events-bottom-panel-resize" onMouseDown={startEventsPanelDrag}>
+              <span className="events-bottom-panel-grip" />
+            </div>
+            <div className="bbp-header events-bottom-panel-header">
+              <div>
+                <span className="bbp-title">Event Analytics</span>
+                <div className="events-bottom-panel-subtitle">Drag up to expand the graphs and live event insights.</div>
+              </div>
+              <div className="panel-header-actions">
+                <button
+                  onClick={() => setEventsPanelMinimized((value) => !value)}
+                  className="close-btn"
+                  title={eventsPanelMinimized ? 'Expand panel' : 'Minimize panel'}
+                >
+                  {eventsPanelMinimized ? '▲' : '▼'}
+                </button>
+              </div>
+            </div>
+            {!eventsPanelMinimized && (
+              <div className="events-bottom-panel-body">
+                <EventInsightsPanel
+                  eventsData={filteredEventsData}
+                  eventsMonth={eventsMonth}
+                  onEventsMonthChange={setEventsMonth}
+                  eventsScope={eventsScope}
+                  onEventsScopeChange={setEventsScope}
+                  variant="bottom"
+                />
+              </div>
+            )}
+          </div>
+        ) : (() => {
           const businesses = getActiveBusinesses()
           if (businesses.length === 0) return null
           const categoryLabel = LAYER_CATEGORIES.find(c => c.id === activeCategory)?.label || 'Businesses'

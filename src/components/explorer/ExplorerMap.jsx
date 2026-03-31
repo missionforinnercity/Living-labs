@@ -17,6 +17,7 @@ const ECOLOGY_SELECTION_TARGET_AREA_M2 = 2500
 const ECOLOGY_SELECTION_MAX_SEGMENTS = 25
 const ECOLOGY_EXTREME_HEAT_SCORE = 75
 const ECOLOGY_EXTREME_COOL_ISLAND_SCORE = 50
+const EVENT_COORD_PRECISION = 6
 
 const toEcologyFeatureKey = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -41,6 +42,13 @@ const parseEcologySelectionKey = (value) => {
     segmentIndex: Number(match[2]),
     segmentCount: Number(match[3])
   }
+}
+
+const getEventCoordinateKey = (feature) => {
+  const coordinates = feature?.geometry?.coordinates
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null
+  const [lng, lat] = coordinates
+  return `${Number(lng).toFixed(EVENT_COORD_PRECISION)},${Number(lat).toFixed(EVENT_COORD_PRECISION)}`
 }
 
 const getEcologySelectionGrid = (feature, explicitSegmentCount = null) => {
@@ -845,6 +853,57 @@ const ExplorerMap = ({
           || feature.properties?.feature_id_key
           || feature.properties?.feature_id
         )
+        return
+      }
+
+      if (feature.source === 'city-events') {
+        const mapInstance = mapRef.current?.getMap?.() || mapRef.current
+        const hitboxFeatures = mapInstance?.queryRenderedFeatures
+          ? mapInstance.queryRenderedFeatures(
+              [
+                [event.point.x - 8, event.point.y - 8],
+                [event.point.x + 8, event.point.y + 8]
+              ],
+              { layers: ['events-points-layer'] }
+            )
+          : []
+
+        const candidateFeatures = [...(event.features || []), ...(hitboxFeatures || [])]
+          .filter((item) => item?.source === 'city-events')
+
+        const targetCoordinateKey = getEventCoordinateKey(feature)
+        const deduped = []
+        const seen = new Set()
+        candidateFeatures.forEach((item) => {
+          const coordKey = getEventCoordinateKey(item)
+          if (!coordKey || coordKey !== targetCoordinateKey) return
+          const eventKey = [
+            coordKey,
+            item.properties?.name || '',
+            item.properties?.date || '',
+            item.properties?.time || '',
+            item.properties?.venue || ''
+          ].join('|')
+          if (seen.has(eventKey)) return
+          seen.add(eventKey)
+          deduped.push(item)
+        })
+
+        const eventGroup = deduped
+          .sort((a, b) => {
+            const dateCompare = (a.properties?.date || '').localeCompare(b.properties?.date || '')
+            if (dateCompare !== 0) return dateCompare
+            return (a.properties?.time || '').localeCompare(b.properties?.time || '')
+          })
+
+        setSelectedFeature(feature)
+        setPopupInfo({
+          longitude: event.lngLat.lng,
+          latitude: event.lngLat.lat,
+          feature: eventGroup[0] || feature,
+          eventGroup: eventGroup.length > 1 ? eventGroup : null,
+          activeEventIndex: 0
+        })
         return
       }
 
@@ -2636,7 +2695,9 @@ const ExplorerMap = ({
 
                   {/* City Events Mode */}
                   {(businessMode === 'events' || popupInfo?.feature?.source === 'city-events') && (() => {
-                    const p = popupInfo.feature.properties || {}
+                    const eventGroup = popupInfo.eventGroup || null
+                    const activeEvent = eventGroup?.[popupInfo.activeEventIndex || 0] || popupInfo.feature
+                    const p = activeEvent?.properties || {}
                     const dateObj = p.date ? new Date(p.date + 'T00:00:00') : null
                     const formattedDate = dateObj
                       ? dateObj.toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -2644,6 +2705,43 @@ const ExplorerMap = ({
                     const formattedTime = p.time ? p.time.slice(0, 5) : null
                     return (
                       <>
+                        {eventGroup?.length > 1 && (
+                          <div className="event-popup-stack">
+                            <div className="event-popup-stack-header">
+                              {eventGroup.length} events at this location
+                            </div>
+                            <div className="event-popup-stack-list">
+                              {eventGroup.map((eventFeature, index) => {
+                                const eventProps = eventFeature.properties || {}
+                                const itemDate = eventProps.date
+                                  ? new Date(`${eventProps.date}T${(eventProps.time || '00:00:00').slice(0, 8)}`)
+                                  : null
+                                const itemLabel = itemDate && !Number.isNaN(itemDate.getTime())
+                                  ? itemDate.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
+                                  : (eventProps.date || 'Date TBC')
+                                return (
+                                  <button
+                                    key={`${eventProps.name || 'event'}-${index}`}
+                                    type="button"
+                                    className={`event-popup-stack-item ${index === (popupInfo.activeEventIndex || 0) ? 'active' : ''}`}
+                                    onClick={() => {
+                                      setPopupInfo((current) => current ? {
+                                        ...current,
+                                        feature: eventFeature,
+                                        activeEventIndex: index
+                                      } : current)
+                                    }}
+                                  >
+                                    <span className="event-popup-stack-title">{eventProps.name || `Event ${index + 1}`}</span>
+                                    <span className="event-popup-stack-meta">
+                                      {itemLabel}{eventProps.time ? ` · ${eventProps.time.slice(0, 5)}` : ''}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
                         <h3 style={{ marginBottom: '0.5rem' }}>{p.name || 'Event'}</h3>
                         {p.venue && (
                           <p style={{ margin: '0.25rem 0' }}>
@@ -2658,6 +2756,18 @@ const ExplorerMap = ({
                         {formattedTime && (
                           <p style={{ margin: '0.25rem 0' }}>
                             <span style={{ color: '#4ade80' }}>🕐</span> <strong>Time:</strong> {formattedTime}
+                          </p>
+                        )}
+                        {p.url && (
+                          <p style={{ margin: '0.55rem 0 0' }}>
+                            <a
+                              href={p.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="event-popup-link"
+                            >
+                              View event details
+                            </a>
                           </p>
                         )}
                       </>
