@@ -1,10 +1,4 @@
-async function fetchJson(path, errorLabel) {
-  const response = await fetch(path)
-  if (!response.ok) {
-    throw new Error(`${errorLabel}: ${response.status} ${response.statusText}`)
-  }
-  return response.json()
-}
+import { fetchJson } from '../shared/http'
 
 function computeLightingThresholds(segments) {
   const validSegments = (segments?.features || []).filter((feature) => {

@@ -23,22 +23,15 @@ import * as turf from '@turf/turf'
 import TrafficAnalytics from './TrafficAnalytics'
 import EventInsightsPanel from './EventInsightsPanel'
 import {
-  buildRouteHistory,
-  buildStravaActivityLayers,
-  filterStravaAnomaliesByMonth,
   formatStravaDaypartLabel,
   summarizeStravaDayparts
 } from '../../utils/dataLoader'
-import { loadExplorerBusinessBoundary, loadExplorerBusinessData } from '../../features/business/data'
-import { loadExplorerWalkabilityData } from '../../features/walkability/data'
-import { loadExplorerLightingData } from '../../features/lighting/data'
-import {
-  loadExplorerAirQualityData,
-  loadExplorerGreeneryData,
-  loadExplorerShadeData,
-  loadExplorerTemperatureData
-} from '../../features/environment/data'
-import { loadExplorerTrafficData } from '../../features/traffic/data'
+import { buildEnvDisplayData } from '../../features/environment/data'
+import { useExplorerBusinessData } from '../../features/business/useExplorerBusinessData'
+import { useExplorerWalkabilityData } from '../../features/walkability/useExplorerWalkabilityData'
+import { useExplorerLightingData } from '../../features/lighting/useExplorerLightingData'
+import { useExplorerEnvironmentData } from '../../features/environment/useExplorerEnvironmentData'
+import { useExplorerTrafficData } from '../../features/traffic/useExplorerTrafficData'
 import './UnifiedDataExplorer.css'
 
 const ExplorerMap = lazy(() => import('./ExplorerMap'))
@@ -137,16 +130,8 @@ const UnifiedDataExplorer = () => {
   const [businessMode, setBusinessMode] = useState('liveliness') // 'liveliness', 'opinions', 'ratings', 'amenities', 'categories', 'property'
   const [dayOfWeek, setDayOfWeek] = useState(new Date().getDay())
   const [hour, setHour] = useState(new Date().getHours())
-  const [businessesData, setBusinessesData] = useState(null)
-  const [streetStallsData, setStreetStallsData] = useState(null)
-  const [propertiesData, setPropertiesData] = useState(null)
-  const [surveyData, setSurveyData] = useState(null)
-  
-  // Events state
-  const [eventsData, setEventsData] = useState(null)
   const [eventsMonth, setEventsMonth] = useState(null) // null = all months, 1-12 for specific month
   const [eventsScope, setEventsScope] = useState('cbd')
-  const [ccidBoundary, setCcidBoundary] = useState(null)
   const [eventsPanelMinimized, setEventsPanelMinimized] = useState(false)
   const [eventsPanelHeight, setEventsPanelHeight] = useState(520)
   const eventsPanelDrag = useRef({ active: false, startY: 0, startHeight: 520 })
@@ -174,45 +159,23 @@ const UnifiedDataExplorer = () => {
   const [showPopularRoutesOnly, setShowPopularRoutesOnly] = useState(false)
   const [networkMetric, setNetworkMetric] = useState('betweenness_800') // betweenness metric to display
   const [transitView, setTransitView] = useState('combined') // 'combined', 'bus', 'train'
-  const [networkData, setNetworkData] = useState(null)
-  const [pedestrianData, setPedestrianData] = useState(null)
-  const [cyclingData, setCyclingData] = useState(null)
-  const [stravaAggregated, setStravaAggregated] = useState(null)
-  const [walkabilityMonths, setWalkabilityMonths] = useState([])
   const [selectedWalkabilityMonth, setSelectedWalkabilityMonth] = useState(null)
-  const [stravaAnomalies, setStravaAnomalies] = useState(null)
-  const [filteredStravaAnomalies, setFilteredStravaAnomalies] = useState(null)
   const [selectedAnomalySegment, setSelectedAnomalySegment] = useState(null)
-  const [transitData, setTransitData] = useState(null)
-  const [busStopsData, setBusStopsData] = useState(null)
-  const [trainStationData, setTrainStationData] = useState(null)
   const [selectedRouteSegment, setSelectedRouteSegment] = useState(null)
   const [compareRouteSegment, setCompareRouteSegment] = useState(null)
-  const [selectedRouteHistory, setSelectedRouteHistory] = useState(null)
-  const [compareRouteHistory, setCompareRouteHistory] = useState(null)
   const [routePanelMinimized, setRoutePanelMinimized] = useState(false)
   
   // Lighting dashboard state
-  const [lightingSegments, setLightingSegments] = useState(null)
-  const [streetLights, setStreetLights] = useState(null)
-  const [missionInterventions, setMissionInterventions] = useState(null)
   const [lightIntensityRaster, setLightIntensityRaster] = useState(null)
-  const [lightingThresholds, setLightingThresholds] = useState(null)
   
   // Temperature dashboard state - using surfaceTemp dataset
-  const [temperatureData, setTemperatureData] = useState(null)
   const [selectedSegment, setSelectedSegment] = useState(null)
   
   // Shade dashboard state - keeping for greenery
-  const [shadeData, setShadeData] = useState(null)
   const [season, setSeason] = useState('summer')
   const [timeOfDay, setTimeOfDay] = useState('1400')
   
   // New greenery data layers
-  const [greeneryAndSkyview, setGreeneryAndSkyview] = useState(null)
-  const [treeCanopyData, setTreeCanopyData] = useState(null)
-  const [parksData, setParksData] = useState(null)
-  const [ecologyHeatByYear, setEcologyHeatByYear] = useState({})
   const [ecologyYear, setEcologyYear] = useState(2026)
   const [ecologyMetric, setEcologyMetric] = useState('urban_heat_score')
   const [selectedEcologyFeatureKeys, setSelectedEcologyFeatureKeys] = useState([])
@@ -220,14 +183,97 @@ const UnifiedDataExplorer = () => {
   const ecologyDetailPanelRef = useRef(null)
 
   // Environment / air quality state (fetched from API)
-  const [envCurrentData, setEnvCurrentData] = useState(null)
-  const [envHistoryData, setEnvHistoryData] = useState(null)
   const [envIndex, setEnvIndex] = useState('uaqi') // which metric to display on the map
   const [envDate, setEnvDate] = useState(null)     // null = live; 'YYYY-MM-DD' = historical day
-  const envLastFetch = useRef(0)
   const [envDetailGrid, setEnvDetailGrid] = useState(null) // grid_id for bottom detail panel
   const [envPanelMinimized, setEnvPanelMinimized] = useState(false)
   const envDetailPanelRef = useRef(null)
+
+  // Layer visibility
+  const [visibleLayers, setVisibleLayers] = useState({
+    // Business layers
+    businesses: false,
+    streetStalls: false,
+    properties: false,
+    eventsData: false,
+    // Walkability layers
+    network: false,
+    pedestrianActivity: false,
+    cyclingActivity: false,
+    // Lighting layers
+    lightingSegments: false,
+    streetLights: false,
+    missionInterventions: false,
+    // Temperature layers
+    temperatureSegments: false,
+    // Environment / greenery layers
+    airQualityVoronoi: false,
+    ecologyHeat: false,
+    greenerySegments: false,
+    treeCanopy: false,
+    parksNearby: false,
+    // Traffic layers
+    trafficSegments: false
+  })
+  
+  // Active layer stack - shows what's currently on the map
+  const [layerStack, setLayerStack] = useState([])
+  
+  // Track which layers are locked (persist when clicking other categories)
+  const [lockedLayers, setLockedLayers] = useState(new Set())
+  
+  // Currently selected category (for highlighting in sidebar)
+  const [activeCategory, setActiveCategory] = useState(storedExplorerState.activeCategory || null)
+
+  const {
+    businessesData,
+    streetStallsData,
+    propertiesData,
+    surveyData,
+    eventsData,
+    ccidBoundary
+  } = useExplorerBusinessData({ dashboardMode, lockedLayers })
+
+  const {
+    networkData,
+    pedestrianData,
+    cyclingData,
+    stravaAggregated,
+    walkabilityMonths,
+    filteredStravaAnomalies,
+    transitData,
+    busStopsData,
+    trainStationData,
+    selectedRouteHistory,
+    compareRouteHistory,
+    effectiveSelectedMonth
+  } = useExplorerWalkabilityData({
+    dashboardMode,
+    lockedLayers,
+    selectedMonth: selectedWalkabilityMonth,
+    selectedRouteSegment,
+    compareRouteSegment
+  })
+
+  const {
+    lightingSegments,
+    streetLights,
+    missionInterventions,
+    lightingThresholds
+  } = useExplorerLightingData({ dashboardMode, lockedLayers })
+
+  const {
+    temperatureData,
+    shadeData,
+    greeneryAndSkyview,
+    treeCanopyData,
+    parksData,
+    ecologyHeatByYear,
+    envCurrentData,
+    envHistoryData
+  } = useExplorerEnvironmentData({ dashboardMode, lockedLayers, season, timeOfDay })
+
+  const { trafficData } = useExplorerTrafficData({ dashboardMode, lockedLayers })
 
   const filteredEventsData = useMemo(() => {
     if (!eventsData?.features) return eventsData
@@ -264,41 +310,15 @@ const UnifiedDataExplorer = () => {
     return [...new Set(envHistoryData.rows.map(r => r.hour_utc?.slice(0, 10)).filter(Boolean))].sort()
   }, [envHistoryData])
 
-  // Derive the rows shown on the map — always from history, defaulting to the latest date
   const envDisplayData = useMemo(() => {
-    if (!envHistoryData?.rows) return null
-    const targetDate = envDate || envHistoryDates[envHistoryDates.length - 1]
-    if (!targetDate) return null
-    const dayRows = envHistoryData.rows.filter(r => r.hour_utc?.slice(0, 10) === targetDate)
-    if (dayRows.length === 0) return null
-    // Average all hours of that day per grid cell
-    const byGrid = {}
-    dayRows.forEach(r => {
-      if (!byGrid[r.grid_id]) byGrid[r.grid_id] = {
-        grid_id: r.grid_id, latitude: r.latitude, longitude: r.longitude,
-        uaqi: [], poll_co_value: [], poll_no2_value: [],
-        poll_o3_value: [], poll_pm10_value: [], poll_so2_value: []
-      }
-      const b = byGrid[r.grid_id]
-      if (r.uaqi      != null) b.uaqi.push(+r.uaqi)
-      if (r.poll_co   != null) b.poll_co_value.push(+r.poll_co)
-      if (r.poll_no2  != null) b.poll_no2_value.push(+r.poll_no2)
-      if (r.poll_o3   != null) b.poll_o3_value.push(+r.poll_o3)
-      if (r.poll_pm10 != null) b.poll_pm10_value.push(+r.poll_pm10)
-      if (r.poll_so2  != null) b.poll_so2_value.push(+r.poll_so2)
-    })
-    const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null
-    const rows = Object.values(byGrid).map(b => ({
-      grid_id: b.grid_id, latitude: b.latitude, longitude: b.longitude,
-      uaqi:           avg(b.uaqi),
-      poll_co_value:  avg(b.poll_co_value),
-      poll_no2_value: avg(b.poll_no2_value),
-      poll_o3_value:  avg(b.poll_o3_value),
-      poll_pm10_value: avg(b.poll_pm10_value),
-      poll_so2_value: avg(b.poll_so2_value),
-    }))
-    return { rows, fetchedAt: targetDate }
-  }, [envDate, envHistoryData, envHistoryDates])
+    return buildEnvDisplayData(envHistoryData, envDate)
+  }, [envDate, envHistoryData])
+
+  useEffect(() => {
+    if (!selectedWalkabilityMonth && effectiveSelectedMonth) {
+      setSelectedWalkabilityMonth(effectiveSelectedMonth)
+    }
+  }, [effectiveSelectedMonth, selectedWalkabilityMonth])
 
   const openEnvGridDetail = useCallback((gridId) => {
     if (!gridId) return
@@ -416,8 +436,6 @@ const UnifiedDataExplorer = () => {
     return () => clearTimeout(timer)
   }, [selectedEcologyFeatureKeys, ecologyPanelMinimized])
 
-  // Traffic dashboard state
-  const [trafficData, setTrafficData] = useState(null)
   const [trafficScenario, setTrafficScenario] = useState('WORK_MORNING')
 
   // Resizable sidebar
@@ -431,42 +449,6 @@ const UnifiedDataExplorer = () => {
   const [isExporting, setIsExporting] = useState(false)
   const [reportLightMode, setReportLightMode] = useState(false)
   const [drawBboxMode, setDrawBboxMode] = useState(false)
-
-  // Layer visibility
-  const [visibleLayers, setVisibleLayers] = useState({
-    // Business layers
-    businesses: false,
-    streetStalls: false,
-    properties: false,
-    eventsData: false,
-    // Walkability layers
-    network: false,
-    pedestrianActivity: false,
-    cyclingActivity: false,
-    // Lighting layers
-    lightingSegments: false,
-    streetLights: false,
-    missionInterventions: false,
-    // Temperature layers
-    temperatureSegments: false,
-    // Environment / greenery layers
-    airQualityVoronoi: false,
-    ecologyHeat: false,
-    greenerySegments: false,
-    treeCanopy: false,
-    parksNearby: false,
-    // Traffic layers
-    trafficSegments: false
-  })
-  
-  // Active layer stack - shows what's currently on the map
-  const [layerStack, setLayerStack] = useState([])
-  
-  // Track which layers are locked (persist when clicking other categories)
-  const [lockedLayers, setLockedLayers] = useState(new Set())
-  
-  // Currently selected category (for highlighting in sidebar)
-  const [activeCategory, setActiveCategory] = useState(storedExplorerState.activeCategory || null)
 
   useEffect(() => {
     try {
@@ -486,246 +468,6 @@ const UnifiedDataExplorer = () => {
     setSelectedEcologyFeatureKeys([])
     setEcologyPanelMinimized(false)
   }, [dashboardMode, activeCategory])
-  
-  // Load business data
-  useEffect(() => {
-    loadExplorerBusinessBoundary()
-      .then(setCcidBoundary)
-      .catch((error) => console.error('Error loading CCID boundary:', error))
-  }, [])
-
-  useEffect(() => {
-    const loadBusinessExplorerState = async () => {
-      try {
-        const { businesses, streetStalls, properties, survey, eventsData } = await loadExplorerBusinessData()
-
-        console.log('Business data loaded:', {
-          businesses: businesses.features?.length,
-          stalls: streetStalls.features?.length,
-          properties: properties.features?.length,
-          survey: survey.features?.length
-        })
-
-        console.log('Sample processed property:', properties.features?.[0]?.properties)
-
-        setBusinessesData(businesses)
-        setStreetStallsData(streetStalls)
-        setPropertiesData(properties)
-        setSurveyData(survey)
-        setEventsData(eventsData)
-      } catch (error) {
-        console.error('Error loading business data:', error)
-      }
-    }
-    
-    // Load business data when dashboard is business OR when any business layer is locked
-    const hasLockedBusinessLayer = ['businessLiveliness', 'vendorOpinions', 'businessRatings', 'amenities', 'businessCategories', 'propertySales', 'cityEvents'].some(id => lockedLayers.has(id))
-    if (dashboardMode === 'business' || hasLockedBusinessLayer) {
-      loadBusinessExplorerState()
-    }
-  }, [dashboardMode, lockedLayers])
-  
-  // Load walkability data
-  useEffect(() => {
-    const loadWalkabilityExplorerState = async () => {
-      try {
-        console.log('Loading active mobility files...')
-
-        const {
-          network,
-          pedestrian,
-          cycling,
-          stravaAggregated: rawStrava,
-          availableMonths,
-          anomalies,
-          transit,
-          busStops,
-          trainStation
-        } = await loadExplorerWalkabilityData()
-
-        console.log('Active mobility data loaded:', {
-          network: network.features?.length,
-          pedestrian: pedestrian.features?.length,
-          cycling: cycling.features?.length,
-          transit: transit.features?.length,
-          busStops: busStops.features?.length,
-          trainStation: trainStation.features?.length
-        })
-
-        console.log('Transformed network data sample coordinate:', network.features?.[0]?.geometry?.coordinates?.[0]?.[0])
-
-        setNetworkData(network)
-        setPedestrianData(pedestrian)
-        setCyclingData(cycling)
-        setStravaAggregated(rawStrava)
-        setStravaAnomalies(anomalies)
-        setWalkabilityMonths(availableMonths)
-        setSelectedWalkabilityMonth(current => current || availableMonths[availableMonths.length - 1]?.key || null)
-        setTransitData(transit)
-        setBusStopsData(busStops)
-        setTrainStationData(trainStation)
-      } catch (error) {
-        console.error('Error loading walkability data:', error)
-      }
-    }
-    
-    // Load walkability data when dashboard is walkability OR when any walkability layer is locked
-    const hasLockedWalkabilityLayer = ['activeMobility', 'mobilityAnomalies', 'networkAnalysis', 'transitAccessibility'].some(id => lockedLayers.has(id))
-    if (dashboardMode === 'walkability' || hasLockedWalkabilityLayer) {
-      loadWalkabilityExplorerState()
-    }
-  }, [dashboardMode, lockedLayers])
-
-  useEffect(() => {
-    if (!stravaAggregated || !selectedWalkabilityMonth) return
-    const { pedestrian, cycling } = buildStravaActivityLayers(stravaAggregated, { months: selectedWalkabilityMonth })
-    setPedestrianData(pedestrian)
-    setCyclingData(cycling)
-  }, [stravaAggregated, selectedWalkabilityMonth])
-
-  useEffect(() => {
-    if (!stravaAnomalies) return
-    setFilteredStravaAnomalies(filterStravaAnomaliesByMonth(stravaAnomalies, selectedWalkabilityMonth))
-  }, [stravaAnomalies, selectedWalkabilityMonth])
-
-  useEffect(() => {
-    if (!selectedRouteSegment || !stravaAggregated) {
-      setSelectedRouteHistory(null)
-      return
-    }
-    setSelectedRouteHistory(buildRouteHistory(stravaAggregated, selectedRouteSegment.edge_uid))
-  }, [selectedRouteSegment, stravaAggregated])
-
-  useEffect(() => {
-    if (!compareRouteSegment || !stravaAggregated) {
-      setCompareRouteHistory(null)
-      return
-    }
-    setCompareRouteHistory(buildRouteHistory(stravaAggregated, compareRouteSegment.edge_uid))
-  }, [compareRouteSegment, stravaAggregated])
-  
-  // Load lighting data
-  useEffect(() => {
-    const loadLightingExplorerState = async () => {
-      try {
-        const {
-          lightingSegments: segments,
-          missionInterventions: projects,
-          streetLights,
-          lightingThresholds: thresholds
-        } = await loadExplorerLightingData()
-
-        setLightingThresholds(thresholds)
-        setLightingSegments(segments)
-        setMissionInterventions(projects)
-        setStreetLights(streetLights)
-        console.log('Lighting data loaded:', {
-          segments: segments?.features?.length,
-          missionInterventions: projects?.features?.length,
-          streetLights: streetLights?.features?.length
-        })
-        // Light intensity raster will be loaded separately in the map component
-      } catch (error) {
-        console.error('Error loading lighting data:', error)
-      }
-    }
-    
-    // Load lighting data when dashboard is lighting OR when any lighting layer is locked
-    const hasLockedLightingLayer = ['streetLighting', 'municipalLights', 'missionInterventions'].some(id => lockedLayers.has(id))
-    if (dashboardMode === 'lighting' || hasLockedLightingLayer) {
-      loadLightingExplorerState()
-    }
-  }, [dashboardMode, lockedLayers])
-  
-  // Load temperature data
-  useEffect(() => {
-    const loadTemperatureExplorerState = async () => {
-      try {
-        const data = await loadExplorerTemperatureData()
-        setTemperatureData(data)
-        console.log('Loaded temperature timeseries data:', data.features?.length, 'segments')
-      } catch (error) {
-        console.error('Error loading temperature data:', error)
-      }
-    }
-    
-    // Load temperature data when dashboard is temperature OR when the temperature layer is locked
-    const hasLockedTempLayer = lockedLayers.has('surfaceTemperature')
-    if (dashboardMode === 'temperature' || hasLockedTempLayer) {
-      loadTemperatureExplorerState()
-    }
-  }, [dashboardMode, lockedLayers])
-  
-  // Load shade/greenery/environment data
-  useEffect(() => {
-    const loadShadeExplorerState = async () => {
-      try {
-        const data = await loadExplorerShadeData(season, timeOfDay)
-        setShadeData(data)
-        console.log(`Loaded shade data: ${season} ${timeOfDay}`)
-      } catch (error) {
-        console.error('Error loading shade data:', error)
-      }
-    }
-
-    const loadGreeneryExplorerState = async () => {
-      try {
-        const greeneryState = await loadExplorerGreeneryData()
-        setGreeneryAndSkyview(greeneryState.greeneryAndSkyview)
-        setTreeCanopyData(greeneryState.treeCanopyData)
-        setParksData(greeneryState.parksData)
-        setEcologyHeatByYear(greeneryState.ecologyHeatByYear)
-        console.log('Loaded greenery layers:', {
-          greeneryData: greeneryState.greeneryAndSkyview,
-          treeCanopyData: greeneryState.treeCanopyData,
-          parksData: greeneryState.parksData,
-          ecologyYears: Object.keys(greeneryState.ecologyHeatByYear).length
-        })
-      } catch (error) {
-        console.error('Error loading greenery data:', error)
-      }
-    }
-
-    const loadAirQualityExplorerState = async () => {
-      // Throttle: only re-fetch if more than 3 minutes have passed
-      const now = Date.now()
-      if (now - envLastFetch.current < 3 * 60 * 1000 && envCurrentData) return
-      try {
-        const { currentData, historyData } = await loadExplorerAirQualityData()
-        if (currentData) setEnvCurrentData(currentData)
-        if (historyData) setEnvHistoryData(historyData)
-        envLastFetch.current = Date.now()
-        console.log('Loaded environment data from DB')
-      } catch (error) {
-        console.error('Error loading environment data:', error)
-      }
-    }
-    
-    const hasLockedEnvLayer = ['greeneryIndex', 'treeCanopy', 'parksNearby', 'airQuality', 'urbanHeatConcrete'].some(id => lockedLayers.has(id))
-    if (dashboardMode === 'environment' || hasLockedEnvLayer) {
-      loadShadeExplorerState()
-      loadGreeneryExplorerState()
-      loadAirQualityExplorerState()
-    }
-  }, [dashboardMode, season, timeOfDay, lockedLayers])
-
-  // Load traffic data
-  useEffect(() => {
-    const loadTrafficExplorerState = async () => {
-      try {
-        const data = await loadExplorerTrafficData()
-        setTrafficData(data)
-        console.log('Traffic data loaded:', data.features?.length, 'segments')
-      } catch (error) {
-        console.error('Error loading traffic data:', error)
-      }
-    }
-
-    const hasLockedTrafficLayer = lockedLayers.has('trafficFlow')
-    if (dashboardMode === 'traffic' || hasLockedTrafficLayer) {
-      loadTrafficExplorerState()
-    }
-  }, [dashboardMode, lockedLayers])
   
   // Listen for clear segment selection event
   useEffect(() => {

@@ -1,73 +1,11 @@
-import proj4 from 'proj4'
-
-proj4.defs('EPSG:3857', '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
-proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs')
+import { transformGeoJSON } from '../shared/geo'
+import { fetchJson } from '../shared/http'
 
 const SEASON_DATES = {
   summer: '2024-12-21',
   autumn: '2025-03-20',
   winter: '2025-06-21',
   spring: '2025-09-22'
-}
-
-async function fetchJson(path, errorLabel) {
-  const response = await fetch(path)
-  if (!response.ok) {
-    throw new Error(`${errorLabel}: ${response.status} ${response.statusText}`)
-  }
-  return response.json()
-}
-
-function transformGeoJSON(geojson, sourceCRS, targetCRS) {
-  if (!geojson || !geojson.features) return geojson
-
-  const transform = proj4(sourceCRS, targetCRS)
-
-  const transformCoordinates = (coords, depth) => {
-    if (depth === 0) return transform.forward(coords)
-    return coords.map((coord) => transformCoordinates(coord, depth - 1))
-  }
-
-  const features = geojson.features.map((feature) => {
-    if (!feature.geometry?.coordinates) return feature
-
-    let depth
-    switch (feature.geometry.type) {
-      case 'Point':
-        depth = 0
-        break
-      case 'LineString':
-      case 'MultiPoint':
-        depth = 1
-        break
-      case 'Polygon':
-      case 'MultiLineString':
-        depth = 2
-        break
-      case 'MultiPolygon':
-        depth = 3
-        break
-      default:
-        return feature
-    }
-
-    return {
-      ...feature,
-      geometry: {
-        ...feature.geometry,
-        coordinates: transformCoordinates(feature.geometry.coordinates, depth)
-      }
-    }
-  })
-
-  return {
-    ...geojson,
-    crs: {
-      type: 'name',
-      properties: { name: 'urn:ogc:def:crs:OGC:1.3:CRS84' }
-    },
-    features
-  }
 }
 
 function enrichTemperatureData(data) {
@@ -176,5 +114,57 @@ export async function loadExplorerAirQualityData() {
   return {
     currentData: currentResp.ok ? await currentResp.json() : null,
     historyData: historyResp.ok ? await historyResp.json() : null
+  }
+}
+
+export function buildEnvDisplayData(envHistoryData, envDate) {
+  if (!envHistoryData?.rows) return null
+
+  const dates = [...new Set(envHistoryData.rows.map((row) => row.hour_utc?.slice(0, 10)).filter(Boolean))].sort()
+  const targetDate = envDate || dates[dates.length - 1]
+  if (!targetDate) return null
+
+  const dayRows = envHistoryData.rows.filter((row) => row.hour_utc?.slice(0, 10) === targetDate)
+  if (dayRows.length === 0) return null
+
+  const byGrid = {}
+  dayRows.forEach((row) => {
+    if (!byGrid[row.grid_id]) {
+      byGrid[row.grid_id] = {
+        grid_id: row.grid_id,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        uaqi: [],
+        poll_co_value: [],
+        poll_no2_value: [],
+        poll_o3_value: [],
+        poll_pm10_value: [],
+        poll_so2_value: []
+      }
+    }
+
+    const bucket = byGrid[row.grid_id]
+    if (row.uaqi != null) bucket.uaqi.push(+row.uaqi)
+    if (row.poll_co != null) bucket.poll_co_value.push(+row.poll_co)
+    if (row.poll_no2 != null) bucket.poll_no2_value.push(+row.poll_no2)
+    if (row.poll_o3 != null) bucket.poll_o3_value.push(+row.poll_o3)
+    if (row.poll_pm10 != null) bucket.poll_pm10_value.push(+row.poll_pm10)
+    if (row.poll_so2 != null) bucket.poll_so2_value.push(+row.poll_so2)
+  })
+
+  const average = (values) => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null)
+  return {
+    rows: Object.values(byGrid).map((bucket) => ({
+      grid_id: bucket.grid_id,
+      latitude: bucket.latitude,
+      longitude: bucket.longitude,
+      uaqi: average(bucket.uaqi),
+      poll_co_value: average(bucket.poll_co_value),
+      poll_no2_value: average(bucket.poll_no2_value),
+      poll_o3_value: average(bucket.poll_o3_value),
+      poll_pm10_value: average(bucket.poll_pm10_value),
+      poll_so2_value: average(bucket.poll_so2_value)
+    })),
+    fetchedAt: targetDate
   }
 }
