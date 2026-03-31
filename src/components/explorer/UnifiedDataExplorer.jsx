@@ -20,19 +20,25 @@ import {
   Cell
 } from 'recharts'
 import * as turf from '@turf/turf'
-import proj4 from 'proj4'
-import TrafficAnalytics, { TRAFFIC_SCENARIOS } from './TrafficAnalytics'
+import TrafficAnalytics from './TrafficAnalytics'
 import EventInsightsPanel from './EventInsightsPanel'
 import {
   buildRouteHistory,
   buildStravaActivityLayers,
   filterStravaAnomaliesByMonth,
   formatStravaDaypartLabel,
-  getStravaAvailableMonths,
-  loadWalkabilityData as loadActiveMobilityData,
-  loadCCIDBoundary,
   summarizeStravaDayparts
 } from '../../utils/dataLoader'
+import { loadExplorerBusinessBoundary, loadExplorerBusinessData } from '../../features/business/data'
+import { loadExplorerWalkabilityData } from '../../features/walkability/data'
+import { loadExplorerLightingData } from '../../features/lighting/data'
+import {
+  loadExplorerAirQualityData,
+  loadExplorerGreeneryData,
+  loadExplorerShadeData,
+  loadExplorerTemperatureData
+} from '../../features/environment/data'
+import { loadExplorerTrafficData } from '../../features/traffic/data'
 import './UnifiedDataExplorer.css'
 
 const ExplorerMap = lazy(() => import('./ExplorerMap'))
@@ -45,69 +51,6 @@ const EnvironmentAnalytics = lazy(() => import('./EnvironmentAnalytics'))
 const EcologyHeatAnalytics = lazy(() => import('./EcologyHeatAnalytics'))
 const EcologyHeatDetailPanel = lazy(() => import('./EcologyHeatDetailPanel'))
 const DateAvailabilityCalendar = lazy(() => import('./DateAvailabilityCalendar'))
-
-// Define coordinate reference systems
-proj4.defs('EPSG:3857', '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs')
-proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs')
-
-// Function to transform GeoJSON coordinates between CRS
-const transformGeoJSON = (geojson, sourceCRS, targetCRS) => {
-  if (!geojson || !geojson.features) return geojson
-  
-  const transform = proj4(sourceCRS, targetCRS)
-  
-  const transformCoordinates = (coords, depth) => {
-    if (depth === 0) {
-      // [x, y] coordinate pair
-      return transform.forward(coords)
-    }
-    // Recursively transform nested coordinate arrays
-    return coords.map(c => transformCoordinates(c, depth - 1))
-  }
-  
-  const transformedFeatures = geojson.features.map(feature => {
-    if (!feature.geometry || !feature.geometry.coordinates) {
-      return feature
-    }
-    
-    let depth
-    switch (feature.geometry.type) {
-      case 'Point':
-        depth = 0
-        break
-      case 'LineString':
-      case 'MultiPoint':
-        depth = 1
-        break
-      case 'Polygon':
-      case 'MultiLineString':
-        depth = 2
-        break
-      case 'MultiPolygon':
-        depth = 3
-        break
-      default:
-        return feature
-    }
-    
-    return {
-      ...feature,
-      geometry: {
-        ...feature.geometry,
-        coordinates: transformCoordinates(feature.geometry.coordinates, depth)
-      }
-    }
-  })
-  
-  return {
-    ...geojson,
-    crs: {
-      type: 'name',
-      properties: { name: 'urn:ogc:def:crs:OGC:1.3:CRS84' }
-    },
-    features: transformedFeatures
-  }
-}
 
 const toEcologyFeatureKey = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -546,90 +489,30 @@ const UnifiedDataExplorer = () => {
   
   // Load business data
   useEffect(() => {
-    loadCCIDBoundary()
+    loadExplorerBusinessBoundary()
       .then(setCcidBoundary)
       .catch((error) => console.error('Error loading CCID boundary:', error))
   }, [])
 
   useEffect(() => {
-    const loadBusinessData = async () => {
+    const loadBusinessExplorerState = async () => {
       try {
-        const [businesses, stalls, properties, survey, liveEventsPayload] = await Promise.all([
-          fetch('/data/business/POI_enriched_20260120_185944.geojson').then(r => r.json()),
-          fetch('/data/business/streetStalls.geojson').then(r => r.json()),
-          fetch('/data/business/properties_consolidated.geojson').then(r => r.json()),
-          fetch('/data/business/survey_data.geojson').then(r => r.json()),
-          fetch('/api/planning/events')
-            .then(async (r) => {
-              if (!r.ok) throw new Error(`Events API failed: ${r.status} ${r.statusText}`)
-              return r.json()
-            })
-            .catch(async () => {
-              const fallback = await fetch('/data/business/events.geojson')
-                .then(r => r.json())
-                .catch(() => ({ type: 'FeatureCollection', features: [] }))
-              return {
-                ...fallback,
-                metadata: {
-                  totalRows: fallback.features?.length || 0,
-                  totalFeatures: fallback.features?.length || 0,
-                  venueCount: new Set((fallback.features || []).map(f => f.properties?.venue).filter(Boolean)).size,
-                  fetchedAt: new Date().toISOString(),
-                  source: 'static fallback /data/business/events.geojson',
-                  fallback: true
-                }
-              }
-            })
-        ])
-        
-        // Process properties data to calculate transfer_count and total_value
-        const processedProperties = {
-          ...properties,
-          features: properties.features.map(feature => {
-            const transactions = feature.properties.properties || []
-            
-            // Count transactions with valid sale prices
-            const transfer_count = transactions.filter(t => {
-              const price = t.sale_price
-              return price && price !== 'DONATION' && price !== 'CRST' && price.startsWith('R')
-            }).length
-            
-            // Calculate total value by parsing sale_price strings like "R 1 000 000"
-            const total_value = transactions.reduce((sum, t) => {
-              const price = t.sale_price
-              if (price && price !== 'DONATION' && price !== 'CRST' && price.startsWith('R')) {
-                // Remove "R " and all spaces, then parse to number
-                const numericValue = parseFloat(price.replace('R ', '').replace(/\s/g, ''))
-                return sum + (isNaN(numericValue) ? 0 : numericValue)
-              }
-              return sum
-            }, 0)
-            
-            return {
-              ...feature,
-              properties: {
-                ...feature.properties,
-                transfer_count,
-                total_value
-              }
-            }
-          })
-        }
-        
+        const { businesses, streetStalls, properties, survey, eventsData } = await loadExplorerBusinessData()
+
         console.log('Business data loaded:', {
           businesses: businesses.features?.length,
-          stalls: stalls.features?.length,
+          stalls: streetStalls.features?.length,
           properties: properties.features?.length,
           survey: survey.features?.length
         })
-        
-        console.log('Sample processed property:', processedProperties.features[0]?.properties)
-        
+
+        console.log('Sample processed property:', properties.features?.[0]?.properties)
+
         setBusinessesData(businesses)
-        setStreetStallsData(stalls)
-        setPropertiesData(processedProperties)
+        setStreetStallsData(streetStalls)
+        setPropertiesData(properties)
         setSurveyData(survey)
-        setEventsData(liveEventsPayload)
+        setEventsData(eventsData)
       } catch (error) {
         console.error('Error loading business data:', error)
       }
@@ -638,79 +521,27 @@ const UnifiedDataExplorer = () => {
     // Load business data when dashboard is business OR when any business layer is locked
     const hasLockedBusinessLayer = ['businessLiveliness', 'vendorOpinions', 'businessRatings', 'amenities', 'businessCategories', 'propertySales', 'cityEvents'].some(id => lockedLayers.has(id))
     if (dashboardMode === 'business' || hasLockedBusinessLayer) {
-      loadBusinessData()
+      loadBusinessExplorerState()
     }
   }, [dashboardMode, lockedLayers])
   
   // Load walkability data
   useEffect(() => {
-    const loadWalkability = async () => {
+    const loadWalkabilityExplorerState = async () => {
       try {
         console.log('Loading active mobility files...')
 
-        const [walkability, anomalies, transit, busStops, trainStation] = await Promise.all([
-          loadActiveMobilityData(),
-          fetch('/data/walkabilty/strava_metro_anomalies.geojson').then(async r => {
-            if (!r.ok) throw new Error(`Anomalies file failed: ${r.status} ${r.statusText}`)
-            return r.json()
-          }),
-          fetch('/data/walkabilty/roads_with_walking_times.geojson').then(async r => {
-            if (!r.ok) throw new Error(`Transit walking times file failed: ${r.status} ${r.statusText}`)
-            return r.json()
-          }),
-          fetch('/data/walkabilty/bus stops.geojson').then(async r => {
-            if (!r.ok) throw new Error(`Bus stops file failed: ${r.status} ${r.statusText}`)
-            return r.json()
-          }),
-          fetch('/data/walkabilty/trainStation.geojson').then(async r => {
-            if (!r.ok) throw new Error(`Train station file failed: ${r.status} ${r.statusText}`)
-            return r.json()
-          })
-        ])
-        const { network, pedestrian, cycling, stravaAggregated: rawStrava } = walkability
-        const availableMonths = getStravaAvailableMonths(rawStrava)
-
-        // Calculate percentiles for pedestrian data
-        if (pedestrian.features) {
-          const tripCounts = pedestrian.features.map(f => f.properties.total_trip_count || 0)
-          const sortedCounts = [...tripCounts].sort((a, b) => a - b)
-          const minCount = sortedCounts[0]
-          const maxCount = sortedCounts[sortedCounts.length - 1]
-
-          pedestrian.features = pedestrian.features.map(feature => {
-            const percentile = (maxCount === minCount)
-              ? 50
-              : ((feature.properties.total_trip_count - minCount) / (maxCount - minCount)) * 100
-            return {
-              ...feature,
-              properties: {
-                ...feature.properties,
-                trip_percentile: percentile
-              }
-            }
-          })
-        }
-
-        // Calculate percentiles for cycling data
-        if (cycling.features) {
-          const tripCounts = cycling.features.map(f => f.properties.total_trip_count || 0)
-          const sortedCounts = [...tripCounts].sort((a, b) => a - b)
-          const minCount = sortedCounts[0]
-          const maxCount = sortedCounts[sortedCounts.length - 1]
-
-          cycling.features = cycling.features.map(feature => {
-            const percentile = (maxCount === minCount)
-              ? 50
-              : ((feature.properties.total_trip_count - minCount) / (maxCount - minCount)) * 100
-            return {
-              ...feature,
-              properties: {
-                ...feature.properties,
-                trip_percentile: percentile
-              }
-            }
-          })
-        }
+        const {
+          network,
+          pedestrian,
+          cycling,
+          stravaAggregated: rawStrava,
+          availableMonths,
+          anomalies,
+          transit,
+          busStops,
+          trainStation
+        } = await loadExplorerWalkabilityData()
 
         console.log('Active mobility data loaded:', {
           network: network.features?.length,
@@ -721,13 +552,9 @@ const UnifiedDataExplorer = () => {
           trainStation: trainStation.features?.length
         })
 
-        // Transform ONLY network data from EPSG:3857 to EPSG:4326
-        // Pedestrian, cycling, and transit data are already in EPSG:4326
-        const transformedNetwork = transformGeoJSON(network, 'EPSG:3857', 'EPSG:4326')
+        console.log('Transformed network data sample coordinate:', network.features?.[0]?.geometry?.coordinates?.[0]?.[0])
 
-        console.log('Transformed network data sample coordinate:', transformedNetwork.features?.[0]?.geometry?.coordinates?.[0]?.[0])
-
-        setNetworkData(transformedNetwork)
+        setNetworkData(network)
         setPedestrianData(pedestrian)
         setCyclingData(cycling)
         setStravaAggregated(rawStrava)
@@ -745,7 +572,7 @@ const UnifiedDataExplorer = () => {
     // Load walkability data when dashboard is walkability OR when any walkability layer is locked
     const hasLockedWalkabilityLayer = ['activeMobility', 'mobilityAnomalies', 'networkAnalysis', 'transitAccessibility'].some(id => lockedLayers.has(id))
     if (dashboardMode === 'walkability' || hasLockedWalkabilityLayer) {
-      loadWalkability()
+      loadWalkabilityExplorerState()
     }
   }, [dashboardMode, lockedLayers])
 
@@ -779,34 +606,16 @@ const UnifiedDataExplorer = () => {
   
   // Load lighting data
   useEffect(() => {
-    const loadLightingData = async () => {
+    const loadLightingExplorerState = async () => {
       try {
-        const [segments, projects, streetLights] = await Promise.all([
-          fetch('/data/lighting/new_Lights/road_segments_lighting_kpis_all.geojson').then(r => r.json()),
-          fetch('/data/lighting/streetLighting.json').then(r => r.json()),
-          fetch('/data/lighting/new_Lights/Street_lights.geojson').then(r => r.json())
-        ])
-        
-        // Calculate percentile thresholds for map styling
-        if (segments?.features) {
-          const validSegments = segments.features.filter(f => 
-            f.properties.mean_lux !== null && 
-            f.properties.mean_lux !== undefined &&
-            f.properties.mean_lux > 0
-          )
-          
-          if (validSegments.length > 0) {
-            const luxValues = validSegments.map(f => f.properties.mean_lux).sort((a, b) => a - b)
-            const percentile20Index = Math.floor(luxValues.length * 0.20)
-            const percentile80Index = Math.floor(luxValues.length * 0.80)
-            
-            setLightingThresholds({
-              bottom20: luxValues[percentile20Index],
-              top20: luxValues[percentile80Index]
-            })
-          }
-        }
-        
+        const {
+          lightingSegments: segments,
+          missionInterventions: projects,
+          streetLights,
+          lightingThresholds: thresholds
+        } = await loadExplorerLightingData()
+
+        setLightingThresholds(thresholds)
         setLightingSegments(segments)
         setMissionInterventions(projects)
         setStreetLights(streetLights)
@@ -824,72 +633,15 @@ const UnifiedDataExplorer = () => {
     // Load lighting data when dashboard is lighting OR when any lighting layer is locked
     const hasLockedLightingLayer = ['streetLighting', 'municipalLights', 'missionInterventions'].some(id => lockedLayers.has(id))
     if (dashboardMode === 'lighting' || hasLockedLightingLayer) {
-      loadLightingData()
+      loadLightingExplorerState()
     }
   }, [dashboardMode, lockedLayers])
   
   // Load temperature data
   useEffect(() => {
-    const loadTemperatureData = async () => {
+    const loadTemperatureExplorerState = async () => {
       try {
-        const response = await fetch('/data/surfaceTemp/annual_surface_temperature_timeseries_20260211_1332.geojson')
-        const data = await response.json()
-        
-        // Pre-process data to calculate overall max temperature for relative heat analysis
-        if (data.features) {
-          const allMaxTemps = []
-          
-          // First pass: calculate overall_max_temp for each segment
-          data.features = data.features.map(feature => {
-            const props = feature.properties
-            const processedProps = { ...props }
-            
-            // Collect ALL temperature readings from ALL seasons
-            const seasons = ['summer', 'autumn', 'winter', 'spring']
-            const allReadings = []
-            
-            seasons.forEach(season => {
-              const seasonData = props[`${season}_temperatures`]
-              if (seasonData && Array.isArray(seasonData)) {
-                seasonData.forEach(reading => {
-                  if (reading && reading.temperature_mean !== null) {
-                    allReadings.push(reading.temperature_mean)
-                  }
-                })
-              }
-            })
-            
-            // Calculate overall max temperature across all seasons
-            if (allReadings.length > 0) {
-              processedProps.overall_max_temp = Math.max(...allReadings)
-              processedProps.overall_min_temp = Math.min(...allReadings)
-              processedProps.overall_avg_temp = allReadings.reduce((sum, t) => sum + t, 0) / allReadings.length
-              allMaxTemps.push(processedProps.overall_max_temp)
-            }
-            
-            return {
-              ...feature,
-              properties: processedProps
-            }
-          })
-          
-          // Second pass: calculate percentile/quintile for each segment
-          if (allMaxTemps.length > 0) {
-            const sortedTemps = [...allMaxTemps].sort((a, b) => a - b)
-            const minTemp = sortedTemps[0]
-            const maxTemp = sortedTemps[sortedTemps.length - 1]
-            
-            data.features = data.features.map(feature => {
-              if (feature.properties.overall_max_temp !== undefined) {
-                // Calculate percentile (0-100)
-                const percentile = ((feature.properties.overall_max_temp - minTemp) / (maxTemp - minTemp)) * 100
-                feature.properties.temp_percentile = percentile
-              }
-              return feature
-            })
-          }
-        }
-        
+        const data = await loadExplorerTemperatureData()
         setTemperatureData(data)
         console.log('Loaded temperature timeseries data:', data.features?.length, 'segments')
       } catch (error) {
@@ -900,86 +652,48 @@ const UnifiedDataExplorer = () => {
     // Load temperature data when dashboard is temperature OR when the temperature layer is locked
     const hasLockedTempLayer = lockedLayers.has('surfaceTemperature')
     if (dashboardMode === 'temperature' || hasLockedTempLayer) {
-      loadTemperatureData()
+      loadTemperatureExplorerState()
     }
   }, [dashboardMode, lockedLayers])
   
   // Load shade/greenery/environment data
   useEffect(() => {
-    const loadShadeData = async () => {
+    const loadShadeExplorerState = async () => {
       try {
-        const seasonDates = {
-          summer: '2024-12-21',
-          autumn: '2025-03-20',
-          winter: '2025-06-21',
-          spring: '2025-09-22'
-        }
-        const date = seasonDates[season] || '2024-12-21'
-        const response = await fetch(`/data/processed/shade/${season}/${date}_${timeOfDay}.geojson`)
-        const data = await response.json()
+        const data = await loadExplorerShadeData(season, timeOfDay)
         setShadeData(data)
-        console.log(`Loaded shade data: ${season} ${date} ${timeOfDay}`)
+        console.log(`Loaded shade data: ${season} ${timeOfDay}`)
       } catch (error) {
         console.error('Error loading shade data:', error)
       }
     }
-    
-    const loadGreeneryData = async () => {
+
+    const loadGreeneryExplorerState = async () => {
       try {
-        const [greeneryResp, treeCanopyResp, parksResp, ...ecologyResponses] = await Promise.all([
-          fetch('/data/greenery/greenryandSkyview.geojson'),
-          fetch('/data/greenery/tree_canopy.geojson'),
-          fetch('/data/greenery/parks_nearby.geojson'),
-          fetch('/data/greenery/ecology_analysis/cpt_cbd_ecology_2020.geojson'),
-          fetch('/data/greenery/ecology_analysis/cpt_cbd_ecology_2021.geojson'),
-          fetch('/data/greenery/ecology_analysis/cpt_cbd_ecology_2022.geojson'),
-          fetch('/data/greenery/ecology_analysis/cpt_cbd_ecology_2023.geojson'),
-          fetch('/data/greenery/ecology_analysis/cpt_cbd_ecology_2024.geojson'),
-          fetch('/data/greenery/ecology_analysis/cpt_cbd_ecology_2025.geojson'),
-          fetch('/data/greenery/ecology_analysis/cpt_cbd_ecology_2026.geojson')
-        ])
-        const [greeneryData, treeCanopyData, parksData, ...ecologyData] = await Promise.all([
-          greeneryResp.json(),
-          treeCanopyResp.json(),
-          parksResp.json(),
-          ...ecologyResponses.map(response => response.json())
-        ])
-        const transformedTreeCanopy = transformGeoJSON(treeCanopyData, 'EPSG:3857', 'EPSG:4326')
-        setGreeneryAndSkyview(greeneryData)
-        setTreeCanopyData(transformedTreeCanopy)
-        setParksData(parksData)
-        setEcologyHeatByYear({
-          2020: ecologyData[0],
-          2021: ecologyData[1],
-          2022: ecologyData[2],
-          2023: ecologyData[3],
-          2024: ecologyData[4],
-          2025: ecologyData[5],
-          2026: ecologyData[6]
+        const greeneryState = await loadExplorerGreeneryData()
+        setGreeneryAndSkyview(greeneryState.greeneryAndSkyview)
+        setTreeCanopyData(greeneryState.treeCanopyData)
+        setParksData(greeneryState.parksData)
+        setEcologyHeatByYear(greeneryState.ecologyHeatByYear)
+        console.log('Loaded greenery layers:', {
+          greeneryData: greeneryState.greeneryAndSkyview,
+          treeCanopyData: greeneryState.treeCanopyData,
+          parksData: greeneryState.parksData,
+          ecologyYears: Object.keys(greeneryState.ecologyHeatByYear).length
         })
-        console.log('Loaded greenery layers:', { greeneryData, treeCanopyData: transformedTreeCanopy, parksData, ecologyYears: ecologyData.length })
       } catch (error) {
         console.error('Error loading greenery data:', error)
       }
     }
 
-    const loadEnvData = async () => {
+    const loadAirQualityExplorerState = async () => {
       // Throttle: only re-fetch if more than 3 minutes have passed
       const now = Date.now()
       if (now - envLastFetch.current < 3 * 60 * 1000 && envCurrentData) return
       try {
-        const [currentResp, historyResp] = await Promise.all([
-          fetch('/api/environment/current'),
-          fetch('/api/environment/history')
-        ])
-        if (currentResp.ok) {
-          const data = await currentResp.json()
-          setEnvCurrentData(data)
-        }
-        if (historyResp.ok) {
-          const data = await historyResp.json()
-          setEnvHistoryData(data)
-        }
+        const { currentData, historyData } = await loadExplorerAirQualityData()
+        if (currentData) setEnvCurrentData(currentData)
+        if (historyData) setEnvHistoryData(historyData)
         envLastFetch.current = Date.now()
         console.log('Loaded environment data from DB')
       } catch (error) {
@@ -989,18 +703,17 @@ const UnifiedDataExplorer = () => {
     
     const hasLockedEnvLayer = ['greeneryIndex', 'treeCanopy', 'parksNearby', 'airQuality', 'urbanHeatConcrete'].some(id => lockedLayers.has(id))
     if (dashboardMode === 'environment' || hasLockedEnvLayer) {
-      loadShadeData()
-      loadGreeneryData()
-      loadEnvData()
+      loadShadeExplorerState()
+      loadGreeneryExplorerState()
+      loadAirQualityExplorerState()
     }
   }, [dashboardMode, season, timeOfDay, lockedLayers])
 
   // Load traffic data
   useEffect(() => {
-    const loadTrafficData = async () => {
+    const loadTrafficExplorerState = async () => {
       try {
-        const response = await fetch('/data/Traffic/traffic_analysis.geojson')
-        const data = await response.json()
+        const data = await loadExplorerTrafficData()
         setTrafficData(data)
         console.log('Traffic data loaded:', data.features?.length, 'segments')
       } catch (error) {
@@ -1010,7 +723,7 @@ const UnifiedDataExplorer = () => {
 
     const hasLockedTrafficLayer = lockedLayers.has('trafficFlow')
     if (dashboardMode === 'traffic' || hasLockedTrafficLayer) {
-      loadTrafficData()
+      loadTrafficExplorerState()
     }
   }, [dashboardMode, lockedLayers])
   
