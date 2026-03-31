@@ -3,7 +3,7 @@ import './DataExplorer.css'
 
 const UnifiedDataExplorer = lazy(() => import('./explorer/UnifiedDataExplorer'))
 
-const DataExplorer = ({ filters, onFiltersChange, activeLayers, onLayersChange }) => {
+const DataExplorer = () => {
   return (
     <div className="data-explorer">
       <Suspense fallback={<div className="app-loading-screen">Loading explorer analytics...</div>}>

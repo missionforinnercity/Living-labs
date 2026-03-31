@@ -110,20 +110,22 @@ const LAYER_CATEGORIES = [
   { id: 'trafficFlow', label: 'Traffic Flow', dashboard: 'traffic', dataKey: 'trafficSegments' }
 ]
 
-const getStoredExplorerState = () => {
+const getExplorerUrlState = () => {
   if (typeof window === 'undefined') return {}
-  try {
-    const dashboardMode = window.localStorage.getItem('explorer:dashboardMode') || null
-    const activeCategory = window.localStorage.getItem('explorer:activeCategory') || null
-    return { dashboardMode, activeCategory }
-  } catch {
-    return {}
+
+  const params = new URLSearchParams(window.location.search)
+  const dashboardMode = params.get('explorerMode')
+  const activeCategory = params.get('explorerCategory')
+
+  return {
+    dashboardMode: DASHBOARD_MODES.some((mode) => mode.id === dashboardMode) ? dashboardMode : null,
+    activeCategory: LAYER_CATEGORIES.some((category) => category.id === activeCategory) ? activeCategory : null
   }
 }
 
 const UnifiedDataExplorer = () => {
-  const storedExplorerState = getStoredExplorerState()
-  const [dashboardMode, setDashboardMode] = useState(storedExplorerState.dashboardMode || 'business')
+  const initialExplorerState = getExplorerUrlState()
+  const [dashboardMode, setDashboardMode] = useState(initialExplorerState.dashboardMode || 'business')
   const [map, setMap] = useState(null)
   
   // Business dashboard state
@@ -223,7 +225,7 @@ const UnifiedDataExplorer = () => {
   const [lockedLayers, setLockedLayers] = useState(new Set())
   
   // Currently selected category (for highlighting in sidebar)
-  const [activeCategory, setActiveCategory] = useState(storedExplorerState.activeCategory || null)
+  const [activeCategory, setActiveCategory] = useState(initialExplorerState.activeCategory || null)
 
   const {
     businessesData,
@@ -451,17 +453,33 @@ const UnifiedDataExplorer = () => {
   const [drawBboxMode, setDrawBboxMode] = useState(false)
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem('explorer:dashboardMode', dashboardMode)
-      if (activeCategory) {
-        window.localStorage.setItem('explorer:activeCategory', activeCategory)
-      } else {
-        window.localStorage.removeItem('explorer:activeCategory')
-      }
-    } catch {
-      // Ignore storage issues and continue with in-memory state.
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    params.set('explorerMode', dashboardMode)
+    if (activeCategory) {
+      params.set('explorerCategory', activeCategory)
+    } else {
+      params.delete('explorerCategory')
     }
+
+    const nextSearch = params.toString()
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`
+    window.history.replaceState(null, '', nextUrl)
   }, [dashboardMode, activeCategory])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const syncFromUrl = () => {
+      const nextState = getExplorerUrlState()
+      if (nextState.dashboardMode) setDashboardMode(nextState.dashboardMode)
+      setActiveCategory(nextState.activeCategory || null)
+    }
+
+    window.addEventListener('popstate', syncFromUrl)
+    return () => window.removeEventListener('popstate', syncFromUrl)
+  }, [])
 
   useEffect(() => {
     if (dashboardMode !== 'environment' || activeCategory === 'urbanHeatConcrete') return

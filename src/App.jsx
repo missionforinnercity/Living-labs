@@ -1,4 +1,4 @@
-import React, { useState, useCallback, lazy, Suspense } from 'react'
+import React, { useState, useCallback, lazy, Suspense, useEffect } from 'react'
 import ModeToggle from './components/ModeToggle'
 import './App.css'
 
@@ -11,11 +11,33 @@ const StreetCompare = lazy(() => import('./components/StreetCompare'))
 const DataExplorer = lazy(() => import('./components/DataExplorer'))
 const WardExplorer = lazy(() => import('./components/WardExplorer'))
 
+function getAppUrlState() {
+  if (typeof window === 'undefined') {
+    return {
+      showLanding: true,
+      mode: 'narrative',
+      narrativeTab: 'districts'
+    }
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const view = params.get('view')
+  const mode = params.get('mode') === 'explorer' ? 'explorer' : 'narrative'
+  const narrativeTab = params.get('tab') === 'walkability' ? 'walkability' : 'districts'
+
+  return {
+    showLanding: view !== 'dashboard',
+    mode,
+    narrativeTab
+  }
+}
+
 function App() {
-  const [showLanding, setShowLanding] = useState(true)
+  const initialUrlState = getAppUrlState()
+  const [showLanding, setShowLanding] = useState(initialUrlState.showLanding)
   const [landingSession, setLandingSession] = useState(0)
-  const [mode, setMode] = useState('narrative') // 'narrative' | 'explorer'
-  const [narrativeTab, setNarrativeTab] = useState('districts') // 'districts' | 'walkability'
+  const [mode, setMode] = useState(initialUrlState.mode) // 'narrative' | 'explorer'
+  const [narrativeTab, setNarrativeTab] = useState(initialUrlState.narrativeTab) // 'districts' | 'walkability'
   const [activeLayers, setActiveLayers] = useState({
     shade: false,
     lighting: false,
@@ -43,6 +65,43 @@ function App() {
 
   // District comparison state
   const [compareDistricts, setCompareDistricts] = useState([])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const syncFromUrl = () => {
+      const nextState = getAppUrlState()
+      setShowLanding(nextState.showLanding)
+      setMode(nextState.mode)
+      setNarrativeTab(nextState.narrativeTab)
+    }
+
+    window.addEventListener('popstate', syncFromUrl)
+    return () => window.removeEventListener('popstate', syncFromUrl)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    if (showLanding) {
+      params.delete('view')
+      params.delete('mode')
+      params.delete('tab')
+    } else {
+      params.set('view', 'dashboard')
+      params.set('mode', mode)
+      if (mode === 'narrative') {
+        params.set('tab', narrativeTab)
+      } else {
+        params.delete('tab')
+      }
+    }
+
+    const nextSearch = params.toString()
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`
+    window.history.replaceState(null, '', nextUrl)
+  }, [mode, narrativeTab, showLanding])
 
   const handleDistrictSelect = useCallback((districtId, feature, bounds, fc) => {
     setSelectedDistrictId(districtId)
@@ -91,14 +150,8 @@ function App() {
   }, [])
 
   const handleReturnToLanding = useCallback(() => {
-    if (mode === 'explorer') {
-      window.localStorage.removeItem('explorer:activeCategory')
-      window.location.assign(`${window.location.pathname}${window.location.search}`)
-      return
-    }
-
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     setMode('narrative')
+    setNarrativeTab('districts')
     setLandingSession(prev => prev + 1)
     setShowLanding(true)
   }, [mode])
@@ -219,12 +272,7 @@ function App() {
           </>
         ) : (
           <Suspense fallback={<div className="app-loading-screen">Loading data explorer...</div>}>
-            <DataExplorer
-              filters={explorerFilters}
-              onFiltersChange={setExplorerFilters}
-              activeLayers={activeLayers}
-              onLayersChange={setActiveLayers}
-            />
+            <DataExplorer />
           </Suspense>
         )}
       </div>

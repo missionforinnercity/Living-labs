@@ -19,10 +19,19 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes('/src/utils/reportGenerator.js')) return 'report-generator'
+          if (id.includes('/src/utils/districtEngine.js')) return 'district-engine'
+
           if (id.includes('node_modules')) {
-            if (id.includes('mapbox-gl') || id.includes('react-map-gl')) return 'maps'
+            if (id.includes('mapbox-gl') || id.includes('/@mapbox/')) return 'mapbox-core'
+            if (id.includes('react-map-gl')) return 'react-map'
+            if (id.includes('@turf/turf') || id.includes('/@turf/')) return 'spatial'
+            if (id.includes('proj4')) return 'projection'
+            if (id.includes('h3-js')) return 'hex'
+            if (id.includes('supercluster')) return 'map-clustering'
             if (id.includes('recharts')) return 'charts'
-            if (id.includes('jspdf') || id.includes('html2canvas')) return 'reporting'
+            if (id.includes('jspdf')) return 'pdf'
+            if (id.includes('html2canvas')) return 'canvas-capture'
             if (id.includes('react') || id.includes('react-dom')) return 'react-vendor'
           }
         }
