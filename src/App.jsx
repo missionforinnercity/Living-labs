@@ -35,7 +35,7 @@ function getAppUrlState() {
 function App() {
   const initialUrlState = getAppUrlState()
   const [showLanding, setShowLanding] = useState(initialUrlState.showLanding)
-  const [landingSession, setLandingSession] = useState(0)
+  const [hasMountedLanding, setHasMountedLanding] = useState(initialUrlState.showLanding)
   const [mode, setMode] = useState(initialUrlState.mode) // 'narrative' | 'explorer'
   const [narrativeTab, setNarrativeTab] = useState(initialUrlState.narrativeTab) // 'districts' | 'walkability'
   const [activeLayers, setActiveLayers] = useState({
@@ -103,8 +103,14 @@ function App() {
     window.history.replaceState(null, '', nextUrl)
   }, [mode, narrativeTab, showLanding])
 
+  useEffect(() => {
+    if (showLanding) {
+      setHasMountedLanding(true)
+    }
+  }, [showLanding])
+
   const handleDistrictSelect = useCallback((districtId, feature, bounds, fc) => {
-    setSelectedDistrictId(districtId)
+    setSelectedDistrictId(feature?.properties?.clusterId || districtId)
     setSelectedDistrictFeature(feature)
     setDistrictBounds(bounds)
     if (fc) setDistrictGeoJSON(fc)
@@ -112,7 +118,7 @@ function App() {
 
   const handleDistrictClick = useCallback((feat) => {
     setSelectedDistrictFeature(feat)
-    setSelectedDistrictId(feat.properties.districtId)
+    setSelectedDistrictId(feat.properties.clusterId || feat.properties.districtId)
     setCompareDistricts(prev => {
       const key = f => f.properties.clusterId
       const exists = prev.findIndex(d => key(d) === key(feat))
@@ -150,133 +156,148 @@ function App() {
   }, [])
 
   const handleReturnToLanding = useCallback(() => {
+    if (mode === 'explorer') {
+      const nextUrl = `${window.location.pathname}${window.location.hash}`
+      window.location.assign(nextUrl)
+      return
+    }
+
     setMode('narrative')
     setNarrativeTab('districts')
-    setLandingSession(prev => prev + 1)
     setShowLanding(true)
   }, [mode])
 
-  if (showLanding) {
-    return (
-      <Suspense fallback={<div className="app-loading-screen">Loading neighbourhood view...</div>}>
-        <WardExplorer
-          key={landingSession}
-          onEnterDashboard={() => setShowLanding(false)}
-        />
-      </Suspense>
-    )
-  }
-
   return (
-    <div className="app">
-      <header className="app-header">
-        <div className="app-brand">
-          <div className="app-brand-mark" />
-          <div>
-            <h1 className="app-brand-title">Mission Urban Lab</h1>
-            <p className="app-brand-sub">District intelligence · Cape Town Metro</p>
+    <>
+      {hasMountedLanding && (showLanding || mode !== 'explorer') ? (
+        <div
+          style={{
+            opacity: showLanding ? 1 : 0,
+            visibility: showLanding ? 'visible' : 'hidden',
+            pointerEvents: showLanding ? 'auto' : 'none'
+          }}
+        >
+          <Suspense fallback={<div className="app-loading-screen">Loading neighbourhood view...</div>}>
+            <WardExplorer
+              onEnterDashboard={() => setShowLanding(false)}
+              isVisible={showLanding}
+            />
+          </Suspense>
+        </div>
+      ) : null}
+
+      {!showLanding ? (
+        <div className="app">
+          <header className="app-header">
+            <div className="app-brand">
+              <div className="app-brand-mark" />
+              <div>
+                <h1 className="app-brand-title">Mission Urban Lab</h1>
+                <p className="app-brand-sub">District intelligence · Cape Town Metro</p>
+              </div>
+            </div>
+            <ModeToggle mode={mode} onModeChange={setMode} />
+            <div className="app-header-actions">
+              <button
+                className="app-back-btn"
+                onClick={handleReturnToLanding}
+              >
+                ← Neighbourhood View
+              </button>
+            </div>
+          </header>
+
+          <div className="app-content">
+            {mode === 'narrative' ? (
+              <>
+                <aside className="sidebar sidebar--dark">
+
+                  {/* Narrative sub-tab switcher */}
+                  <div className="narrative-tabs">
+                    <button
+                      className={`narrative-tab ${narrativeTab === 'districts' ? 'narrative-tab--active' : ''}`}
+                      onClick={() => handleNarrativeTab('districts')}
+                    >
+                      District Explorer
+                    </button>
+                    <button
+                      className={`narrative-tab ${narrativeTab === 'walkability' ? 'narrative-tab--active' : ''}`}
+                      onClick={() => handleNarrativeTab('walkability')}
+                    >
+                      Walkability
+                    </button>
+                  </div>
+
+                  {narrativeTab === 'districts' ? (
+                    <Suspense fallback={<div className="app-panel-loading">Loading district explorer...</div>}>
+                      <NarrativeDistricts
+                        selectedDistrictId={selectedDistrictId}
+                        onDistrictSelect={handleDistrictSelect}
+                        onLayersChange={setActiveLayers}
+                      />
+                    </Suspense>
+                  ) : (
+                    <Suspense fallback={<div className="app-panel-loading">Loading walkability tools...</div>}>
+                      <WalkabilityPanel
+                        onWalkabilityChange={setWalkabilityData}
+                        compareCount={compareSegments.length}
+                        onSegmentClick={handleSegmentClick}
+                      />
+                    </Suspense>
+                  )}
+                </aside>
+
+                <main className="map-container">
+                  <Suspense fallback={<div className="app-map-loading">Loading map...</div>}>
+                    <Map
+                      mode={mode}
+                      activeLayers={activeLayers}
+                      temporalState={{ season: 'summer', timeOfDay: '1400', hour: 14 }}
+                      explorerFilters={explorerFilters}
+                      selectedTour={null}
+                      districtGeoJSON={districtGeoJSON}
+                      selectedDistrictId={selectedDistrictId}
+                      districtBounds={districtBounds}
+                      onDistrictClick={handleDistrictClick}
+                      compareDistricts={compareDistricts}
+                      showDistricts={narrativeTab === 'districts'}
+                      walkabilityData={walkabilityData}
+                      onSegmentClick={handleSegmentClick}
+                      compareSegments={compareSegments}
+                      focusedSegment={focusedSegment}
+                    />
+                    {narrativeTab === 'districts' && (
+                      <DistrictStatsPanel
+                        feature={selectedDistrictFeature}
+                        onClose={() => setSelectedDistrictFeature(null)}
+                      />
+                    )}
+                    {narrativeTab === 'districts' && compareDistricts.length > 0 && (
+                      <DistrictCompare
+                        districts={compareDistricts}
+                        onClose={() => setCompareDistricts([])}
+                        onClear={() => setCompareDistricts([])}
+                      />
+                    )}
+                    {narrativeTab === 'walkability' && compareSegments.length > 0 && (
+                      <StreetCompare
+                        segments={compareSegments}
+                        onClose={() => setCompareSegments([])}
+                        onClear={() => setCompareSegments([])}
+                      />
+                    )}
+                  </Suspense>
+                </main>
+              </>
+            ) : (
+              <Suspense fallback={<div className="app-loading-screen">Loading data explorer...</div>}>
+                <DataExplorer />
+              </Suspense>
+            )}
           </div>
         </div>
-        <ModeToggle mode={mode} onModeChange={setMode} />
-        <div className="app-header-actions">
-          <button
-            className="app-back-btn"
-            onClick={handleReturnToLanding}
-          >
-            ← Neighbourhood View
-          </button>
-        </div>
-      </header>
-
-      <div className="app-content">
-        {mode === 'narrative' ? (
-          <>
-            <aside className="sidebar sidebar--dark">
-
-              {/* Narrative sub-tab switcher */}
-              <div className="narrative-tabs">
-                <button
-                  className={`narrative-tab ${narrativeTab === 'districts' ? 'narrative-tab--active' : ''}`}
-                  onClick={() => handleNarrativeTab('districts')}
-                >
-                  District Explorer
-                </button>
-                <button
-                  className={`narrative-tab ${narrativeTab === 'walkability' ? 'narrative-tab--active' : ''}`}
-                  onClick={() => handleNarrativeTab('walkability')}
-                >
-                  Walkability
-                </button>
-              </div>
-
-              {narrativeTab === 'districts' ? (
-                <Suspense fallback={<div className="app-panel-loading">Loading district explorer...</div>}>
-                  <NarrativeDistricts
-                    selectedDistrictId={selectedDistrictId}
-                    onDistrictSelect={handleDistrictSelect}
-                    onLayersChange={setActiveLayers}
-                  />
-                </Suspense>
-              ) : (
-                <Suspense fallback={<div className="app-panel-loading">Loading walkability tools...</div>}>
-                  <WalkabilityPanel
-                    onWalkabilityChange={setWalkabilityData}
-                    compareCount={compareSegments.length}
-                    onSegmentClick={handleSegmentClick}
-                  />
-                </Suspense>
-              )}
-            </aside>
-
-            <main className="map-container">
-              <Suspense fallback={<div className="app-map-loading">Loading map...</div>}>
-                <Map
-                  mode={mode}
-                  activeLayers={activeLayers}
-                  temporalState={{ season: 'summer', timeOfDay: '1400', hour: 14 }}
-                  explorerFilters={explorerFilters}
-                  selectedTour={null}
-                  districtGeoJSON={districtGeoJSON}
-                  selectedDistrictId={selectedDistrictId}
-                  districtBounds={districtBounds}
-                  onDistrictClick={handleDistrictClick}
-                  compareDistricts={compareDistricts}
-                  showDistricts={narrativeTab === 'districts'}
-                  walkabilityData={walkabilityData}
-                  onSegmentClick={handleSegmentClick}
-                  compareSegments={compareSegments}
-                  focusedSegment={focusedSegment}
-                />
-                {narrativeTab === 'districts' && (
-                  <DistrictStatsPanel
-                    feature={selectedDistrictFeature}
-                    onClose={() => setSelectedDistrictFeature(null)}
-                  />
-                )}
-                {narrativeTab === 'districts' && compareDistricts.length > 0 && (
-                  <DistrictCompare
-                    districts={compareDistricts}
-                    onClose={() => setCompareDistricts([])}
-                    onClear={() => setCompareDistricts([])}
-                  />
-                )}
-                {narrativeTab === 'walkability' && compareSegments.length > 0 && (
-                  <StreetCompare
-                    segments={compareSegments}
-                    onClose={() => setCompareSegments([])}
-                    onClear={() => setCompareSegments([])}
-                  />
-                )}
-              </Suspense>
-            </main>
-          </>
-        ) : (
-          <Suspense fallback={<div className="app-loading-screen">Loading data explorer...</div>}>
-            <DataExplorer />
-          </Suspense>
-        )}
-      </div>
-    </div>
+      ) : null}
+    </>
   )
 }
 

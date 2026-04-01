@@ -297,6 +297,7 @@ const ExplorerMap = ({
   layerStack = [],
   activeCategory,
   onMapLoad,
+  enableCanvasCapture = false,
   drawBboxMode,
   onBboxDrawn,
   opinionSource,
@@ -312,7 +313,17 @@ const ExplorerMap = ({
   ratingFilter = null   // null = all, array of floor values e.g. [4,5]
 }) => {
   const mapRef = useRef()
+  const rawMapRef = useRef(null)
   const mapLib = useMemo(() => import('mapbox-gl'), [])
+  const mapDebugEnabled = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugMaps') === '1'
+  const debugMap = useCallback((message, details = null) => {
+    if (!mapDebugEnabled) return
+    if (details === null) {
+      console.log(`[ExplorerMap] ${message}`)
+      return
+    }
+    console.log(`[ExplorerMap] ${message}`, details)
+  }, [mapDebugEnabled])
 
   // ─── Hex layer opacity — fades to 0 and back when envCurrentData changes ──
   const [hexOpacity, setHexOpacity] = useState(0)
@@ -919,9 +930,59 @@ const ExplorerMap = ({
   
   useEffect(() => {
     if (mapRef.current && onMapLoad) {
+      rawMapRef.current = mapRef.current?.getMap?.() || mapRef.current
       onMapLoad(mapRef.current)
     }
   }, [mapRef.current, onMapLoad])
+
+  useEffect(() => {
+    const mapInstance = rawMapRef.current || mapRef.current?.getMap?.() || mapRef.current
+    if (!mapInstance) return
+
+    const canvas = mapInstance.getCanvas?.()
+    const handleContextLost = (event) => {
+      event.preventDefault?.()
+      debugMap('webglcontextlost')
+    }
+    const handleContextRestored = () => {
+      debugMap('webglcontextrestored')
+    }
+    const handleError = (event) => {
+      debugMap('map error', {
+        message: event?.error?.message,
+        error: event?.error
+      })
+    }
+
+    canvas?.addEventListener('webglcontextlost', handleContextLost)
+    canvas?.addEventListener('webglcontextrestored', handleContextRestored)
+    mapInstance.on?.('error', handleError)
+    debugMap('map ready', {
+      dashboardMode,
+      enableCanvasCapture
+    })
+
+    return () => {
+      canvas?.removeEventListener('webglcontextlost', handleContextLost)
+      canvas?.removeEventListener('webglcontextrestored', handleContextRestored)
+      mapInstance.off?.('error', handleError)
+      debugMap('map listeners removed')
+    }
+  }, [dashboardMode, debugMap, enableCanvasCapture, mapRef.current])
+
+  useEffect(() => {
+    return () => {
+      const mapInstance = rawMapRef.current || mapRef.current?.getMap?.() || mapRef.current
+      debugMap('cleanup start', {
+        dashboardMode,
+        enableCanvasCapture,
+        hadMap: Boolean(mapInstance)
+      })
+      rawMapRef.current = null
+      mapRef.current = null
+      onMapLoad?.(null)
+    }
+  }, [dashboardMode, debugMap, enableCanvasCapture, onMapLoad])
   
   return (
     <div className="explorer-map">
@@ -973,13 +1034,15 @@ const ExplorerMap = ({
         </div>
       )}
       <Map
+        key={enableCanvasCapture ? 'explorer-map-capture' : 'explorer-map-default'}
         ref={mapRef}
         {...viewState}
         onMove={(evt) => setViewState(evt.viewState)}
         mapLib={mapLib}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle="mapbox://styles/mapbox/dark-v11"
-        preserveDrawingBuffer={true}
+        preserveDrawingBuffer={enableCanvasCapture}
+        reuseMaps={false}
         interactiveLayerIds={[
           'businesses-points-layer',
           'businesses-ratings-layer',
@@ -3099,7 +3162,7 @@ const ExplorerMap = ({
                     {p.PARK_NAME && (
                       <>
                         <p><strong>Park Name:</strong> {p.PARK_NAME}</p>
-                        {p.SUB_AREA && <p><strong>Area:</strong> {p.SUB_AREA} ha</p>}
+                        {p.area_ha != null && <p><strong>Area:</strong> {p.area_ha} ha</p>}
                         {p.PLAY_EQPM && <p><strong>Play Equipment:</strong> {p.PLAY_EQPM}</p>}
                       </>
                     )}

@@ -1291,6 +1291,7 @@ const UnifiedDataExplorer = () => {
               layerStack={layerStack}
               activeCategory={activeCategory}
               onMapLoad={setMap}
+              enableCanvasCapture={drawBboxMode || isExporting}
               drawBboxMode={drawBboxMode}
               onBboxDrawn={handleBboxDrawn}
               opinionSource={opinionSource}

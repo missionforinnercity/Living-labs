@@ -1,3 +1,4 @@
+import * as turf from '@turf/turf'
 import { transformGeoJSON } from '../shared/geo'
 import { fetchJson } from '../shared/http'
 
@@ -65,6 +66,30 @@ function enrichTemperatureData(data) {
   }
 }
 
+function enrichParksData(parksData) {
+  if (!parksData?.features?.length) return parksData
+
+  return {
+    ...parksData,
+    features: parksData.features.map((feature) => {
+      let areaHa = null
+      try {
+        areaHa = turf.area(feature) / 10000
+      } catch {
+        areaHa = null
+      }
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          area_ha: areaHa != null && Number.isFinite(areaHa) ? Number(areaHa.toFixed(2)) : null
+        }
+      }
+    })
+  }
+}
+
 export async function loadExplorerShadeData(season, timeOfDay) {
   const date = SEASON_DATES[season] || SEASON_DATES.summer
   return fetchJson(`/data/processed/shade/${season}/${date}_${timeOfDay}.geojson`, 'Shade data load failed')
@@ -87,7 +112,7 @@ export async function loadExplorerGreeneryData() {
   return {
     greeneryAndSkyview,
     treeCanopyData: transformGeoJSON(treeCanopyData, 'EPSG:3857', 'EPSG:4326'),
-    parksData,
+    parksData: enrichParksData(parksData),
     ecologyHeatByYear: {
       2020: ecologyYears[0],
       2021: ecologyYears[1],

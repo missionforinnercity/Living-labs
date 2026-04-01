@@ -560,7 +560,7 @@ function DetailRow({ label, value, delta }) {
   )
 }
 
-export default function WardExplorer({ onEnterDashboard }) {
+export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
   const mapRef = useRef(null)
   const mapEl = useRef(null)
   const mapboxglRef = useRef(null)
@@ -568,6 +568,11 @@ export default function WardExplorer({ onEnterDashboard }) {
   const selectedFeatureIdRef = useRef(null)
   const initialHashRef = useRef(null)
   const activeCollectionRef = useRef(null)
+  const activeLensIdRef = useRef('neighbourhoods')
+  const activeLensNameKeyRef = useRef(LENS_CONFIG.neighbourhoods.nameKey)
+  const activeMetricRef = useRef(LENS_CONFIG.neighbourhoods.metrics[0])
+  const applyActiveMetricColorRef = useRef(null)
+  const applyActiveMetricVisibilityRef = useRef(null)
 
   const [mapLoaded, setMapLoaded] = useState(false)
   const [collections, setCollections] = useState({})
@@ -595,6 +600,73 @@ export default function WardExplorer({ onEnterDashboard }) {
   const [isThemePanelCollapsed, setIsThemePanelCollapsed] = useState(false)
   const [isDetailMinimized, setIsDetailMinimized] = useState(false)
   const [isAnalyticsCollapsed, setIsAnalyticsCollapsed] = useState(true)
+  const [mapEpoch, setMapEpoch] = useState(0)
+  const mapLoadedRef = useRef(false)
+  const mapDebugEnabled = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugMaps') === '1'
+
+  const debugMap = useCallback((message, details = null) => {
+    if (!mapDebugEnabled) return
+    if (details === null) {
+      console.log(`[WardExplorer] ${message}`)
+      return
+    }
+    console.log(`[WardExplorer] ${message}`, details)
+  }, [mapDebugEnabled])
+
+  const collectMapDiagnostics = useCallback(() => {
+    const map = mapRef.current
+    const canvas = map?.getCanvas?.() || mapEl.current?.querySelector?.('canvas')
+    const container = mapEl.current
+    const canvasStyle = canvas ? window.getComputedStyle(canvas) : null
+    const containerStyle = container ? window.getComputedStyle(container) : null
+
+    return {
+      mapEpoch,
+      isVisible,
+      mapLoaded: mapLoadedRef.current,
+      hasMapInstance: Boolean(map),
+      loaded: map?.loaded?.() ?? null,
+      styleLoaded: map?.isStyleLoaded?.() ?? null,
+      tilesLoaded: map?.areTilesLoaded?.() ?? null,
+      canvas: canvas ? {
+        width: canvas.width,
+        height: canvas.height,
+        clientWidth: canvas.clientWidth,
+        clientHeight: canvas.clientHeight,
+        display: canvasStyle?.display,
+        visibility: canvasStyle?.visibility,
+        opacity: canvasStyle?.opacity
+      } : null,
+      container: container ? {
+        clientWidth: container.clientWidth,
+        clientHeight: container.clientHeight,
+        display: containerStyle?.display,
+        visibility: containerStyle?.visibility,
+        opacity: containerStyle?.opacity
+      } : null,
+      sourcePresent: map?.getSource?.(FEATURE_SOURCE_ID) ? true : false,
+      fillLayerPresent: map?.getLayer?.(FEATURE_FILL_ID) ? true : false,
+      labelLayerPresent: map?.getLayer?.(FEATURE_LABEL_ID) ? true : false
+    }
+  }, [isVisible, mapEpoch])
+
+  const rebuildMap = useCallback(() => {
+    debugMap('manual rebuild requested', collectMapDiagnostics())
+    try {
+      mapRef.current?.remove?.()
+    } catch (error) {
+      debugMap('manual rebuild remove failed', error)
+    }
+    mapRef.current = null
+    mapboxglRef.current = null
+    setMapLoaded(false)
+    mapLoadedRef.current = false
+    setMapEpoch((value) => value + 1)
+  }, [collectMapDiagnostics, debugMap])
+
+  useEffect(() => {
+    mapLoadedRef.current = mapLoaded
+  }, [mapLoaded])
 
   useEffect(() => {
     initialHashRef.current = new URLSearchParams(window.location.hash.slice(1))
@@ -660,6 +732,12 @@ export default function WardExplorer({ onEnterDashboard }) {
   useEffect(() => {
     activeCollectionRef.current = activeCollection
   }, [activeCollection])
+
+  useEffect(() => {
+    activeLensIdRef.current = activeLensId
+    activeLensNameKeyRef.current = activeLens.nameKey
+    activeMetricRef.current = activeMetric
+  }, [activeLens.nameKey, activeLensId, activeMetric])
 
   useEffect(() => {
     if (selectedFeatureId) {
@@ -913,8 +991,8 @@ export default function WardExplorer({ onEnterDashboard }) {
     const map = mapRef.current
     if (!map || !feature) return
     const bounds = getFeatureBounds(feature)
-    map.fitBounds(bounds, { padding: { top: 110, right: 360, bottom: 260, left: 320 }, duration: 700, maxZoom: activeLensId === 'economy' ? 12.4 : 13.3 })
-  }, [activeLensId])
+    map.fitBounds(bounds, { padding: { top: 110, right: 360, bottom: 260, left: 320 }, duration: 700, maxZoom: activeLensIdRef.current === 'economy' ? 12.4 : 13.3 })
+  }, [])
 
   const clearSelectedFeatureState = useCallback(() => {
     const map = mapRef.current
@@ -950,18 +1028,46 @@ export default function WardExplorer({ onEnterDashboard }) {
   }, [])
 
   useEffect(() => {
-    if (!activeCollection || mapRef.current || !mapEl.current) return
+    applyActiveMetricColorRef.current = applyActiveMetricColor
+    applyActiveMetricVisibilityRef.current = applyActiveMetricVisibility
+  }, [applyActiveMetricColor, applyActiveMetricVisibility])
+
+  useEffect(() => {
+    if (!isVisible || !activeCollection || mapRef.current || !mapEl.current) return
 
     let observer = null
     let frameId = null
+    let retryTimer = null
     let cancelled = false
     let map = null
+    let initAttempts = 0
+
+    const scheduleInitialize = () => {
+      if (cancelled || mapRef.current || frameId) return
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null
+        initializeMap()
+      })
+    }
+
+    const scheduleRetry = () => {
+      if (cancelled || mapRef.current || retryTimer || initAttempts >= 5) return
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null
+        initializeMap()
+      }, 220)
+    }
 
     const initializeMap = async () => {
       if (cancelled || mapRef.current || !mapEl.current) return
+      initAttempts += 1
 
       const { clientWidth, clientHeight } = mapEl.current
-      if (clientWidth <= 0 || clientHeight <= 0) return
+      debugMap('initialize attempt', { initAttempts, clientWidth, clientHeight, isVisible })
+      if (clientWidth <= 0 || clientHeight <= 0) {
+        scheduleInitialize()
+        return
+      }
 
       const mapboxModule = await import('mapbox-gl')
       const mapboxgl = mapboxModule.default ?? mapboxModule
@@ -969,24 +1075,54 @@ export default function WardExplorer({ onEnterDashboard }) {
       mapboxglRef.current = mapboxgl
       if (cancelled || mapRef.current || !mapEl.current) return
 
-      map = new mapboxgl.Map({
-        container: mapEl.current,
-        style: 'mapbox://styles/mapbox/dark-v11',
-        center: BASE_MAP_VIEW.center,
-        zoom: BASE_MAP_VIEW.zoom,
-        pitch: BASE_MAP_VIEW.pitch,
-        bearing: BASE_MAP_VIEW.bearing,
-        attributionControl: false
-      })
+      try {
+        map = new mapboxgl.Map({
+          container: mapEl.current,
+          style: 'mapbox://styles/mapbox/dark-v11',
+          center: BASE_MAP_VIEW.center,
+          zoom: BASE_MAP_VIEW.zoom,
+          pitch: BASE_MAP_VIEW.pitch,
+          bearing: BASE_MAP_VIEW.bearing,
+          attributionControl: false
+        })
+      } catch (error) {
+        debugMap('map initialization failed', error)
+        scheduleRetry()
+        return
+      }
 
       mapRef.current = map
+      const canvas = map.getCanvas()
+      const handleContextLost = (event) => {
+        event.preventDefault?.()
+        debugMap('webglcontextlost')
+      }
+      const handleContextRestored = () => {
+        debugMap('webglcontextrestored')
+      }
+      canvas?.addEventListener('webglcontextlost', handleContextLost)
+      canvas?.addEventListener('webglcontextrestored', handleContextRestored)
+
+      map.on('error', (event) => {
+        debugMap('map error', {
+          message: event?.error?.message,
+          error: event?.error
+        })
+      })
+
       map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right')
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right')
 
-      map.on('load', () => {
-        map.addSource(FEATURE_SOURCE_ID, {
+        map.on('load', () => {
+          debugMap('map load')
+          const logDelayedStatus = (label, delay) => {
+            window.setTimeout(() => {
+              debugMap(label, collectMapDiagnostics())
+            }, delay)
+          }
+          map.addSource(FEATURE_SOURCE_ID, {
           type: 'geojson',
-          data: activeCollection,
+          data: activeCollectionRef.current,
           promoteId: '__featureId'
         })
 
@@ -995,8 +1131,8 @@ export default function WardExplorer({ onEnterDashboard }) {
           type: 'fill',
           source: FEATURE_SOURCE_ID,
           paint: {
-            'fill-color': activeMetric.high,
-            'fill-opacity': getFillOpacityExpression(activeLensId)
+            'fill-color': activeMetricRef.current.high,
+            'fill-opacity': getFillOpacityExpression(activeLensIdRef.current)
           }
         })
 
@@ -1016,11 +1152,11 @@ export default function WardExplorer({ onEnterDashboard }) {
           source: FEATURE_SOURCE_ID,
           minzoom: 10.8,
           layout: {
-            'text-field': ['get', activeLens.nameKey],
-            'text-size': activeLensId === 'economy' ? 9 : 10,
+            'text-field': ['get', activeLensNameKeyRef.current],
+            'text-size': activeLensIdRef.current === 'economy' ? 9 : 10,
             'text-max-width': 8,
             'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
-            visibility: activeLensId === 'economy' ? 'none' : 'visible'
+            visibility: activeLensIdRef.current === 'economy' ? 'none' : 'visible'
           },
           paint: {
             'text-color': 'rgba(255,255,255,0.64)',
@@ -1029,8 +1165,9 @@ export default function WardExplorer({ onEnterDashboard }) {
           }
         })
 
-        applyActiveMetricColor(map, activeLensId, activeMetric, activeCollection)
-        applyActiveMetricVisibility(map, activeMetric)
+        map.setPaintProperty(FEATURE_FILL_ID, 'fill-opacity', getFillOpacityExpression(activeLensIdRef.current))
+        applyActiveMetricColorRef.current?.(map, activeLensIdRef.current, activeMetricRef.current, activeCollectionRef.current)
+        applyActiveMetricVisibilityRef.current?.(map, activeMetricRef.current)
         map.resize()
 
         map.on('mousemove', FEATURE_FILL_ID, (event) => {
@@ -1069,6 +1206,15 @@ export default function WardExplorer({ onEnterDashboard }) {
         })
 
         setMapLoaded(true)
+        debugMap('post-load status', collectMapDiagnostics())
+        logDelayedStatus('post-load status +300ms', 300)
+        logDelayedStatus('post-load status +1200ms', 1200)
+      })
+
+      map.once('remove', () => {
+        canvas?.removeEventListener('webglcontextlost', handleContextLost)
+        canvas?.removeEventListener('webglcontextrestored', handleContextRestored)
+        debugMap('map remove')
       })
     }
 
@@ -1085,21 +1231,53 @@ export default function WardExplorer({ onEnterDashboard }) {
       observer.observe(mapEl.current)
     }
 
-    if (!mapRef.current) {
-      frameId = window.requestAnimationFrame(() => {
-        initializeMap()
-      })
-    }
+    scheduleInitialize()
 
     return () => {
       cancelled = true
       setMapLoaded(false)
+      mapLoadedRef.current = false
       if (frameId) window.cancelAnimationFrame(frameId)
+      if (retryTimer) window.clearTimeout(retryTimer)
       if (observer) observer.disconnect()
-      if (map) map.remove()
+      const currentMap = mapRef.current || map
+      debugMap('cleanup', { hadMap: Boolean(currentMap), isVisible })
+      if (currentMap) currentMap.remove()
       mapRef.current = null
+      mapboxglRef.current = null
     }
-  }, [activeCollection, activeLens.nameKey, activeLensId, activeMetric, applyActiveMetricColor, applyActiveMetricVisibility, fitFeatureOnMap, setSelectedFeatureState])
+  }, [activeCollection, debugMap, fitFeatureOnMap, isVisible, mapEpoch, setSelectedFeatureState])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !mapDebugEnabled) return
+
+    window.__wardMapDebug = {
+      status: () => {
+        const snapshot = collectMapDiagnostics()
+        console.log('[WardExplorer] manual status', snapshot)
+        return snapshot
+      },
+      repaint: () => {
+        const map = mapRef.current
+        if (!map) return null
+        map.resize()
+        map.triggerRepaint?.()
+        const snapshot = collectMapDiagnostics()
+        console.log('[WardExplorer] manual repaint', snapshot)
+        return snapshot
+      },
+      rebuild: () => {
+        rebuildMap()
+        return 'rebuild requested'
+      }
+    }
+
+    return () => {
+      if (window.__wardMapDebug) {
+        delete window.__wardMapDebug
+      }
+    }
+  }, [collectMapDiagnostics, mapDebugEnabled, rebuildMap])
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current || !activeCollection) return
@@ -1133,6 +1311,27 @@ export default function WardExplorer({ onEnterDashboard }) {
     applyActiveMetricColor(mapRef.current, activeLensId, activeMetric)
     applyActiveMetricVisibility(mapRef.current, activeMetric)
   }, [activeLensId, activeMetric, applyActiveMetricColor, applyActiveMetricVisibility, mapLoaded])
+
+  useEffect(() => {
+    if (!isVisible || !mapRef.current) return
+
+    let frameId = null
+    const timers = []
+    const refreshMap = () => {
+      if (!mapRef.current) return
+      mapRef.current.resize()
+      mapRef.current.triggerRepaint()
+    }
+
+    frameId = window.requestAnimationFrame(refreshMap)
+    timers.push(window.setTimeout(refreshMap, 80))
+    timers.push(window.setTimeout(refreshMap, 240))
+
+    return () => {
+      if (frameId) window.cancelAnimationFrame(frameId)
+      timers.forEach((timer) => window.clearTimeout(timer))
+    }
+  }, [isVisible, mapLoaded])
 
   useEffect(() => {
     if (!collections[activeLensId] || !initialHashRef.current) return
