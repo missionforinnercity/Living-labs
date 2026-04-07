@@ -233,6 +233,11 @@
   z-index: 100;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.30),
               0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  transition: width 0.25s ease;
+}
+
+.explorer-sidebar.explorer-sidebar--wide {
+  max-width: calc(100vw - 48px);
 }
 
 .explorer-map-container {
@@ -757,6 +762,138 @@
 .ecology-rank-card strong,
 .ecology-compare-chip strong {
   color: #f8fafc;
+}
+
+.greenery-bottom-panel {
+  height: min(560px, 62vh);
+  transition: height 0.25s ease;
+  background:
+    radial-gradient(circle at top right, rgba(34, 197, 94, 0.16), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.1), transparent 34%),
+    rgba(6, 18, 14, 0.94);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.greenery-bottom-panel.greenery-minimized {
+  height: auto;
+}
+
+.greenery-bottom-panel.greenery-minimized .greenery-charts-container {
+  display: none;
+}
+
+.greenery-panel-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.greenery-panel-headline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.greenery-panel-score {
+  min-width: 74px;
+  height: 74px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(21, 128, 61, 0.32), rgba(20, 83, 45, 0.48));
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  color: #f0fdf4;
+  font-size: 1.7rem;
+  font-weight: 800;
+  box-shadow: 0 16px 32px rgba(6, 78, 59, 0.2);
+}
+
+.greenery-panel-subtitle {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+
+.greenery-charts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.greenery-summary-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.greenery-detail-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.greenery-detail-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.greenery-destination-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.greenery-destination-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.greenery-destination-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.greenery-destination-item strong {
+  display: block;
+  color: #f0fdf4;
+}
+
+.greenery-destination-item small,
+.greenery-destination-metrics small {
+  display: block;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.greenery-destination-metrics {
+  text-align: right;
+}
+
+.greenery-destination-metrics span {
+  display: block;
+  font-weight: 700;
+}
+
+.greenery-destination-empty {
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+@media (max-width: 1200px) {
+  .greenery-summary-row,
+  .greenery-detail-layout,
+  .greenery-destination-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ecology-compare-grid,

@@ -1,330 +1,466 @@
-import React, { useState, useEffect } from 'react'
+import React, { useMemo } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts'
 import './GreeneryAnalytics.css'
 
-const GreeneryAnalytics = ({
-  shadeData,
-  greeneryAndSkyview,
-  treeCanopyData,
-  parksData,
-  hideLayerControls = false,
-  allLayersActive = false
-}) => {
-  const [stats, setStats] = useState(null)
-  const [categoryStats, setCategoryStats] = useState(null)
-  
-  // Calculate greenery/vegetation statistics
-  useEffect(() => {
-    if (greeneryAndSkyview?.features) {
-      const features = greeneryAndSkyview.features
-      
-      // Filter segments with valid vegetation data
-      const validSegments = features.filter(f => 
-        f.properties.vegetation_index !== null && 
-        f.properties.vegetation_index !== undefined
-      )
-      
-      if (validSegments.length > 0) {
-        const vegetationIndices = validSegments.map(f => f.properties.vegetation_index)
-        const skyViewFactors = validSegments.map(f => f.properties.sky_view_factor || 0)
-        
-        const totalVeg = vegetationIndices.reduce((sum, v) => sum + v, 0)
-        const avgVeg = totalVeg / vegetationIndices.length
-        const maxVeg = Math.max(...vegetationIndices)
-        const minVeg = Math.min(...vegetationIndices)
-        
-        const avgSkyView = skyViewFactors.reduce((sum, v) => sum + v, 0) / skyViewFactors.length
-        
-        // Count tree canopy polygons
-        const treeCanopyCount = treeCanopyData?.features?.length || 0
-        
-        // Count parks
-        const parksCount = parksData?.features?.length || 0
-        
-        // Categorize by vegetation density
-        const categories = {
-          noVegetation: validSegments.filter(f => f.properties.vegetation_index < 0.1).length,
-          sparse: validSegments.filter(f => f.properties.vegetation_index >= 0.1 && f.properties.vegetation_index < 0.3).length,
-          moderate: validSegments.filter(f => f.properties.vegetation_index >= 0.3 && f.properties.vegetation_index < 0.5).length,
-          dense: validSegments.filter(f => f.properties.vegetation_index >= 0.5 && f.properties.vegetation_index < 0.7).length,
-          veryDense: validSegments.filter(f => f.properties.vegetation_index >= 0.7).length
-        }
-        
-        setStats({
-          totalSegments: features.length,
-          analyzedSegments: validSegments.length,
-          avgVegetation: avgVeg.toFixed(3),
-          maxVegetation: maxVeg.toFixed(3),
-          minVegetation: minVeg.toFixed(3),
-          avgSkyView: avgSkyView.toFixed(3),
-          treeCanopyCount,
-          parksCount
-        })
-        
-        setCategoryStats(categories)
-      }
-    }
-  }, [greeneryAndSkyview, treeCanopyData, parksData])
-  
-  // Compute green health score (0-100) from combined data
-  const greenHealthScore = stats ? Math.round(
-    (parseFloat(stats.avgVegetation) / 0.5) * 40 +
-    (1 - parseFloat(stats.avgSkyView)) * 30 +
-    Math.min(stats.treeCanopyCount / 2000, 1) * 20 +
-    Math.min(stats.parksCount / 40, 1) * 10
-  ) : null
+const ACCESS_BANDS = [
+  { key: 'excellent', label: '< 2 min', max: 2, color: '#166534' },
+  { key: 'good', label: '2-5 min', max: 5, color: '#22c55e' },
+  { key: 'moderate', label: '5-8 min', max: 8, color: '#84cc16' },
+  { key: 'stretched', label: '8-12 min', max: 12, color: '#d9f99d' },
+  { key: 'poor', label: '12+ min', max: Infinity, color: '#f59e0b' }
+]
 
-  const scoreColor = greenHealthScore >= 70 ? '#00e5a0' : greenHealthScore >= 45 ? '#fbbf24' : '#ef4444'
-  const scoreLabel = greenHealthScore >= 70 ? 'Good' : greenHealthScore >= 45 ? 'Moderate' : 'Low'
+const QUALITY_COLORS = {
+  very_high: '#14532d',
+  high: '#22c55e',
+  medium: '#a3e635',
+  low: '#facc15',
+  very_low: '#f97316',
+  unknown: '#64748b'
+}
+
+const DESTINATION_COLORS = {
+  park: '#22c55e',
+  garden: '#84cc16',
+  beach: '#38bdf8',
+  other: '#94a3b8'
+}
+
+const formatMinutes = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${numeric.toFixed(1)} min` : '—'
+}
+
+const formatPercent = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${numeric.toFixed(0)}%` : '—'
+}
+
+const formatStreet = (value) => {
+  if (!value) return 'Unnamed street'
+  return String(value)
+    .toLowerCase()
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+}
+
+const GreeneryAnalytics = ({
+  greeneryAndSkyview,
+  parksData,
+  allLayersActive = false,
+  showGreenDestinations = true,
+  onToggleGreenDestinations,
+  insightsExpanded = false,
+  onInsightsExpandedChange,
+  greeneryMapMode = 'percentile',
+  onGreeneryMapModeChange,
+  showUnderservedGreenery = true,
+  onShowUnderservedGreeneryChange
+}) => {
+  const analytics = useMemo(() => {
+    const segmentFeatures = greeneryAndSkyview?.features || []
+    const destinationFeatures = parksData?.features || []
+    if (!segmentFeatures.length) return null
+
+    const validSegments = segmentFeatures.filter((feature) => {
+      const value = Number(feature?.properties?.quality_adjusted_park_minutes)
+      return Number.isFinite(value)
+    })
+    if (!validSegments.length) return null
+
+    const accessBands = ACCESS_BANDS.map((band, index) => {
+      const min = index === 0 ? -Infinity : ACCESS_BANDS[index - 1].max
+      const count = validSegments.filter((feature) => {
+        const value = Number(feature.properties.quality_adjusted_park_minutes)
+        return value > min && value <= band.max
+      }).length
+      return {
+        ...band,
+        count,
+        share: (count / validSegments.length) * 100
+      }
+    })
+
+    const streetMap = new Map()
+    validSegments.forEach((feature) => {
+      const props = feature.properties || {}
+      const streetKey = props.str_name || props.str_name_mdf || props.segment_id || 'Unknown'
+      if (!streetMap.has(streetKey)) {
+        streetMap.set(streetKey, {
+          street: streetKey,
+          segments: 0,
+          adjusted: [],
+          walk: [],
+          quality: [],
+          gaps: 0
+        })
+      }
+      const bucket = streetMap.get(streetKey)
+      bucket.segments += 1
+      bucket.adjusted.push(Number(props.quality_adjusted_park_minutes))
+      bucket.walk.push(Number(props.walk_time_minutes))
+      bucket.quality.push(Number(props.park_quality_score))
+      if (props.residential_access_gap) bucket.gaps += 1
+    })
+
+    const streets = [...streetMap.values()]
+      .map((street) => ({
+        street: formatStreet(street.street),
+        rawStreet: street.street,
+        segments: street.segments,
+        avgAdjusted: street.adjusted.reduce((sum, value) => sum + value, 0) / street.adjusted.length,
+        avgWalk: street.walk.reduce((sum, value) => sum + value, 0) / street.walk.length,
+        avgQuality: street.quality.reduce((sum, value) => sum + value, 0) / street.quality.length,
+        gapShare: (street.gaps / street.segments) * 100
+      }))
+      .filter((street) => street.segments >= 3)
+
+    const topStreets = [...streets]
+      .sort((a, b) => a.avgAdjusted - b.avgAdjusted)
+      .slice(0, 5)
+
+    const underservedStreets = [...streets]
+      .sort((a, b) => b.avgAdjusted - a.avgAdjusted)
+      .slice(0, 5)
+
+    const qualityMixMap = new Map()
+    validSegments.forEach((feature) => {
+      const qualityClass = feature?.properties?.park_quality_class || 'unknown'
+      qualityMixMap.set(qualityClass, (qualityMixMap.get(qualityClass) || 0) + 1)
+    })
+    const qualityMix = [...qualityMixMap.entries()]
+      .map(([qualityClass, count]) => ({
+        qualityClass,
+        label: qualityClass.replace(/_/g, ' '),
+        count,
+        color: QUALITY_COLORS[qualityClass] || QUALITY_COLORS.unknown
+      }))
+      .sort((a, b) => b.count - a.count)
+
+    const destinationMixMap = new Map()
+    destinationFeatures.forEach((feature) => {
+      const type = feature?.properties?.destination_type || 'other'
+      destinationMixMap.set(type, (destinationMixMap.get(type) || 0) + 1)
+    })
+    const destinationMix = [...destinationMixMap.entries()]
+      .map(([type, count]) => ({
+        type,
+        label: type.replace(/_/g, ' '),
+        count,
+        color: DESTINATION_COLORS[type] || DESTINATION_COLORS.other
+      }))
+      .sort((a, b) => b.count - a.count)
+
+    const adjustedValues = validSegments.map((feature) => Number(feature.properties.quality_adjusted_park_minutes))
+    const walkValues = validSegments.map((feature) => Number(feature.properties.walk_time_minutes))
+    const qualityValues = validSegments
+      .map((feature) => Number(feature.properties.park_quality_score))
+      .filter((value) => Number.isFinite(value))
+
+    const accessGapCount = validSegments.filter((feature) => feature?.properties?.residential_access_gap).length
+    const residentialSegments = validSegments.filter((feature) => feature?.properties?.is_residential_proxy).length
+    const underserved15Count = validSegments.filter((feature) => feature?.properties?.underserved_15_min).length
+
+    return {
+      headline: {
+        segments: validSegments.length,
+        streets: streetMap.size,
+        destinations: destinationFeatures.length,
+        avgAdjusted: adjustedValues.reduce((sum, value) => sum + value, 0) / adjustedValues.length,
+        avgWalk: walkValues.reduce((sum, value) => sum + value, 0) / walkValues.length,
+        avgQuality: qualityValues.length ? qualityValues.reduce((sum, value) => sum + value, 0) / qualityValues.length : null,
+        accessGapCount,
+        accessGapShare: (accessGapCount / validSegments.length) * 100,
+        residentialSegments,
+        underserved15Count,
+        underserved15Share: (underserved15Count / validSegments.length) * 100
+      },
+      accessBands,
+      qualityMix,
+      destinationMix,
+      topStreets,
+      underservedStreets
+    }
+  }, [greeneryAndSkyview, parksData])
+
+  if (!analytics) {
+    return (
+      <aside className="greenery-analytics">
+        <div className="greenery-empty">Loading green access analytics…</div>
+      </aside>
+    )
+  }
+
+  const { headline, accessBands, qualityMix, destinationMix, topStreets, underservedStreets } = analytics
 
   return (
     <aside className="greenery-analytics">
-      <div className="analytics-header">
-        <h2>Greenery Analysis</h2>
-        <p className="header-subtitle">Vegetation coverage metrics</p>
+      <div className="greenery-hero">
+        <div>
+          <span className="greenery-kicker">Green Access Explorer</span>
+          <h2>Street-to-park access, destination quality, and gap detection</h2>
+          <p>
+            Streets are coloured by quality-adjusted walk time to greenery. Click one street for a deep dive, then click a second to compare.
+          </p>
+        </div>
+        <div className="greenery-hero-score">
+          <span>{formatMinutes(headline.avgAdjusted)}</span>
+          <small>citywide adjusted access time</small>
+        </div>
       </div>
 
-      {/* Combined urban green profile — shown when all 3 layers are active */}
-      {allLayersActive && stats && (
-        <div className="green-profile-panel">
-          <div className="green-profile-header">
-            <span className="green-profile-badge">◉ ALL LAYERS</span>
-            <h3>Urban Green Profile</h3>
-            <p>Combined analysis across all greenery datasets</p>
-          </div>
-
-          <div className="green-score-row">
-            <div className="green-score-ring" style={{ '--score-color': scoreColor }}>
-              <span className="green-score-value" style={{ color: scoreColor }}>{greenHealthScore}</span>
-              <span className="green-score-label">/ 100</span>
-            </div>
-            <div className="green-score-meta">
-              <span className="green-score-grade" style={{ color: scoreColor }}>{scoreLabel} Green Coverage</span>
-              <p>Composite score from vegetation index, sky view, tree canopy &amp; parks data</p>
-            </div>
-          </div>
-
-          <div className="green-profile-grid">
-            <div className="green-profile-stat">
-              <span className="gps-icon">🌿</span>
-              <span className="gps-value">{stats.avgVegetation}</span>
-              <span className="gps-label">Avg NDVI</span>
-            </div>
-            <div className="green-profile-stat">
-              <span className="gps-icon">🌳</span>
-              <span className="gps-value">{stats.treeCanopyCount.toLocaleString()}</span>
-              <span className="gps-label">Canopy Areas</span>
-            </div>
-            <div className="green-profile-stat">
-              <span className="gps-icon">🏞️</span>
-              <span className="gps-value">{stats.parksCount}</span>
-              <span className="gps-label">Parks Nearby</span>
-            </div>
-            <div className="green-profile-stat">
-              <span className="gps-icon">☀️</span>
-              <span className="gps-value">{stats.avgSkyView}</span>
-              <span className="gps-label">Sky View Factor</span>
-            </div>
-          </div>
-
-          <div className="green-profile-insight">
-            <strong>Key Finding:</strong>{' '}
-            {parseFloat(stats.avgVegetation) < 0.2
-              ? `Most streets (${stats.analyzedSegments} segments) have minimal vegetation cover. Tree planting programmes would significantly improve urban heat and comfort.`
-              : parseFloat(stats.avgVegetation) < 0.4
-              ? `Moderate vegetation across ${stats.analyzedSegments} segments. Concentrated mostly in residential zones — city centre gaps remain a priority.`
-              : `Good vegetation coverage across ${stats.analyzedSegments} segments. Focus on maintaining canopy and expanding parks access.`
-            }
-          </div>
+      <div className="greenery-toolbar">
+        <div className="greenery-toggle-group">
+          <label className="greenery-toggle">
+            <input
+              type="checkbox"
+              checked={showGreenDestinations}
+              onChange={() => onToggleGreenDestinations?.()}
+            />
+            <span>Show Green Destinations</span>
+          </label>
+          <label className="greenery-toggle">
+            <input
+              type="checkbox"
+              checked={showUnderservedGreenery}
+              onChange={() => onShowUnderservedGreeneryChange?.(!showUnderservedGreenery)}
+            />
+            <span>Highlight 15+ Min Streets</span>
+          </label>
         </div>
-      )}
+        <div className="greenery-mode-switch" role="tablist" aria-label="Greenery map mode">
+          <button
+            className={`greenery-mode-btn ${greeneryMapMode === 'percentile' ? 'active' : ''}`}
+            onClick={() => onGreeneryMapModeChange?.('percentile')}
+          >
+            Relative Rank
+          </button>
+          <button
+            className={`greenery-mode-btn ${greeneryMapMode === 'minutes' ? 'active' : ''}`}
+            onClick={() => onGreeneryMapModeChange?.('minutes')}
+          >
+            Actual Minutes
+          </button>
+        </div>
+        <button
+          className="greenery-insights-btn"
+          onClick={() => onInsightsExpandedChange?.(!insightsExpanded)}
+        >
+          {insightsExpanded ? 'Close Extra Insights' : 'Open Extra Insights'}
+        </button>
+      </div>
 
-      {/* Statistics */}
-      {stats && (
-        <div className="stats-container">
-          <h3>Vegetation Index</h3>
-          <div className="stats-grid">
-            <div className="stat-card">
-              <span className="stat-label">Average</span>
-              <span className="stat-value">{stats.avgVegetation}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Maximum</span>
-              <span className="stat-value">{stats.maxVegetation}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Minimum</span>
-              <span className="stat-value">{stats.minVegetation}</span>
-            </div>
-          </div>
-          
-          <h3>Related Metrics</h3>
-          <div className="metrics-list">
-            <div className="metric-item">
-              <span className="metric-label">Avg Sky View Factor:</span>
-              <span className="metric-value">{stats.avgSkyView}</span>
-            </div>
-            <div className="metric-item">
-              <span className="metric-label">Tree Canopy Areas:</span>
-              <span className="metric-value">{stats.treeCanopyCount}</span>
-            </div>
-            <div className="metric-item">
-              <span className="metric-label">Parks Nearby:</span>
-              <span className="metric-value">{stats.parksCount}</span>
-            </div>
-            <div className="metric-item">
-              <span className="metric-label">Total Segments:</span>
-              <span className="metric-value">{stats.totalSegments}</span>
-            </div>
-          </div>
-          
-          {/* Vegetation Distribution */}
-          {categoryStats && (
-            <div className="distribution-section">
-              <h4>Vegetation Density Distribution</h4>
-              <div className="category-bars">
-                <div className="category-bar">
-                  <span className="category-label">No Vegetation (&lt;0.1)</span>
-                  <div className="bar-container">
-                    <div 
-                      className="bar no-veg"
-                      style={{ 
-                        width: `${(categoryStats.noVegetation / stats.analyzedSegments) * 100}%`
-                      }}
-                    />
-                  </div>
-                  <span className="category-count">{categoryStats.noVegetation}</span>
-                </div>
-                
-                <div className="category-bar">
-                  <span className="category-label">Sparse (0.1-0.3)</span>
-                  <div className="bar-container">
-                    <div 
-                      className="bar sparse-veg"
-                      style={{ 
-                        width: `${(categoryStats.sparse / stats.analyzedSegments) * 100}%`
-                      }}
-                    />
-                  </div>
-                  <span className="category-count">{categoryStats.sparse}</span>
-                </div>
-                
-                <div className="category-bar">
-                  <span className="category-label">Moderate (0.3-0.5)</span>
-                  <div className="bar-container">
-                    <div 
-                      className="bar moderate-veg"
-                      style={{ 
-                        width: `${(categoryStats.moderate / stats.analyzedSegments) * 100}%`
-                      }}
-                    />
-                  </div>
-                  <span className="category-count">{categoryStats.moderate}</span>
-                </div>
-                
-                <div className="category-bar">
-                  <span className="category-label">Dense (0.5-0.7)</span>
-                  <div className="bar-container">
-                    <div 
-                      className="bar dense-veg"
-                      style={{ 
-                        width: `${(categoryStats.dense / stats.analyzedSegments) * 100}%`
-                      }}
-                    />
-                  </div>
-                  <span className="category-count">{categoryStats.dense}</span>
-                </div>
-                
-                <div className="category-bar">
-                  <span className="category-label">Very Dense (&gt;0.7)</span>
-                  <div className="bar-container">
-                    <div 
-                      className="bar very-dense-veg"
-                      style={{ 
-                        width: `${(categoryStats.veryDense / stats.analyzedSegments) * 100}%`
-                      }}
-                    />
-                  </div>
-                  <span className="category-count">{categoryStats.veryDense}</span>
-                </div>
+      <div className="greenery-stat-grid">
+        <div className="greenery-stat-card">
+          <span>Mapped street segments</span>
+          <strong>{headline.segments.toLocaleString()}</strong>
+        </div>
+        <div className="greenery-stat-card">
+          <span>Named streets</span>
+          <strong>{headline.streets.toLocaleString()}</strong>
+        </div>
+        <div className="greenery-stat-card">
+          <span>Green destinations</span>
+          <strong>{headline.destinations.toLocaleString()}</strong>
+        </div>
+        <div className="greenery-stat-card">
+          <span>15+ min streets</span>
+          <strong>{formatPercent(headline.underserved15Share)}</strong>
+        </div>
+      </div>
+
+      <div className="greenery-insight-strip">
+        <div>
+          <span>Average walk time</span>
+          <strong>{formatMinutes(headline.avgWalk)}</strong>
+        </div>
+        <div>
+          <span>Average destination quality</span>
+          <strong>{headline.avgQuality != null ? `${headline.avgQuality.toFixed(0)}/100` : '—'}</strong>
+        </div>
+        <div>
+          <span>Residential segments screened</span>
+          <strong>{headline.residentialSegments.toLocaleString()}</strong>
+        </div>
+        <div>
+          <span>15+ min segments</span>
+          <strong>{headline.underserved15Count.toLocaleString()}</strong>
+        </div>
+      </div>
+
+      <div className="greenery-definitions">
+        <div className="greenery-definition-card">
+          <strong>Relative Rank</strong>
+          <p>Shows how each street compares with the rest of the city, from the best access streets to the weakest.</p>
+        </div>
+        <div className="greenery-definition-card">
+          <strong>15+ Min Streets</strong>
+          <p>Street segments whose quality-adjusted walk to green space is longer than 15 minutes.</p>
+        </div>
+        <div className="greenery-definition-card">
+          <strong>Residential Buildings</strong>
+          <p>The average count of residential buildings within 250 m of a street segment used to estimate who is affected.</p>
+        </div>
+        <div className="greenery-definition-card">
+          <strong>Residential Gap Share</strong>
+          <p>The share of mapped residential street segments flagged by the access-gap logic, separate from the 15+ minute threshold.</p>
+        </div>
+      </div>
+
+      {insightsExpanded && (
+        <>
+          <div className="greenery-chart-grid">
+            <section className="greenery-panel">
+              <div className="greenery-panel-head">
+                <span>Access Distribution</span>
+                <strong>Quality-adjusted minutes to greenery</strong>
               </div>
-            </div>
-          )}
-          
-          <div className="info-box">
-            <h4>About Vegetation Index</h4>
-            <p>
-              The vegetation index (NDVI) measures the presence and health of vegetation. 
-              Higher values indicate denser, healthier vegetation which contributes to:
-            </p>
-            <ul>
-              <li>Increased shade coverage</li>
-              <li>Lower surface temperatures</li>
-              <li>Improved air quality</li>
-              <li>Enhanced pedestrian comfort</li>
-            </ul>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={accessBands} margin={{ top: 8, right: 6, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
+                    formatter={(value, name) => [name === 'share' ? `${Number(value).toFixed(1)}%` : Number(value).toLocaleString(), name === 'share' ? 'Share' : 'Segments']}
+                  />
+                  <Bar dataKey="count" radius={[10, 10, 0, 0]}>
+                    {accessBands.map((entry) => (
+                      <Cell key={entry.key} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </section>
+
+            <section className="greenery-panel">
+              <div className="greenery-panel-head">
+                <span>Destination Mix</span>
+                <strong>Green nodes by type</strong>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={destinationMix} layout="vertical" margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                  <XAxis type="number" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="label" stroke="#94a3b8" tick={{ fontSize: 11 }} width={64} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
+                    formatter={(value) => [Number(value).toLocaleString(), 'Destinations']}
+                  />
+                  <Bar dataKey="count" radius={[0, 10, 10, 0]}>
+                    {destinationMix.map((entry) => (
+                      <Cell key={entry.type} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </section>
+
+            <section className="greenery-panel">
+              <div className="greenery-panel-head">
+                <span>Quality Mix</span>
+                <strong>Nearest destination quality class</strong>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={qualityMix}
+                    dataKey="count"
+                    nameKey="label"
+                    innerRadius={48}
+                    outerRadius={78}
+                    paddingAngle={3}
+                  >
+                    {qualityMix.map((entry) => (
+                      <Cell key={entry.qualityClass} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
+                    formatter={(value) => [Number(value).toLocaleString(), 'Segments']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="greenery-legend">
+                {qualityMix.map((entry) => (
+                  <div key={entry.qualityClass} className="greenery-legend-item">
+                    <span style={{ backgroundColor: entry.color }} />
+                    <small>{entry.label}</small>
+                    <strong>{entry.count}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="greenery-panel greenery-panel--story">
+              <div className="greenery-panel-head">
+                <span>Read This Map</span>
+                <strong>What stands out</strong>
+              </div>
+              <div className="greenery-story-list">
+                <p>
+                  <strong>{formatPercent(100 - headline.accessGapShare)}</strong> of mapped segments are not flagged as residential access gaps, which means the shortfall is concentrated rather than universal.
+                </p>
+                <p>
+                  The typical street reaches usable greenery in <strong>{formatMinutes(headline.avgWalk)}</strong>, but quality adjustments stretch the citywide average to <strong>{formatMinutes(headline.avgAdjusted)}</strong>.
+                </p>
+                <p>
+                  Destination supply is dominated by <strong>{destinationMix[0]?.label || 'park'}</strong>, so quality and placement matter more than raw variety in most areas.
+                </p>
+                {allLayersActive && (
+                  <p>
+                    With all environment layers active, you can read greenery access alongside canopy, heat, and air quality to spot streets that need both cooling and better park reach.
+                  </p>
+                )}
+              </div>
+            </section>
           </div>
-        </div>
+
+          <div className="greenery-ranking-grid">
+            <section className="greenery-ranking-card">
+              <div className="greenery-panel-head">
+                <span>Best Performing Streets</span>
+                <strong>Lowest adjusted access times</strong>
+              </div>
+              {topStreets.map((street) => (
+                <div key={street.rawStreet} className="greenery-ranking-row">
+                  <div>
+                    <strong>{street.street}</strong>
+                    <small>{street.segments} segments · quality {street.avgQuality.toFixed(0)}/100</small>
+                  </div>
+                  <span>{formatMinutes(street.avgAdjusted)}</span>
+                </div>
+              ))}
+            </section>
+
+            <section className="greenery-ranking-card greenery-ranking-card--warning">
+              <div className="greenery-panel-head">
+                <span>Most Underserved Streets</span>
+                <strong>Highest adjusted access times</strong>
+              </div>
+              {underservedStreets.map((street) => (
+                <div key={street.rawStreet} className="greenery-ranking-row">
+                  <div>
+                    <strong>{street.street}</strong>
+                    <small>{street.segments} segments · gap share {street.gapShare.toFixed(0)}%</small>
+                  </div>
+                  <span>{formatMinutes(street.avgAdjusted)}</span>
+                </div>
+              ))}
+            </section>
+          </div>
+        </>
       )}
-      
-      {/* Layer Controls - hidden when using category selector */}
-      {!hideLayerControls && (
-        <div className="layer-controls">
-          <h4>Visible Layers</h4>
-          <div className="layer-toggles">
-            <label className="layer-toggle">
-              <input
-                type="checkbox"
-                checked={false}
-                onChange={() => {}}
-              />
-              <span>Greenery & Sky View Factor</span>
-            </label>
-            <label className="layer-toggle">
-              <input
-                type="checkbox"
-                checked={false}
-                onChange={() => {}}
-              />
-              <span>Tree Canopy</span>
-            </label>
-            <label className="layer-toggle">
-              <input
-                type="checkbox"
-                checked={false}
-                onChange={() => {}}
-              />
-              <span>Parks Nearby</span>
-            </label>
-          </div>
-        </div>
-      )}
-      
-      {/* Legend */}
-      <div className="legend-section">
-        <h4>Vegetation Density</h4>
-        <div className="legend-items">
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#8b4513' }}></div>
-            <span>No Vegetation (&lt;0.1)</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#d4b896' }}></div>
-            <span>Sparse (0.1-0.3)</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#bde69c' }}></div>
-            <span>Moderate (0.3-0.5)</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#6ab04c' }}></div>
-            <span>Dense (0.5-0.7)</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#2d7a2e' }}></div>
-            <span>Very Dense (&gt;0.7)</span>
-          </div>
-        </div>
-      </div>
     </aside>
   )
 }

@@ -70,6 +70,36 @@ const parseEcologySelectionKey = (value) => {
   }
 }
 
+const GREENERY_DESTINATION_COLORS = {
+  park: '#22c55e',
+  garden: '#84cc16',
+  beach: '#38bdf8',
+  other: '#94a3b8'
+}
+
+const GREENERY_QUALITY_COLORS = {
+  very_high: '#14532d',
+  high: '#22c55e',
+  medium: '#84cc16',
+  low: '#facc15',
+  very_low: '#f97316',
+  unknown: '#64748b'
+}
+
+const formatGreeneryStreetName = (value) => {
+  if (!value) return 'Unnamed street'
+  return String(value)
+    .toLowerCase()
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+}
+
+const formatMinutes = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${numeric.toFixed(1)} min` : '—'
+}
+
+const clampRatio = (value) => Math.max(0, Math.min(100, value))
+
 const DASHBOARD_MODES = [
   { id: 'business', label: 'Business Analytics' },
   { id: 'walkability', label: 'Active Mobility' },
@@ -103,9 +133,8 @@ const LAYER_CATEGORIES = [
   // Environment layers (greenery + air quality)
   { id: 'airQuality',   label: 'Air Quality',  dashboard: 'environment', dataKey: 'airQualityVoronoi' },
   { id: 'urbanHeatConcrete', label: 'Heat Islands & Cool Islands', dashboard: 'environment', dataKey: 'ecologyHeat' },
-  { id: 'greeneryIndex', label: 'Greenery Index', dashboard: 'environment', dataKey: 'greenerySegments' },
+  { id: 'greeneryIndex', label: 'Greenery Access', dashboard: 'environment', dataKey: 'greenerySegments' },
   { id: 'treeCanopy', label: 'Tree Canopy', dashboard: 'environment', dataKey: 'treeCanopy' },
-  { id: 'parksNearby', label: 'Parks Nearby', dashboard: 'environment', dataKey: 'parksNearby' },
   // Traffic layers
   { id: 'trafficFlow', label: 'Traffic Flow', dashboard: 'traffic', dataKey: 'trafficSegments' }
 ]
@@ -190,6 +219,13 @@ const UnifiedDataExplorer = () => {
   const [envDetailGrid, setEnvDetailGrid] = useState(null) // grid_id for bottom detail panel
   const [envPanelMinimized, setEnvPanelMinimized] = useState(false)
   const envDetailPanelRef = useRef(null)
+  const [selectedGreeneryStreetKeys, setSelectedGreeneryStreetKeys] = useState([])
+  const [greeneryPanelMinimized, setGreeneryPanelMinimized] = useState(false)
+  const greeneryDetailPanelRef = useRef(null)
+  const [showGreenDestinations, setShowGreenDestinations] = useState(true)
+  const [greeneryInsightsExpanded, setGreeneryInsightsExpanded] = useState(false)
+  const [greeneryMapMode, setGreeneryMapMode] = useState('percentile')
+  const [showUnderservedGreenery, setShowUnderservedGreenery] = useState(true)
 
   // Layer visibility
   const [visibleLayers, setVisibleLayers] = useState({
@@ -316,6 +352,151 @@ const UnifiedDataExplorer = () => {
     return buildEnvDisplayData(envHistoryData, envDate)
   }, [envDate, envHistoryData])
 
+  const greeneryStreetSummaries = useMemo(() => {
+    const features = greeneryAndSkyview?.features || []
+    if (!features.length) return {}
+
+    const summaryByStreet = {}
+    features.forEach((feature) => {
+      const props = feature.properties || {}
+      const streetKey = props.str_name || props.str_name_mdf || props.segment_id
+      if (!streetKey) return
+
+      if (!summaryByStreet[streetKey]) {
+        summaryByStreet[streetKey] = {
+          streetKey,
+          displayName: formatGreeneryStreetName(streetKey),
+          features: [],
+          segmentProfile: [],
+          qualityClasses: { very_high: 0, high: 0, medium: 0, low: 0, very_low: 0, unknown: 0 }
+        }
+      }
+
+      const bucket = summaryByStreet[streetKey]
+      const adjustedMinutes = Number(props.quality_adjusted_park_minutes)
+      const walkMinutes = Number(props.walk_time_minutes)
+      const bestCaseMinutes = Number(props.best_case_minutes)
+      const worstCaseMinutes = Number(props.worst_case_minutes)
+      const parkQualityScore = Number(props.park_quality_score)
+      const segmentLengthM = Number(props.segment_length_m)
+      const buildings250m = Number(props.residential_buildings_250m)
+      const qualityClass = props.park_quality_class || 'unknown'
+
+      bucket.features.push(feature)
+      bucket.segmentProfile.push({
+        segment: bucket.features.length,
+        adjustedMinutes: Number.isFinite(adjustedMinutes) ? adjustedMinutes : null,
+        walkMinutes: Number.isFinite(walkMinutes) ? walkMinutes : null,
+        qualityScore: Number.isFinite(parkQualityScore) ? parkQualityScore : null
+      })
+      bucket.qualityClasses[qualityClass] = (bucket.qualityClasses[qualityClass] || 0) + 1
+      bucket.totalLengthM = (bucket.totalLengthM || 0) + (Number.isFinite(segmentLengthM) ? segmentLengthM : 0)
+      bucket.gapSegments = (bucket.gapSegments || 0) + (props.residential_access_gap ? 1 : 0)
+      bucket.residentialSegments = (bucket.residentialSegments || 0) + (props.is_residential_proxy ? 1 : 0)
+      bucket.residentialBuildings250m = (bucket.residentialBuildings250m || 0) + (Number.isFinite(buildings250m) ? buildings250m : 0)
+      bucket.adjustedMinutesTotal = (bucket.adjustedMinutesTotal || 0) + (Number.isFinite(adjustedMinutes) ? adjustedMinutes : 0)
+      bucket.adjustedMinutesCount = (bucket.adjustedMinutesCount || 0) + (Number.isFinite(adjustedMinutes) ? 1 : 0)
+      bucket.walkMinutesTotal = (bucket.walkMinutesTotal || 0) + (Number.isFinite(walkMinutes) ? walkMinutes : 0)
+      bucket.walkMinutesCount = (bucket.walkMinutesCount || 0) + (Number.isFinite(walkMinutes) ? 1 : 0)
+      bucket.bestCaseTotal = (bucket.bestCaseTotal || 0) + (Number.isFinite(bestCaseMinutes) ? bestCaseMinutes : 0)
+      bucket.bestCaseCount = (bucket.bestCaseCount || 0) + (Number.isFinite(bestCaseMinutes) ? 1 : 0)
+      bucket.worstCaseTotal = (bucket.worstCaseTotal || 0) + (Number.isFinite(worstCaseMinutes) ? worstCaseMinutes : 0)
+      bucket.worstCaseCount = (bucket.worstCaseCount || 0) + (Number.isFinite(worstCaseMinutes) ? 1 : 0)
+      bucket.qualityScoreTotal = (bucket.qualityScoreTotal || 0) + (Number.isFinite(parkQualityScore) ? parkQualityScore : 0)
+      bucket.qualityScoreCount = (bucket.qualityScoreCount || 0) + (Number.isFinite(parkQualityScore) ? 1 : 0)
+    })
+
+    Object.values(summaryByStreet).forEach((bucket) => {
+      const segmentCount = bucket.features.length || 1
+      bucket.segmentCount = bucket.features.length
+      bucket.avgAdjustedMinutes = bucket.adjustedMinutesCount ? bucket.adjustedMinutesTotal / bucket.adjustedMinutesCount : null
+      bucket.avgWalkMinutes = bucket.walkMinutesCount ? bucket.walkMinutesTotal / bucket.walkMinutesCount : null
+      bucket.avgBestCaseMinutes = bucket.bestCaseCount ? bucket.bestCaseTotal / bucket.bestCaseCount : null
+      bucket.avgWorstCaseMinutes = bucket.worstCaseCount ? bucket.worstCaseTotal / bucket.worstCaseCount : null
+      bucket.avgParkQualityScore = bucket.qualityScoreCount ? bucket.qualityScoreTotal / bucket.qualityScoreCount : null
+      bucket.accessGapShare = (bucket.gapSegments / segmentCount) * 100
+      bucket.avgResidentialBuildings250m = bucket.residentialBuildings250m / segmentCount
+      bucket.radarMetrics = [
+        { metric: 'Access speed', value: clampRatio(100 - ((bucket.avgAdjustedMinutes || 0) / 18) * 100) },
+        { metric: 'Green quality', value: clampRatio(bucket.avgParkQualityScore || 0) },
+        { metric: 'Res. coverage', value: clampRatio((bucket.residentialSegments / segmentCount) * 100) },
+        { metric: 'Gap risk', value: clampRatio(100 - bucket.accessGapShare) },
+        { metric: 'Street length', value: clampRatio((bucket.totalLengthM / 2000) * 100) }
+      ]
+      bucket.qualityMixChart = Object.entries(bucket.qualityClasses)
+        .filter(([, count]) => count > 0)
+        .map(([qualityClass, count]) => ({
+          qualityClass,
+          label: qualityClass.replace(/_/g, ' '),
+          count,
+          color: GREENERY_QUALITY_COLORS[qualityClass] || GREENERY_QUALITY_COLORS.unknown
+        }))
+    })
+
+    return summaryByStreet
+  }, [greeneryAndSkyview])
+
+  const selectedGreenerySummaries = useMemo(() => {
+    return selectedGreeneryStreetKeys
+      .map((key) => greeneryStreetSummaries[key])
+      .filter(Boolean)
+  }, [greeneryStreetSummaries, selectedGreeneryStreetKeys])
+
+  const greeneryStreetComparisonData = useMemo(() => {
+    const [primary, compare] = selectedGreenerySummaries
+    if (!primary) return null
+
+    return [
+      { metric: 'Adjusted', primary: primary.avgAdjustedMinutes, compare: compare?.avgAdjustedMinutes ?? null },
+      { metric: 'Walk', primary: primary.avgWalkMinutes, compare: compare?.avgWalkMinutes ?? null },
+      { metric: 'Quality', primary: primary.avgParkQualityScore, compare: compare?.avgParkQualityScore ?? null },
+      { metric: 'Gap share', primary: primary.accessGapShare, compare: compare?.accessGapShare ?? null },
+      { metric: 'Buildings', primary: primary.avgResidentialBuildings250m, compare: compare?.avgResidentialBuildings250m ?? null }
+    ]
+  }, [selectedGreenerySummaries])
+
+  const greenerySegmentTrendData = useMemo(() => {
+    const [primary, compare] = selectedGreenerySummaries
+    if (!primary) return []
+    const size = Math.max(primary.segmentProfile.length, compare?.segmentProfile?.length || 0)
+    return Array.from({ length: size }, (_, index) => ({
+      segment: `S${index + 1}`,
+      primaryAdjusted: primary.segmentProfile[index]?.adjustedMinutes ?? null,
+      primaryQuality: primary.segmentProfile[index]?.qualityScore ?? null,
+      compareAdjusted: compare?.segmentProfile?.[index]?.adjustedMinutes ?? null,
+      compareQuality: compare?.segmentProfile?.[index]?.qualityScore ?? null
+    }))
+  }, [selectedGreenerySummaries])
+
+  const greeneryNearestDestinations = useMemo(() => {
+    const destinations = parksData?.features || []
+    return selectedGreenerySummaries.map((summary) => {
+      const ranked = destinations
+        .map((destination) => {
+          const destinationPoint = turf.point(destination.geometry.coordinates)
+          const nearestDistance = summary.features.reduce((best, feature) => {
+            try {
+              const distance = turf.pointToLineDistance(destinationPoint, feature, { units: 'kilometers' }) * 1000
+              return best == null || distance < best ? distance : best
+            } catch {
+              return best
+            }
+          }, null)
+          return {
+            name: destination.properties?.name || 'Green destination',
+            type: destination.properties?.destination_type || 'other',
+            qualityScore: Number(destination.properties?.quality_score),
+            distanceM: nearestDistance,
+            color: GREENERY_DESTINATION_COLORS[destination.properties?.destination_type] || GREENERY_DESTINATION_COLORS.other
+          }
+        })
+        .filter((item) => item.distanceM != null)
+        .sort((a, b) => a.distanceM - b.distanceM)
+        .slice(0, 5)
+      return { streetKey: summary.streetKey, destinations: ranked }
+    })
+  }, [parksData, selectedGreenerySummaries])
+
   useEffect(() => {
     if (!selectedWalkabilityMonth && effectiveSelectedMonth) {
       setSelectedWalkabilityMonth(effectiveSelectedMonth)
@@ -324,8 +505,25 @@ const UnifiedDataExplorer = () => {
 
   const openEnvGridDetail = useCallback((gridId) => {
     if (!gridId) return
+    setSelectedGreeneryStreetKeys([])
+    setGreeneryPanelMinimized(false)
     setEnvDetailGrid(gridId)
     setEnvPanelMinimized(false)
+  }, [])
+
+  const openGreeneryStreetDetail = useCallback((streetKey) => {
+    if (!streetKey) return
+    setEnvDetailGrid(null)
+    setEnvPanelMinimized(false)
+    setSelectedGreeneryStreetKeys((current) => {
+      const [primaryKey, compareKey] = current
+      if (!primaryKey) return [streetKey]
+      if (streetKey === primaryKey) return compareKey ? [primaryKey] : [primaryKey]
+      if (streetKey === compareKey) return [primaryKey]
+      if (!compareKey) return [primaryKey, streetKey]
+      return [primaryKey, streetKey]
+    })
+    setGreeneryPanelMinimized(false)
   }, [])
 
   useEffect(() => {
@@ -335,6 +533,14 @@ const UnifiedDataExplorer = () => {
     }, 120)
     return () => clearTimeout(timer)
   }, [envDetailGrid, envPanelMinimized])
+
+  useEffect(() => {
+    if (!selectedGreeneryStreetKeys.length || greeneryPanelMinimized) return
+    const timer = setTimeout(() => {
+      greeneryDetailPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }, 120)
+    return () => clearTimeout(timer)
+  }, [greeneryPanelMinimized, selectedGreeneryStreetKeys])
 
   const ecologyCurrentData = useMemo(() => ecologyHeatByYear[ecologyYear] || null, [ecologyHeatByYear, ecologyYear])
 
@@ -443,6 +649,7 @@ const UnifiedDataExplorer = () => {
   // Resizable sidebar
   const [sidebarWidth, setSidebarWidth] = useState(360)
   const sidebarDragRef = useRef(null)
+  const effectiveSidebarWidth = greeneryInsightsExpanded ? Math.max(sidebarWidth, 620) : sidebarWidth
 
   // Rating filter — null = all, Set of floor values e.g. new Set([4,5])
   const [ratingFilter, setRatingFilter] = useState(null)
@@ -486,6 +693,20 @@ const UnifiedDataExplorer = () => {
     setSelectedEcologyFeatureKeys([])
     setEcologyPanelMinimized(false)
   }, [dashboardMode, activeCategory])
+
+  useEffect(() => {
+    const greeneryCategoryActive = dashboardMode === 'environment' && activeCategory !== 'airQuality' && activeCategory !== 'urbanHeatConcrete'
+    if (!greeneryCategoryActive && greeneryInsightsExpanded) {
+      setGreeneryInsightsExpanded(false)
+    }
+  }, [activeCategory, dashboardMode, greeneryInsightsExpanded])
+
+  useEffect(() => {
+    if (dashboardMode !== 'environment') return
+    if (activeCategory === 'greeneryIndex' || activeCategory === 'treeCanopy' || activeCategory === null) {
+      setShowGreenDestinations(true)
+    }
+  }, [activeCategory, dashboardMode])
   
   // Listen for clear segment selection event
   useEffect(() => {
@@ -675,6 +896,11 @@ const UnifiedDataExplorer = () => {
       && !(dashboardMode === 'walkability' && c.id === 'mobilityAnomalies')
     ))
   }
+
+  const showEnvironmentAllLayersToggle = useMemo(() => {
+    if (dashboardMode !== 'environment') return false
+    return getCurrentDashboardCategories().length > 1
+  }, [dashboardMode])
 
   // Get businesses matching the current category/filters for bottom panel
   const getActiveBusinesses = () => {
@@ -965,7 +1191,7 @@ const UnifiedDataExplorer = () => {
       {/* Category sub-nav — horizontal pill bar below mode tabs */}
       <div className="category-subnav">
         {/* All Layers toggle — only for dashboards with multiple layer types */}
-        {['environment'].includes(dashboardMode) && (() => {
+        {showEnvironmentAllLayersToggle && (() => {
           const dashCats = getCurrentDashboardCategories()
           const allActive = dashCats.every(c => layerStack.some(l => l.id === c.id))
           return (
@@ -991,7 +1217,7 @@ const UnifiedDataExplorer = () => {
       </div>
 
       <div className="explorer-content">
-        <aside className="explorer-sidebar" style={{ width: sidebarWidth }}>
+        <aside className={`explorer-sidebar ${greeneryInsightsExpanded ? 'explorer-sidebar--wide' : ''}`} style={{ width: effectiveSidebarWidth }}>
           <div className="sidebar-resize-handle" onMouseDown={startSidebarDrag} />
           {/* Dashboard-specific content */}
           <Suspense fallback={<div className="app-panel-loading">Loading analytics panel...</div>}>
@@ -1187,25 +1413,30 @@ const UnifiedDataExplorer = () => {
                     comparisonFeature={compareEcologyFeature}
                     comparisonSeries={compareEcologyFeatureSeries}
                   />
+                ) : activeCategory === 'airQuality' ? (
+                  <EnvironmentAnalytics
+                    currentData={envDisplayData}
+                    historyData={envHistoryData}
+                    envIndex={envIndex}
+                    onEnvIndexChange={setEnvIndex}
+                    envDate={envDate}
+                    onEnvDateChange={setEnvDate}
+                  />
                 ) : (
-                  <>
-                    <EnvironmentAnalytics
-                      currentData={envDisplayData}
-                      historyData={envHistoryData}
-                      envIndex={envIndex}
-                      onEnvIndexChange={setEnvIndex}
-                      envDate={envDate}
-                      onEnvDateChange={setEnvDate}
-                    />
-                    <GreeneryAnalytics
-                      shadeData={shadeData}
-                      greeneryAndSkyview={greeneryAndSkyview}
-                      treeCanopyData={treeCanopyData}
-                      parksData={parksData}
-                      hideLayerControls={true}
-                      allLayersActive={LAYER_CATEGORIES.filter(c => c.dashboard === 'environment').every(c => layerStack.some(l => l.id === c.id))}
-                    />
-                  </>
+                  <GreeneryAnalytics
+                    greeneryAndSkyview={greeneryAndSkyview}
+                    parksData={parksData}
+                    hideLayerControls={true}
+                    allLayersActive={LAYER_CATEGORIES.filter(c => c.dashboard === 'environment').every(c => layerStack.some(l => l.id === c.id))}
+                    showGreenDestinations={showGreenDestinations}
+                    onToggleGreenDestinations={() => setShowGreenDestinations((current) => !current)}
+                    insightsExpanded={greeneryInsightsExpanded}
+                    onInsightsExpandedChange={setGreeneryInsightsExpanded}
+                    greeneryMapMode={greeneryMapMode}
+                    onGreeneryMapModeChange={setGreeneryMapMode}
+                    showUnderservedGreenery={showUnderservedGreenery}
+                    onShowUnderservedGreeneryChange={setShowUnderservedGreenery}
+                  />
                 )}
               </>
             )}
@@ -1279,6 +1510,9 @@ const UnifiedDataExplorer = () => {
               greeneryAndSkyview={greeneryAndSkyview}
               treeCanopyData={treeCanopyData}
               parksData={parksData}
+              showGreenDestinations={showGreenDestinations}
+              greeneryMapMode={greeneryMapMode}
+              showUnderservedGreenery={showUnderservedGreenery}
               ecologyHeatData={ecologyCurrentData}
               ecologyMetric={ecologyMetric}
               selectedEcologyFeatureKeys={selectedEcologyFeatureKeys}
@@ -1286,6 +1520,7 @@ const UnifiedDataExplorer = () => {
               envHistoryData={envHistoryData}
               envIndex={envIndex}
               onEnvGridDetail={openEnvGridDetail}
+              onGreeneryStreetSelect={openGreeneryStreetDetail}
               onEcologyFeatureSelect={openEcologyFeatureDetail}
               visibleLayers={visibleLayers}
               layerStack={layerStack}
@@ -1329,7 +1564,7 @@ const UnifiedDataExplorer = () => {
           {dashboardMode === 'walkability' && selectedRouteSegment && selectedRouteHistory && (
             <div
               className={`bottom-panel route-history-panel ${routePanelMinimized ? 'route-history-panel--minimized' : ''}`}
-              style={{ right: `${sidebarWidth + 32}px` }}
+              style={{ right: `${effectiveSidebarWidth + 32}px` }}
             >
               <div className="panel-header">
                 <h3>Route Compare: A {selectedRouteHistory.edgeUid}{compareRouteHistory ? ` vs B ${compareRouteHistory.edgeUid}` : ''}</h3>
@@ -1565,7 +1800,7 @@ const UnifiedDataExplorer = () => {
           {dashboardMode === 'walkability' && selectedAnomalySegment && (
             <div
               className={`bottom-panel route-history-panel ${routePanelMinimized ? 'route-history-panel--minimized' : ''}`}
-              style={{ right: `${sidebarWidth + 32}px` }}
+              style={{ right: `${effectiveSidebarWidth + 32}px` }}
             >
               <div className="panel-header">
                 <h3>Anomaly Detail: edge {selectedAnomalySegment.edge_uid}</h3>
@@ -1781,6 +2016,229 @@ const UnifiedDataExplorer = () => {
             </div>
           )}
 
+          {/* ── Greenery detail bottom panel ── */}
+          {dashboardMode === 'environment' && selectedGreenerySummaries.length > 0 && activeCategory !== 'urbanHeatConcrete' && (() => {
+            const [primaryStreet, compareStreet] = selectedGreenerySummaries
+            const primaryDestinations = greeneryNearestDestinations.find((entry) => entry.streetKey === primaryStreet.streetKey)?.destinations || []
+            const compareDestinations = compareStreet
+              ? (greeneryNearestDestinations.find((entry) => entry.streetKey === compareStreet.streetKey)?.destinations || [])
+              : []
+            const greeneryRadarData = primaryStreet.radarMetrics.map((metric, index) => ({
+              metric: metric.metric,
+              primary: metric.value,
+              compare: compareStreet?.radarMetrics?.[index]?.value ?? null
+            }))
+            const qualityKeys = ['very_high', 'high', 'medium', 'low', 'very_low', 'unknown']
+            const greeneryQualityCompareData = qualityKeys.map((qualityKey) => ({
+              quality: qualityKey.replace(/_/g, ' '),
+              primary: primaryStreet.qualityClasses[qualityKey] || 0,
+              compare: compareStreet?.qualityClasses?.[qualityKey] || 0,
+              color: GREENERY_QUALITY_COLORS[qualityKey] || GREENERY_QUALITY_COLORS.unknown
+            }))
+
+            return (
+              <div
+                ref={greeneryDetailPanelRef}
+                className={`bottom-panel greenery-bottom-panel ${greeneryPanelMinimized ? 'greenery-minimized' : ''}`}
+                style={{ marginRight: effectiveSidebarWidth + 32 }}
+              >
+                <div className="panel-header greenery-panel-header">
+                  <div className="greenery-panel-headline">
+                    <div className="greenery-panel-score">
+                      {Math.round(primaryStreet.avgParkQualityScore || 0)}
+                    </div>
+                    <div>
+                      <h3>{primaryStreet.displayName} — Greenery Access Detail</h3>
+                      <div className="greenery-panel-subtitle">
+                        {primaryStreet.segmentCount} mapped segments · adjusted access {formatMinutes(primaryStreet.avgAdjustedMinutes)}
+                      </div>
+                      <div className="ecology-comparison-key">
+                        <div className="ecology-comparison-key-item">
+                          <span className="ecology-role-badge warm">A</span>
+                          <span>{primaryStreet.displayName}</span>
+                        </div>
+                        {compareStreet && (
+                          <div className="ecology-comparison-key-item">
+                            <span className="ecology-role-badge cool">B</span>
+                            <span>{compareStreet.displayName}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <button
+                      onClick={() => setGreeneryPanelMinimized((current) => !current)}
+                      className="close-btn"
+                      title={greeneryPanelMinimized ? 'Expand' : 'Minimize'}
+                    >{greeneryPanelMinimized ? '▲' : '▼'}</button>
+                    <button
+                      onClick={() => { setSelectedGreeneryStreetKeys([]); setGreeneryPanelMinimized(false) }}
+                      className="close-btn"
+                    >✕</button>
+                  </div>
+                </div>
+
+                {!greeneryPanelMinimized && (
+                  <div className="charts-container greenery-charts-container">
+                    <div className="env-detail-summary-row ecology-summary-row greenery-summary-row">
+                      <div className="env-detail-stat">
+                        <span className="env-detail-stat-label">Primary adjusted</span>
+                        <strong>{formatMinutes(primaryStreet.avgAdjustedMinutes)}</strong>
+                      </div>
+                      <div className="env-detail-stat">
+                        <span className="env-detail-stat-label">Primary quality</span>
+                        <strong>{Math.round(primaryStreet.avgParkQualityScore || 0)}/100</strong>
+                      </div>
+                      <div className="env-detail-stat">
+                        <span className="env-detail-stat-label">Gap share</span>
+                        <strong>{primaryStreet.accessGapShare.toFixed(0)}%</strong>
+                      </div>
+                      <div className="env-detail-stat">
+                        <span className="env-detail-stat-label">Compare street</span>
+                        <strong>{compareStreet ? compareStreet.displayName : 'Click another street'}</strong>
+                      </div>
+                    </div>
+
+                    <div className="greenery-detail-layout">
+                      <div className="greenery-detail-column">
+                        <div className="ecology-chart-card">
+                          <div className="ecology-chart-head">
+                            <span>Street Comparison</span>
+                            <strong>Average access metrics</strong>
+                          </div>
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={greeneryStreetComparisonData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                              <XAxis dataKey="metric" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                              <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                              <Tooltip
+                                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
+                                formatter={(value, name) => {
+                                  const label = name === 'primary' ? primaryStreet.displayName : compareStreet?.displayName || 'Compare'
+                                  return [Number(value).toFixed(1), label]
+                                }}
+                              />
+                              <Legend wrapperStyle={{ fontSize: 11 }} />
+                              <Bar dataKey="primary" fill="#22c55e" radius={[8, 8, 0, 0]} name={primaryStreet.displayName} />
+                              {compareStreet && <Bar dataKey="compare" fill="#38bdf8" radius={[8, 8, 0, 0]} name={compareStreet.displayName} />}
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="ecology-chart-card">
+                          <div className="ecology-chart-head">
+                            <span>Segment Profile</span>
+                            <strong>Adjusted access time by segment</strong>
+                          </div>
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={greenerySegmentTrendData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                              <XAxis dataKey="segment" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                              <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                              <Tooltip
+                                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
+                                formatter={(value, name) => {
+                                  const label = name === 'primaryAdjusted' ? primaryStreet.displayName : compareStreet?.displayName || 'Compare'
+                                  return [value != null ? `${Number(value).toFixed(1)} min` : '—', label]
+                                }}
+                              />
+                              <Line type="monotone" dataKey="primaryAdjusted" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 2 }} connectNulls />
+                              {compareStreet && <Line type="monotone" dataKey="compareAdjusted" stroke="#38bdf8" strokeWidth={2.5} dot={{ r: 2 }} connectNulls />}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      <div className="greenery-detail-column">
+                        <div className="ecology-chart-card">
+                          <div className="ecology-chart-head">
+                            <span>Street Spidergram</span>
+                            <strong>Performance profile</strong>
+                          </div>
+                          <ResponsiveContainer width="100%" height={240}>
+                            <RadarChart data={greeneryRadarData}>
+                              <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                              <PolarAngleAxis dataKey="metric" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                              <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} />
+                              <Radar dataKey="primary" stroke="#22c55e" fill="#22c55e" fillOpacity={0.32} />
+                              {compareStreet && <Radar dataKey="compare" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.18} />}
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="ecology-chart-card">
+                          <div className="ecology-chart-head">
+                            <span>Quality Mix</span>
+                            <strong>Nearest green destination class</strong>
+                          </div>
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={greeneryQualityCompareData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                              <XAxis dataKey="quality" stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                              <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} allowDecimals={false} />
+                              <Tooltip
+                                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
+                                formatter={(value, name) => [Number(value), name === 'primary' ? primaryStreet.displayName : compareStreet?.displayName || 'Compare']}
+                              />
+                              <Bar dataKey="primary" fill="#22c55e" radius={[8, 8, 0, 0]} />
+                              {compareStreet && <Bar dataKey="compare" fill="#38bdf8" radius={[8, 8, 0, 0]} />}
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="greenery-destination-grid">
+                      <div className="ecology-rank-card">
+                        <span>Nearest Green Destinations</span>
+                        <strong>{primaryStreet.displayName}</strong>
+                        <div className="greenery-destination-list">
+                          {primaryDestinations.map((destination) => (
+                            <div key={`${primaryStreet.streetKey}-${destination.name}`} className="greenery-destination-item">
+                              <div>
+                                <strong>{destination.name}</strong>
+                                <small>{String(destination.type).replace(/_/g, ' ')}</small>
+                              </div>
+                              <div className="greenery-destination-metrics">
+                                <span style={{ color: destination.color }}>{destination.qualityScore ? `${Math.round(destination.qualityScore)}/100` : '—'}</span>
+                                <small>{destination.distanceM != null ? `${Math.round(destination.distanceM)} m` : '—'}</small>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="ecology-rank-card">
+                        <span>Nearest Green Destinations</span>
+                        <strong>{compareStreet ? compareStreet.displayName : 'Comparison slot'}</strong>
+                        <div className="greenery-destination-list">
+                          {(compareStreet ? compareDestinations : []).map((destination) => (
+                            <div key={`${compareStreet.streetKey}-${destination.name}`} className="greenery-destination-item">
+                              <div>
+                                <strong>{destination.name}</strong>
+                                <small>{String(destination.type).replace(/_/g, ' ')}</small>
+                              </div>
+                              <div className="greenery-destination-metrics">
+                                <span style={{ color: destination.color }}>{destination.qualityScore ? `${Math.round(destination.qualityScore)}/100` : '—'}</span>
+                                <small>{destination.distanceM != null ? `${Math.round(destination.distanceM)} m` : '—'}</small>
+                              </div>
+                            </div>
+                          ))}
+                          {!compareStreet && (
+                            <div className="greenery-destination-empty">
+                              Click a second street to compare destination reach, quality mix, and segment performance.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           {/* ── Environment detail bottom panel ── */}
           {dashboardMode === 'environment' && envDetailGrid && (() => {
             const gridRow = envDisplayData?.rows?.find(r => r.grid_id === envDetailGrid) || envCurrentData?.rows?.find(r => r.grid_id === envDetailGrid)
@@ -1886,7 +2344,7 @@ const UnifiedDataExplorer = () => {
               <div
                 ref={envDetailPanelRef}
                 className={`bottom-panel env-bottom-panel ${envPanelMinimized ? 'env-minimized' : ''}`}
-                style={{ marginRight: sidebarWidth + 32 }}
+                style={{ marginRight: effectiveSidebarWidth + 32 }}
               >
                 <div className="panel-header">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -2043,7 +2501,7 @@ const UnifiedDataExplorer = () => {
                 compareSeries={compareEcologyFeatureSeries}
                 currentYearData={ecologyCurrentData}
                 selectedYear={ecologyYear}
-                sidebarWidth={sidebarWidth}
+                sidebarWidth={effectiveSidebarWidth}
                 panelRef={ecologyDetailPanelRef}
                 minimized={ecologyPanelMinimized}
                 onToggleMinimized={() => setEcologyPanelMinimized(current => !current)}
@@ -2057,7 +2515,7 @@ const UnifiedDataExplorer = () => {
         {dashboardMode === 'business' && businessMode === 'events' ? (
           <div
             className={`biz-bottom-panel events-bottom-panel ${eventsPanelMinimized ? 'events-bottom-panel--minimized' : ''}`}
-            style={{ right: `${sidebarWidth + 32}px`, height: eventsPanelMinimized ? 92 : `${eventsPanelHeight}px` }}
+            style={{ right: `${effectiveSidebarWidth + 32}px`, height: eventsPanelMinimized ? 92 : `${eventsPanelHeight}px` }}
           >
             <div className="events-bottom-panel-resize" onMouseDown={startEventsPanelDrag}>
               <span className="events-bottom-panel-grip" />

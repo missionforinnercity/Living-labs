@@ -66,24 +66,65 @@ function enrichTemperatureData(data) {
   }
 }
 
-function enrichParksData(parksData) {
-  if (!parksData?.features?.length) return parksData
+function enrichGreenDestinationsData(destinationsData) {
+  if (!destinationsData?.features?.length) return destinationsData
 
   return {
-    ...parksData,
-    features: parksData.features.map((feature) => {
-      let areaHa = null
-      try {
-        areaHa = turf.area(feature) / 10000
-      } catch {
-        areaHa = null
+    ...destinationsData,
+    features: destinationsData.features.map((feature) => {
+      const areaM2 = Number(feature?.properties?.area_m2)
+      let areaHa = Number.isFinite(areaM2) && areaM2 > 0 ? areaM2 / 10000 : null
+
+      if (areaHa == null) {
+        try {
+          areaHa = turf.area(feature) / 10000
+        } catch {
+          areaHa = null
+        }
       }
 
       return {
         ...feature,
         properties: {
           ...feature.properties,
-          area_ha: areaHa != null && Number.isFinite(areaHa) ? Number(areaHa.toFixed(2)) : null
+          area_ha: areaHa != null && Number.isFinite(areaHa) && areaHa > 0 ? Number(areaHa.toFixed(2)) : null
+        }
+      }
+    })
+  }
+}
+
+function enrichGreeneryAccessData(greeneryData) {
+  if (!greeneryData?.features?.length) return greeneryData
+
+  const validValues = greeneryData.features
+    .map((feature) => Number(feature?.properties?.quality_adjusted_park_minutes))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b)
+
+  if (!validValues.length) return greeneryData
+
+  const percentileAt = (value) => {
+    const lastIndex = validValues.length - 1
+    if (lastIndex <= 0) return 50
+    let index = validValues.findIndex((entry) => entry >= value)
+    if (index < 0) index = lastIndex
+    return (index / lastIndex) * 100
+  }
+
+  return {
+    ...greeneryData,
+    features: greeneryData.features.map((feature) => {
+      const adjustedMinutes = Number(feature?.properties?.quality_adjusted_park_minutes)
+      const percentile = Number.isFinite(adjustedMinutes) ? percentileAt(adjustedMinutes) : null
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          greenery_access_percentile: percentile != null ? Number(percentile.toFixed(2)) : null,
+          greenery_access_decile: percentile != null ? Math.min(10, Math.max(1, Math.ceil(percentile / 10) || 1)) : null,
+          underserved_15_min: Number.isFinite(adjustedMinutes) ? adjustedMinutes > 15 : false
         }
       }
     })
@@ -97,9 +138,9 @@ export async function loadExplorerShadeData(season, timeOfDay) {
 
 export async function loadExplorerGreeneryData() {
   const [greeneryAndSkyview, treeCanopyData, parksData, ...ecologyYears] = await Promise.all([
-    fetchJson('/data/greenery/greenryandSkyview.geojson', 'Greenery load failed'),
+    fetchJson('/api/environment/greenery-access', 'Greenery access load failed'),
     fetchJson('/data/greenery/tree_canopy.geojson', 'Tree canopy load failed'),
-    fetchJson('/data/greenery/parks_nearby.geojson', 'Parks load failed'),
+    fetchJson('/api/environment/green-destinations', 'Green destinations load failed'),
     fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2020.geojson', 'Ecology 2020 load failed'),
     fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2021.geojson', 'Ecology 2021 load failed'),
     fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2022.geojson', 'Ecology 2022 load failed'),
@@ -110,9 +151,9 @@ export async function loadExplorerGreeneryData() {
   ])
 
   return {
-    greeneryAndSkyview,
+    greeneryAndSkyview: enrichGreeneryAccessData(greeneryAndSkyview),
     treeCanopyData: transformGeoJSON(treeCanopyData, 'EPSG:3857', 'EPSG:4326'),
-    parksData: enrichParksData(parksData),
+    parksData: enrichGreenDestinationsData(parksData),
     ecologyHeatByYear: {
       2020: ecologyYears[0],
       2021: ecologyYears[1],

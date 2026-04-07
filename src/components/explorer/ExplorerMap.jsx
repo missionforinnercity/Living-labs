@@ -51,6 +51,35 @@ const getEventCoordinateKey = (feature) => {
   return `${Number(lng).toFixed(EVENT_COORD_PRECISION)},${Number(lat).toFixed(EVENT_COORD_PRECISION)}`
 }
 
+const getStreetViewCoordinates = (feature) => {
+  const geometry = feature?.geometry
+  if (!geometry) return null
+
+  if (geometry.type === 'Point') {
+    const [lng, lat] = geometry.coordinates || []
+    return Number.isFinite(lng) && Number.isFinite(lat) ? { lng, lat } : null
+  }
+
+  if (geometry.type === 'MultiPoint') {
+    const [lng, lat] = geometry.coordinates?.[0] || []
+    return Number.isFinite(lng) && Number.isFinite(lat) ? { lng, lat } : null
+  }
+
+  try {
+    const centroid = turf.centroid(feature)
+    const [lng, lat] = centroid?.geometry?.coordinates || []
+    return Number.isFinite(lng) && Number.isFinite(lat) ? { lng, lat } : null
+  } catch {
+    return null
+  }
+}
+
+const getStreetViewUrl = (feature) => {
+  const coordinates = getStreetViewCoordinates(feature)
+  if (!coordinates) return null
+  return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${coordinates.lat},${coordinates.lng}`
+}
+
 const getEcologySelectionGrid = (feature, explicitSegmentCount = null) => {
   const areaM2 = Number(feature?.properties?.area_m2)
   if (!Number.isFinite(areaM2) || areaM2 <= ECOLOGY_SELECTION_LARGE_AREA_M2) return null
@@ -285,6 +314,9 @@ const ExplorerMap = ({
   greeneryAndSkyview,
   treeCanopyData,
   parksData,
+  showGreenDestinations = true,
+  greeneryMapMode = 'percentile',
+  showUnderservedGreenery = true,
   ecologyHeatData,
   ecologyMetric = 'urban_heat_score',
   selectedEcologyFeatureKeys = [],
@@ -292,6 +324,7 @@ const ExplorerMap = ({
   envHistoryData,
   envIndex = 'uaqi',
   onEnvGridDetail,
+  onGreeneryStreetSelect,
   onEcologyFeatureSelect,
   visibleLayers,
   layerStack = [],
@@ -859,6 +892,22 @@ const ExplorerMap = ({
         return
       }
 
+      if (feature.source === 'greenery-access') {
+        const clickedStreet = feature.properties?.str_name || feature.properties?.str_name_mdf
+        onGreeneryStreetSelect?.(clickedStreet)
+        return
+      }
+
+      if (feature.source === 'green-destinations') {
+        setSelectedFeature(feature)
+        setPopupInfo({
+          longitude: event.lngLat.lng,
+          latitude: event.lngLat.lat,
+          feature
+        })
+        return
+      }
+
       if (feature.source === 'ecology-heat') {
         onEcologyFeatureSelect?.(
           buildEcologySelectionKeyFromClick(feature, event.lngLat)
@@ -1064,13 +1113,13 @@ const ExplorerMap = ({
           'mission-interventions-layer',
           'municipal-lights-layer',
           'temperature-segments-layer',
-          'greenery-skyview-layer',
+          'greenery-access-layer',
+          'greenery-destination-layer',
           'ecology-heat-volume',
           'ecology-heat-hit',
           'ecology-heat-primary-outline',
           'ecology-heat-compare-outline',
           'tree-canopy-layer',
-          'parks-nearby-layer',
           'env-grid-fill',
           'traffic-layer',
           'events-points-layer'
@@ -2105,33 +2154,71 @@ const ExplorerMap = ({
         )}
 
         {/* Greenery Layers */}
-        {/* Greenery & Sky View Factor Layer */}
+        {/* Greenery access street segments */}
         {shouldRenderCategory('greeneryIndex') && greeneryAndSkyview && (
               <Source
-                id="greenery-skyview-segments"
+                id="greenery-access"
                 type="geojson"
                 data={greeneryAndSkyview}
               >
                 <Layer
-                  id="greenery-skyview-layer"
+                  id="greenery-access-layer"
                   type="line"
                   paint={{
                     'line-color': [
-                      'case',
-                      ['==', ['get', 'vegetation_index'], null],
-                      '#4b5563',
-                      [
-                        'step',
-                        ['get', 'vegetation_index'],
-                        '#8b4513',  // No Vegetation: <0.1
-                        0.1, '#d4b896',  // Sparse: 0.1-0.3
-                        0.3, '#bde69c',  // Moderate: 0.3-0.5
-                        0.5, '#6ab04c',  // Dense: 0.5-0.7
-                        0.7, '#2d7a2e'   // Very Dense: >0.7
-                      ]
+                      ...(greeneryMapMode === 'minutes'
+                        ? [
+                            'interpolate',
+                            ['linear'],
+                            ['coalesce', ['get', 'quality_adjusted_park_minutes'], 18],
+                            0, '#14532d',
+                            2, '#166534',
+                            5, '#22c55e',
+                            8, '#84cc16',
+                            12, '#facc15',
+                            15, '#f59e0b',
+                            20, '#ea580c'
+                          ]
+                        : [
+                            'step',
+                            ['coalesce', ['get', 'greenery_access_percentile'], 50],
+                            '#14532d',
+                            10, '#166534',
+                            25, '#22c55e',
+                            50, '#84cc16',
+                            75, '#d9f99d',
+                            90, '#f59e0b'
+                          ])
                     ],
-                    'line-width': 5,
+                    'line-width': [
+                      'interpolate',
+                      ['linear'],
+                      ['zoom'],
+                      11, 3.2,
+                      14, 5.2,
+                      17, 8
+                    ],
                     'line-opacity': 0.9
+                  }}
+                />
+                <Layer
+                  id="greenery-access-gap-overlay"
+                  type="line"
+                  filter={showUnderservedGreenery
+                    ? ['==', ['get', 'underserved_15_min'], true]
+                    : ['==', ['get', 'residential_access_gap'], true]}
+                  paint={{
+                    'line-color': showUnderservedGreenery ? '#ef4444' : '#f59e0b',
+                    'line-width': [
+                      'interpolate',
+                      ['linear'],
+                      ['zoom'],
+                      11, 1.1,
+                      14, 1.8,
+                      17, 2.8
+                    ],
+                    'line-dasharray': [1.2, 1.2],
+                    'line-opacity': 0.95
                   }}
                 />
               </Source>
@@ -2260,27 +2347,36 @@ const ExplorerMap = ({
               </Source>
             )}
             
-            {/* Parks Nearby Layer */}
-            {shouldRenderCategory('parksNearby') && parksData && (
+            {/* Green destination nodes */}
+            {showGreenDestinations && (shouldRenderCategory('greeneryIndex') || activeCategory == null) && parksData && (
               <Source
-                id="parks-nearby"
+                id="green-destinations"
                 type="geojson"
                 data={parksData}
               >
                 <Layer
-                  id="parks-nearby-layer"
-                  type="fill"
+                  id="greenery-destination-layer"
+                  type="circle"
                   paint={{
-                    'fill-color': '#10b981',
-                    'fill-opacity': 0.4
-                  }}
-                />
-                <Layer
-                  id="parks-nearby-outline"
-                  type="line"
-                  paint={{
-                    'line-color': '#059669',
-                    'line-width': 2
+                    'circle-color': [
+                      'match',
+                      ['coalesce', ['get', 'destination_type'], 'other'],
+                      'park', '#22c55e',
+                      'garden', '#84cc16',
+                      'beach', '#38bdf8',
+                      '#94a3b8'
+                    ],
+                    'circle-radius': [
+                      'interpolate',
+                      ['linear'],
+                      ['coalesce', ['get', 'quality_score'], 45],
+                      40, 5,
+                      70, 8,
+                      100, 12
+                    ],
+                    'circle-stroke-color': '#ecfdf5',
+                    'circle-stroke-width': 1.6,
+                    'circle-opacity': 0.92
                   }}
                 />
               </Source>
@@ -3148,22 +3244,48 @@ const ExplorerMap = ({
 
               {(dashboardMode === 'environment' || dashboardMode === 'greenery') && (() => {
                 const p = popupInfo.feature.properties
-                const vegIndex = parseFloat(p.vegetation_index)
-                const svf = parseFloat(p.sky_view_factor)
-                const shadePct = parseFloat(p.shade_coverage_pct)
-                const surfTemp = parseFloat(p.surface_temp_celsius)
+                const adjustedMinutes = parseFloat(p.quality_adjusted_park_minutes)
+                const walkMinutes = parseFloat(p.walk_time_minutes)
+                const qualityScore = parseFloat(p.quality_score ?? p.park_quality_score)
+                const canopyRatio = parseFloat(p.canopy_cover_ratio)
+                const accessPercentile = parseFloat(p.greenery_access_percentile)
+                const streetViewUrl = p.destination_type ? getStreetViewUrl(popupInfo.feature) : null
                 return (
                   <>
-                    <h3>{p.street_name || p.STR_NAME || 'Greenery Analysis'}</h3>
-                    {!isNaN(vegIndex) && <p><strong>Vegetation Index:</strong> {vegIndex.toFixed(3)}</p>}
-                    {!isNaN(svf) && <p><strong>Sky View Factor:</strong> {svf.toFixed(3)}</p>}
-                    {!isNaN(shadePct) && <p><strong>Shade Coverage:</strong> {shadePct.toFixed(1)}%</p>}
-                    {!isNaN(surfTemp) && <p><strong>Surface Temp:</strong> {surfTemp.toFixed(1)}°C</p>}
-                    {p.PARK_NAME && (
+                    <h3>{p.name || p.str_name || p.street_name || p.STR_NAME || 'Greenery Analysis'}</h3>
+                    {p.destination_type ? (
                       <>
-                        <p><strong>Park Name:</strong> {p.PARK_NAME}</p>
+                        <p><strong>Destination Type:</strong> {String(p.destination_type).replace(/_/g, ' ')}</p>
+                        {p.destination_group && <p><strong>Group:</strong> {String(p.destination_group).replace(/_/g, ' ')}</p>}
+                        {!isNaN(qualityScore) && <p><strong>Quality Score:</strong> {qualityScore.toFixed(0)}/100</p>}
+                        {p.quality_class && <p><strong>Quality Class:</strong> {String(p.quality_class).replace(/_/g, ' ')}</p>}
+                        {!isNaN(canopyRatio) && <p><strong>Canopy Cover:</strong> {(canopyRatio * 100).toFixed(0)}%</p>}
                         {p.area_ha != null && <p><strong>Area:</strong> {p.area_ha} ha</p>}
-                        {p.PLAY_EQPM && <p><strong>Play Equipment:</strong> {p.PLAY_EQPM}</p>}
+                        {p.access_reason && <p><strong>Access Basis:</strong> {String(p.access_reason).replace(/_/g, ' ')}</p>}
+                        {streetViewUrl && (
+                          <p style={{ marginTop: '0.65rem' }}>
+                            <a
+                              href={streetViewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="event-popup-link"
+                            >
+                              Open Street View
+                            </a>
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {!isNaN(adjustedMinutes) && <p><strong>Adjusted Green Access:</strong> {adjustedMinutes.toFixed(1)} min</p>}
+                        {!isNaN(walkMinutes) && <p><strong>Raw Walk Time:</strong> {walkMinutes.toFixed(1)} min</p>}
+                        {!isNaN(accessPercentile) && <p><strong>Relative Rank:</strong> {accessPercentile.toFixed(0)}th percentile</p>}
+                        {!isNaN(qualityScore) && <p><strong>Nearest Green Quality:</strong> {qualityScore.toFixed(0)}/100</p>}
+                        {p.park_quality_class && <p><strong>Quality Class:</strong> {String(p.park_quality_class).replace(/_/g, ' ')}</p>}
+                        {p.segment_length_m != null && <p><strong>Segment Length:</strong> {Number(p.segment_length_m).toFixed(0)} m</p>}
+                        {p.residential_buildings_250m != null && <p><strong>Residential Buildings in 250m:</strong> {p.residential_buildings_250m}</p>}
+                        {p.underserved_15_min && <p><strong>15+ Min Flag:</strong> Underserved green access</p>}
+                        {p.residential_access_gap && <p><strong>Gap Flag:</strong> Residential access gap</p>}
                       </>
                     )}
                   </>

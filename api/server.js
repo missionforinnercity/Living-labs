@@ -80,6 +80,37 @@ function buildEventsFeatureCollection(rows) {
   }
 }
 
+function buildGeoFeatureCollection(rows, {
+  geometryField = 'geometry',
+  source = null,
+  metadata = {}
+} = {}) {
+  const features = rows
+    .filter((row) => row?.[geometryField])
+    .map((row) => {
+      const properties = { ...row }
+      delete properties[geometryField]
+
+      return {
+        type: 'Feature',
+        properties,
+        geometry: row[geometryField]
+      }
+    })
+
+  return {
+    type: 'FeatureCollection',
+    features,
+    metadata: {
+      totalRows: rows.length,
+      totalFeatures: features.length,
+      fetchedAt: new Date().toISOString(),
+      ...(source ? { source } : {}),
+      ...metadata
+    }
+  }
+}
+
 // Current environment grid data — returns all grid cells
 app.get('/api/environment/current', async (_req, res) => {
   try {
@@ -122,6 +153,105 @@ app.get('/api/environment/history', async (_req, res) => {
     res.json({ rows, fetchedAt: new Date().toISOString() })
   } catch (err) {
     console.error('[API] /environment/history error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/environment/greenery-access', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        ogc_fid,
+        globalid,
+        objectid,
+        sl_str_name_key,
+        str_name,
+        lu_str_name_type_key,
+        bgn_date,
+        str_name_mdf,
+        prvt_ind,
+        lu_str_name_drct_key,
+        shape__length,
+        segment_id,
+        residential_buildings_250m,
+        is_residential_proxy,
+        segment_length_m,
+        walk_time_minutes,
+        best_case_minutes,
+        worst_case_minutes,
+        residential_access_gap,
+        park_walk_time_minutes,
+        park_quality_score,
+        park_quality_class,
+        quality_adjusted_park_minutes,
+        ST_AsGeoJSON(wkb_geometry)::json AS geometry
+      FROM environment.greenery_accessibility_metrics
+      ORDER BY str_name NULLS LAST, segment_id
+    `)
+
+    const [{ rows: summaryRows }] = await Promise.all([
+      pool.query(`
+        SELECT
+          count(*) AS segment_count,
+          count(distinct str_name) AS street_count,
+          count(*) FILTER (WHERE residential_access_gap) AS access_gap_segments,
+          round(avg(walk_time_minutes)::numeric, 2) AS avg_walk_time_minutes,
+          round(avg(quality_adjusted_park_minutes)::numeric, 2) AS avg_quality_adjusted_minutes,
+          round(avg(park_quality_score)::numeric, 1) AS avg_park_quality_score
+        FROM environment.greenery_accessibility_metrics
+      `)
+    ])
+
+    res.json(buildGeoFeatureCollection(rows, {
+      source: 'environment.greenery_accessibility_metrics',
+      metadata: summaryRows[0] || {}
+    }))
+  } catch (err) {
+    console.error('[API] /environment/greenery-access error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/environment/green-destinations', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        ogc_fid,
+        name,
+        destination_type,
+        source_layer,
+        source,
+        osm_id,
+        quality_score,
+        quality_class,
+        canopy_cover_ratio,
+        area_m2,
+        is_official_park,
+        near_major_road,
+        access_reason,
+        destination_group,
+        ST_AsGeoJSON(wkb_geometry)::json AS geometry
+      FROM environment.green_destinations
+      ORDER BY destination_group NULLS LAST, destination_type NULLS LAST, name NULLS LAST
+    `)
+
+    const [{ rows: summaryRows }] = await Promise.all([
+      pool.query(`
+        SELECT
+          count(*) AS destination_count,
+          count(*) FILTER (WHERE is_official_park) AS official_park_count,
+          count(*) FILTER (WHERE near_major_road) AS near_major_road_count,
+          round(avg(quality_score)::numeric, 1) AS avg_quality_score
+        FROM environment.green_destinations
+      `)
+    ])
+
+    res.json(buildGeoFeatureCollection(rows, {
+      source: 'environment.green_destinations',
+      metadata: summaryRows[0] || {}
+    }))
+  } catch (err) {
+    console.error('[API] /environment/green-destinations error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })
