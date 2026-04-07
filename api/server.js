@@ -111,19 +111,30 @@ function buildGeoFeatureCollection(rows, {
   }
 }
 
-// Current environment grid data — returns all grid cells
+// Current environment grid data — latest record per grid cell derived from history
 app.get('/api/environment/current', async (_req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT
-        grid_id, latitude, longitude,
-        fetched_utc, aq_datetime, updated_at,
-        uaqi, uaqi_display, uaqi_category, uaqi_dominant,
-        poll_co_value, poll_no2_value, poll_o3_value,
-        poll_pm10_value, poll_so2_value,
+        DISTINCT ON (grid_id)
+        grid_id,
+        latitude,
+        longitude,
+        datetime_utc AS fetched_utc,
+        datetime_utc AS aq_datetime,
+        datetime_utc AS updated_at,
+        uaqi,
+        uaqi AS uaqi_display,
+        uaqi_category,
+        NULL::text AS uaqi_dominant,
+        poll_co_value,
+        poll_no2_value,
+        poll_o3_value,
+        poll_pm10_value,
+        poll_so2_value,
         health_general
-      FROM environment.airquality_current
-      ORDER BY grid_id
+      FROM environment.airquality_history
+      ORDER BY grid_id, datetime_utc DESC
     `)
     res.json({ rows, fetchedAt: new Date().toISOString() })
   } catch (err) {

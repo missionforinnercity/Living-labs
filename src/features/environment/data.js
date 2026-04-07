@@ -172,14 +172,48 @@ export async function loadExplorerTemperatureData() {
 }
 
 export async function loadExplorerAirQualityData() {
-  const [currentResp, historyResp] = await Promise.all([
-    fetch('/api/environment/current'),
-    fetch('/api/environment/history')
-  ])
+  const historyData = await fetchJson('/api/environment/history', 'Environment history load failed')
+  const rows = historyData?.rows || []
+
+  const latestByGrid = new Map()
+  rows.forEach((row) => {
+    const key = row?.grid_id
+    if (!key) return
+    const ts = row?.hour_utc || ''
+    const existing = latestByGrid.get(key)
+    if (!existing || ts > (existing.hour_utc || '')) {
+      latestByGrid.set(key, row)
+    }
+  })
+
+  const currentRows = [...latestByGrid.values()]
+    .sort((a, b) => String(a.grid_id).localeCompare(String(b.grid_id)))
+    .map((row) => ({
+      grid_id: row.grid_id,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      fetched_utc: row.hour_utc,
+      aq_datetime: row.hour_utc,
+      updated_at: row.hour_utc,
+      uaqi: row.uaqi,
+      uaqi_display: row.uaqi,
+      uaqi_category: row.uaqi_category,
+      uaqi_dominant: null,
+      poll_co_value: row.poll_co,
+      poll_no2_value: row.poll_no2,
+      poll_o3_value: row.poll_o3,
+      poll_pm10_value: row.poll_pm10,
+      poll_so2_value: row.poll_so2,
+      health_general: row.health_general
+    }))
 
   return {
-    currentData: currentResp.ok ? await currentResp.json() : null,
-    historyData: historyResp.ok ? await historyResp.json() : null
+    currentData: {
+      rows: currentRows,
+      fetchedAt: historyData?.fetchedAt || new Date().toISOString(),
+      source: 'environment.airquality_history (latest per grid)'
+    },
+    historyData
   }
 }
 
