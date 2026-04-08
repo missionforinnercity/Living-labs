@@ -1296,7 +1296,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
     const cleanup = () => {
       if (!map.current) return
-      ;[LYR_WLK, LYR_STORY_GLOW, LYR_STORY].forEach(id => {
+      ;[LYR_WLK, 'walkability-idx-glow-outer', 'walkability-idx-glow-inner', LYR_STORY_GLOW, LYR_STORY].forEach(id => {
         if (map.current.getLayer(id)) map.current.removeLayer(id)
       })
       ;[SRC_WLK, SRC_STORY].forEach(id => {
@@ -1319,15 +1319,45 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
     map.current.addSource(SRC_WLK, { type: 'geojson', data: fc || EMPTY_FC })
 
-    // Core line layer — clean, wider, good opacity
+    // Outer glow — wide, very blurred, low opacity. Creates the neon bleed.
+    map.current.addLayer({
+      id:     'walkability-idx-glow-outer',
+      type:   'line',
+      source: SRC_WLK,
+      paint: {
+        'line-color':   colorExpr,
+        'line-width':   ['interpolate', ['linear'], ['zoom'], 12, 10, 14, 18, 16, 28],
+        'line-opacity': ['interpolate', ['linear'], ['get', kpiProp], 0, 0.0, 0.2, 0.03, 0.5, 0.07, 1, 0.12],
+        'line-blur':    ['interpolate', ['linear'], ['zoom'], 12, 6, 16, 12],
+        'line-cap': 'round',
+        'line-join': 'round',
+      }
+    })
+
+    // Inner glow — tighter, slightly brighter
+    map.current.addLayer({
+      id:     'walkability-idx-glow-inner',
+      type:   'line',
+      source: SRC_WLK,
+      paint: {
+        'line-color':   colorExpr,
+        'line-width':   ['interpolate', ['linear'], ['zoom'], 12, 5, 14, 8, 16, 14],
+        'line-opacity': ['interpolate', ['linear'], ['get', kpiProp], 0, 0.0, 0.2, 0.06, 0.5, 0.12, 1, 0.2],
+        'line-blur':    ['interpolate', ['linear'], ['zoom'], 12, 3, 16, 5],
+        'line-cap': 'round',
+        'line-join': 'round',
+      }
+    })
+
+    // Core line — crisp on top
     map.current.addLayer({
       id:     LYR_WLK,
       type:   'line',
       source: SRC_WLK,
       paint: {
         'line-color':   colorExpr,
-        'line-width':   ['interpolate', ['linear'], ['zoom'], 12, 2, 14, 3.5, 16, 5],
-        'line-opacity': ['interpolate', ['linear'], ['get', kpiProp], 0, 0.4, 0.5, 0.7, 1, 0.95],
+        'line-width':   ['interpolate', ['linear'], ['zoom'], 12, 1.5, 14, 2.5, 16, 4],
+        'line-opacity': ['interpolate', ['linear'], ['get', kpiProp], 0, 0.3, 0.3, 0.6, 0.6, 0.8, 1, 1],
         'line-cap': 'round',
         'line-join': 'round',
       }

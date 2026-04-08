@@ -36,11 +36,12 @@
 .nav-item {
   display: flex;
   align-items: center;
-  padding: 10px;
-  border-radius: 6px;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 8px;
   color: var(--nr-text, #999997);
   font-family: 'Inter', sans-serif;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   background: none;
   border: none;

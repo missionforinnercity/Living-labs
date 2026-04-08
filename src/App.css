@@ -15,7 +15,7 @@
 }
 
 .app-shell.nav-expanded {
-  grid-template-columns: calc(2 * var(--grid-col) + var(--layout-gap)) 1fr;
+  grid-template-columns: 180px 1fr;
 }
 
 .app-content {
