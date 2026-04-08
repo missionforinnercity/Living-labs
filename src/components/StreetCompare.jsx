@@ -1,224 +1,146 @@
-import React, { useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import { RADAR_AXES } from '../utils/walkabilityEngine'
 import { StreetViewSnippet } from './StreetViewSnippet'
-import { GaugeDial } from './charts'
 import './StreetCompare.css'
 
-// ─── SVG Radar Chart (clear stroked polygon — readable at small sizes) ────────
+// ─── KPI bar with value ──────────────────────────────────────────────────────
 
-const CX = 110
-const CY = 110
-const R  = 85
-const N  = RADAR_AXES.length
-const LEVELS = [0.25, 0.5, 0.75, 1.0]
-
-function axisPoint (i, r) {
-  const angle = (i / N) * 2 * Math.PI - Math.PI / 2
-  return [CX + r * Math.cos(angle), CY + r * Math.sin(angle)]
-}
-
-function formatPt (pts) {
-  return pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
-}
-
-function SegmentRadar ({ segment, color }) {
-  const values = useMemo(
-    () => RADAR_AXES.map(a => Math.max(0.02, Math.min(1, segment[a.key] ?? 0))),
-    [segment]
-  )
-
-  const dataPts  = values.map((v, i) => axisPoint(i, v * R))
-  const dataPath = formatPt(dataPts)
+function KpiRow ({ label, a, b, hasTwo, format = v => v, invert = false }) {
+  const aNum = parseFloat(a) || 0
+  const bNum = parseFloat(b) || 0
+  const aWin = hasTwo && (invert ? aNum < bNum : aNum > bNum)
+  const bWin = hasTwo && (invert ? bNum < aNum : bNum > aNum)
 
   return (
-    <div className="sc-radar-wrap">
-      <svg viewBox="0 0 220 220" className="sc-radar-svg">
-        {LEVELS.map(level => (
-          <polygon
-            key={level}
-            points={formatPt(RADAR_AXES.map((_, i) => axisPoint(i, level * R)))}
-            className="sc-radar-ring"
-          />
-        ))}
-        {RADAR_AXES.map((axis, i) => {
-          const [x, y] = axisPoint(i, R)
-          return <line key={axis.key} x1={CX} y1={CY} x2={x} y2={y} className="sc-radar-spoke" />
-        })}
-        <polygon points={dataPath} fill={color} fillOpacity={0.2} stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
-        {dataPts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r={3} fill={color} opacity={0.9} />)}
-        {RADAR_AXES.map((axis, i) => {
-          const [x, y] = axisPoint(i, R + 18)
-          return <text key={axis.key} x={x} y={y} textAnchor="middle" dominantBaseline="central" className="sc-radar-label">{axis.label}</text>
-        })}
-        <circle cx={CX} cy={CY} r={2} fill="rgba(255,255,255,0.3)" />
-      </svg>
-
-      {/* GaugeDials for day/night KPI */}
-      <div className="sc-gauge-row">
-        <div className="sc-gauge-cell">
-          <GaugeDial themeKey="walkability" score={segment.kpi_day ?? 0} active />
-          <span className="sc-gauge-label">Day</span>
-        </div>
-        <div className="sc-gauge-cell">
-          <GaugeDial themeKey="lighting" score={segment.kpi_night ?? 0} active />
-          <span className="sc-gauge-label">Night</span>
-        </div>
+    <div className="sc-kpi">
+      <span className="sc-kpi-label">{label}</span>
+      <div className="sc-kpi-vals">
+        <span className={`sc-kpi-val ${aWin ? 'sc-kpi-val--win' : ''}`}>{format(a)}</span>
+        {hasTwo && <span className={`sc-kpi-val ${bWin ? 'sc-kpi-val--win' : ''}`}>{format(b)}</span>}
       </div>
     </div>
   )
 }
 
-// ─── Value comparison row ─────────────────────────────────────────────────────
+// ─── Segment card ────────────────────────────────────────────────────────────
 
-function CompareRow ({ label, a, b, format = v => v, invert = false }) {
-  const aNum = parseFloat(a) || 0
-  const bNum = parseFloat(b) || 0
-  const aWins = invert ? aNum < bNum : aNum > bNum
-  const bWins = invert ? bNum < aNum : bNum > aNum
+function SegmentCard ({ props, color, tag, feature, svOpen, onToggleSv, onCloseSv }) {
+  const dayPct   = Math.round((props.kpi_day ?? 0) * 100)
+  const nightPct = Math.round((props.kpi_night ?? 0) * 100)
+
   return (
-    <div className="sc-row">
-      <span className={`sc-row-val ${aWins ? 'sc-row-val--win' : bWins ? 'sc-row-val--lose' : ''}`}>
-        {format(a)}
-      </span>
-      <span className="sc-row-label">{label}</span>
-      <span className={`sc-row-val sc-row-val--right ${bWins ? 'sc-row-val--win' : aWins ? 'sc-row-val--lose' : ''}`}>
-        {format(b)}
-      </span>
+    <div className="sc-card">
+      <div className="sc-card-head">
+        <span className="sc-card-tag" style={{ background: color }}>{tag}</span>
+        <span className="sc-card-name">{(props.street_name || '—').toLowerCase()}</span>
+      </div>
+
+      <div className="sc-card-scores">
+        <div className="sc-card-score">
+          <span className="sc-card-score-val">{dayPct}</span>
+          <span className="sc-card-score-label">Day</span>
+          <div className="sc-card-bar"><div className="sc-card-fill sc-card-fill--day" style={{ width: `${dayPct}%` }} /></div>
+        </div>
+        <div className="sc-card-score">
+          <span className="sc-card-score-val">{nightPct}</span>
+          <span className="sc-card-score-label">Night</span>
+          <div className="sc-card-bar"><div className="sc-card-fill sc-card-fill--night" style={{ width: `${nightPct}%` }} /></div>
+        </div>
+      </div>
+
+      {/* Radar axes as mini bars */}
+      <div className="sc-card-axes">
+        {RADAR_AXES.map(a => {
+          const val = Math.round((props[a.key] ?? 0) * 100)
+          return (
+            <div key={a.key} className="sc-card-axis">
+              <span className="sc-card-axis-label">{a.label}</span>
+              <div className="sc-card-axis-bar"><div className="sc-card-axis-fill" style={{ width: `${val}%`, background: color }} /></div>
+              <span className="sc-card-axis-val">{val}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      <button className="sc-sv-toggle" onClick={onToggleSv}>
+        {svOpen ? 'Hide Street View' : 'Street View'}
+      </button>
+
+      {svOpen && (
+        <div className="sc-sv-wrap">
+          <StreetViewSnippet feature={feature} compact onClose={onCloseSv} />
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main ────────────────────────────────────────────────────────────────────
 
-const COLORS = ['#e8a020', '#3d80c0']   // Segment A = amber, Segment B = steel blue
+const COLORS = ['#5EC2A0', '#7B93FF']
 
 const StreetCompare = ({ segments, onClose, onClear }) => {
-  const [svOpen, setSvOpen] = useState({})   // { 0: true, 1: true } — which columns have SV open
+  const [svOpen, setSvOpen] = useState({})
 
   if (!segments || segments.length === 0) return null
 
   const [a, b] = segments
-  const aProps  = a?.properties || {}
-  const bProps  = b?.properties || {}
-  const hasTwo  = segments.length >= 2
-
-  const toggleSv = idx => setSvOpen(prev => ({ ...prev, [idx]: !prev[idx] }))
+  const aProps = a?.properties || {}
+  const bProps = b?.properties || {}
+  const hasTwo = segments.length >= 2
 
   const fmt1 = v => Math.round((v ?? 0) * 100)
-  const fmtC = v => `${(v ?? 0).toFixed(1)}\u00b0C`
+  const fmtC = v => `${(v ?? 0).toFixed(1)}°C`
   const fmtL = v => `${(v ?? 0).toFixed(0)} lx`
 
   return (
     <div className="sc-panel">
       {/* Header */}
       <div className="sc-header">
-        <div className="sc-header-left">
-          <span className="sc-panel-title">Street Comparison</span>
-          {!hasTwo && (
-            <span className="sc-hint">Select a second street on the map to compare</span>
-          )}
-        </div>
-        <div className="sc-header-actions">
-          {hasTwo && (
-            <button className="sc-btn sc-btn--ghost" onClick={onClear}>
-              Clear
-            </button>
-          )}
-          <button className="sc-btn sc-btn--close" onClick={onClose} aria-label="Close">
-            &#x2715;
+        <span className="sc-title">Street Comparison</span>
+        {!hasTwo && <span className="sc-hint">Select a second street on the map</span>}
+        <div className="sc-actions">
+          {hasTwo && <button className="sc-btn" onClick={onClear}>Clear</button>}
+          <button className="sc-close" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
       </div>
 
-      {/* Street name headers */}
-      <div className="sc-names">
-        <div className="sc-name" style={{ borderColor: COLORS[0] }}>
-          <span className="sc-name-tag" style={{ background: COLORS[0] }}>A</span>
-          <span className="sc-name-text">{aProps.street_name || 'Street A'}</span>
-        </div>
+      {/* Cards */}
+      <div className={`sc-cards ${hasTwo ? 'sc-cards--two' : ''}`}>
+        <SegmentCard
+          props={aProps} color={COLORS[0]} tag="A" feature={a}
+          svOpen={svOpen[0]}
+          onToggleSv={() => setSvOpen(p => ({ ...p, 0: !p[0] }))}
+          onCloseSv={() => setSvOpen(p => ({ ...p, 0: false }))}
+        />
         {hasTwo && (
-          <div className="sc-name" style={{ borderColor: COLORS[1] }}>
-            <span className="sc-name-tag" style={{ background: COLORS[1] }}>B</span>
-            <span className="sc-name-text">{bProps.street_name || 'Street B'}</span>
-          </div>
+          <SegmentCard
+            props={bProps} color={COLORS[1]} tag="B" feature={b}
+            svOpen={svOpen[1]}
+            onToggleSv={() => setSvOpen(p => ({ ...p, 1: !p[1] }))}
+            onCloseSv={() => setSvOpen(p => ({ ...p, 1: false }))}
+          />
         )}
       </div>
 
-      {/* Charts */}
-      <div className={`sc-charts ${hasTwo ? 'sc-charts--two' : ''}`}>
-        {/* Segment A */}
-        <div className="sc-chart-col">
-          <SegmentRadar segment={aProps} color={COLORS[0]} />
-          <button
-            className={`sc-sv-btn ${svOpen[0] ? 'sc-sv-btn--active' : ''}`}
-            onClick={() => toggleSv(0)}
-            title="Toggle Street View preview"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            Street View
-          </button>
-          {svOpen[0] && (
-            <div className="sc-sv-panel">
-              <StreetViewSnippet feature={a} compact onClose={() => setSvOpen(prev => ({ ...prev, 0: false }))} />
-            </div>
-          )}
-        </div>
-
-        {/* Segment B */}
-        {hasTwo && (
-          <div className="sc-chart-col">
-            <SegmentRadar segment={bProps} color={COLORS[1]} />
-            <button
-              className={`sc-sv-btn ${svOpen[1] ? 'sc-sv-btn--active' : ''}`}
-              onClick={() => toggleSv(1)}
-              title="Toggle Street View preview"
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-              Street View
-            </button>
-            {svOpen[1] && (
-              <div className="sc-sv-panel">
-                <StreetViewSnippet feature={b} compact onClose={() => setSvOpen(prev => ({ ...prev, 1: false }))} />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Side-by-side KPI table (only when two selected) */}
+      {/* Side-by-side KPI comparison */}
       {hasTwo && (
-        <div className="sc-table">
-          <div className="sc-table-header">
+        <div className="sc-compare">
+          <div className="sc-compare-head">
             <span style={{ color: COLORS[0] }}>{aProps.street_name || 'A'}</span>
-            <span className="sc-table-metric">Metric</span>
+            <span className="sc-compare-mid">vs</span>
             <span style={{ color: COLORS[1] }}>{bProps.street_name || 'B'}</span>
           </div>
-
-          <CompareRow label="Day Score"        a={fmt1(aProps.kpi_day)}      b={fmt1(bProps.kpi_day)} />
-          <CompareRow label="Night Score"      a={fmt1(aProps.kpi_night)}    b={fmt1(bProps.kpi_night)} />
-          <CompareRow label="Slope Penalty"    a={fmt1(aProps.slope_penalty)} b={fmt1(bProps.slope_penalty)} />
-          <CompareRow label="Shade Cover"      a={fmt1(aProps.canopy_cover)}  b={fmt1(bProps.canopy_cover)} />
-          <CompareRow label="Surface Temp"     a={fmtC(aProps.surface_temp)}  b={fmtC(bProps.surface_temp)} invert />
-          <CompareRow label="Min Lighting"     a={fmtL(aProps.min_lux)}       b={fmtL(bProps.min_lux)} />
-          <CompareRow label="Night Venues"     a={aProps.night_poi ?? 0}       b={bProps.night_poi ?? 0} />
+          <KpiRow label="Day Score"    a={fmt1(aProps.kpi_day)}      b={fmt1(bProps.kpi_day)} hasTwo={hasTwo} />
+          <KpiRow label="Night Score"  a={fmt1(aProps.kpi_night)}    b={fmt1(bProps.kpi_night)} hasTwo={hasTwo} />
+          <KpiRow label="Shade"        a={fmt1(aProps.canopy_cover)} b={fmt1(bProps.canopy_cover)} hasTwo={hasTwo} />
+          <KpiRow label="Temperature"  a={fmtC(aProps.surface_temp)} b={fmtC(bProps.surface_temp)} hasTwo={hasTwo} invert />
+          <KpiRow label="Min Lighting" a={fmtL(aProps.min_lux)}      b={fmtL(bProps.min_lux)} hasTwo={hasTwo} />
+          <KpiRow label="Night Venues" a={aProps.night_poi ?? 0}      b={bProps.night_poi ?? 0} hasTwo={hasTwo} />
         </div>
       )}
-
-      {/* Axis legend */}
-      <div className="sc-axes-legend">
-        {RADAR_AXES.map(a => (
-          <div key={a.key} className="sc-axis-item">
-            <span className="sc-axis-name">{a.label}</span>
-            <span className="sc-axis-desc">{a.description}</span>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }

@@ -1,336 +1,302 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   StreetCompare — Side-by-side KPI spider comparison panel
+   StreetCompare — dark, compact, side-by-side street analysis
    ═══════════════════════════════════════════════════════════════════════════ */
-
-/* Scoped tokens — reference global vars from index.css */
-.sc-panel {
-  --sc-bg:         var(--bg-surface);
-  --sc-border:     var(--border);
-  --sc-text:       var(--text);
-  --sc-text-dim:   var(--text-dim);
-  --sc-text-muted: var(--text-muted);
-  /* Compare-specific semantic colors */
-  --sc-win:  #4aaa7a;
-  --sc-lose: rgba(255, 255, 255, 0.3);
-}
 
 .sc-panel {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(200, 210, 220, 0.12);
-  backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
-  -webkit-backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
-  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
   z-index: 500;
-  max-height: 420px;
+  background: #1F1F1F;
+  border: 1px solid #484847;
+  border-radius: 14px;
+  max-height: 380px;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  font-family: 'Inter', 'Helvetica Neue', sans-serif;
+  font-family: 'Inter', sans-serif;
+  color: #F6F6F6;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
 
-/* ─── Header ─────────────────────────────────────────────────────────────── */
+.sc-panel::-webkit-scrollbar { width: 4px; }
+.sc-panel::-webkit-scrollbar-track { background: transparent; }
+.sc-panel::-webkit-scrollbar-thumb { background: #484847; border-radius: 2px; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
 .sc-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.7rem 1.25rem;
-  border-bottom: 1px solid var(--sc-border);
-  flex-shrink: 0;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #484847;
+  position: sticky;
+  top: 0;
+  background: #1F1F1F;
+  z-index: 1;
 }
-.sc-header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-}
-.sc-panel-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--sc-text);
-}
-.sc-hint {
-  font-size: 0.72rem;
-  color: var(--sc-text-dim);
-  font-style: italic;
-}
-.sc-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.sc-btn {
-  font-size: 0.72rem;
-  font-weight: 600;
-  border-radius: 5px;
-  border: 1px solid var(--sc-border);
-  cursor: pointer;
-  padding: 4px 10px;
-  transition: all 0.14s;
-}
-.sc-btn--ghost {
-  background: transparent;
-  color: var(--sc-text-dim);
-}
-.sc-btn--ghost:hover { background: rgba(255,255,255,0.06); color: var(--sc-text); }
-.sc-btn--close {
-  background: transparent;
-  color: var(--sc-text-dim);
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-}
-.sc-btn--close:hover { background: rgba(239,68,68,0.12); color: #f87171; border-color: rgba(239,68,68,0.3); }
 
-/* ─── Street name headers ────────────────────────────────────────────────── */
-.sc-names {
-  display: flex;
-  gap: 1px;
-  padding: 0.65rem 1.25rem 0;
+.sc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.sc-name {
-  flex: 1;
+
+.sc-hint {
+  font-size: 0.62rem;
+  color: #999997;
+}
+
+.sc-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: rgba(255,255,255,0.03);
-  border-radius: 6px;
-  border-left: 3px solid;
-  padding: 0.4rem 0.65rem;
+  gap: 8px;
 }
-.sc-name-tag {
-  font-size: 0.65rem;
-  font-weight: 800;
-  color: #0a0c10;
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
+
+.sc-btn {
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #484847;
+  background: transparent;
+  color: #999997;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'Inter', sans-serif;
+}
+
+.sc-btn:hover { color: #F6F6F6; border-color: #999997; }
+
+.sc-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #484847;
+  background: #141414;
+  color: #999997;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sc-close:hover { background: rgba(255,80,80,0.15); color: #F6F6F6; }
+
+/* ── Segment cards ──────────────────────────────────────────────────────── */
+.sc-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 12px;
+}
+
+.sc-cards--two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.sc-card {
+  background: #141414;
+  border: 1px solid #484847;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sc-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sc-card-tag {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #141414;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
-.sc-name-text {
+
+.sc-card-name {
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--sc-text);
-  text-transform: capitalize;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* ─── Chart layout ───────────────────────────────────────────────────────── */
-.sc-charts {
+/* Day/Night score row */
+.sc-card-scores {
   display: flex;
-  justify-content: center;
-  padding: 0.75rem 1.25rem 0;
-  gap: 1rem;
-}
-.sc-charts--two .sc-chart-col { flex: 1; }
-.sc-chart-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.55rem;
+  gap: 8px;
 }
 
-/* ─── Street View toggle button ─────────────────────────────────────────── */
-.sc-sv-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.75rem;
-  border-radius: 20px;
-  border: 1px solid rgba(66, 133, 244, 0.28);
-  background: rgba(66, 133, 244, 0.08);
-  color: rgba(126, 184, 248, 0.75);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: background 0.14s, color 0.14s, border-color 0.14s;
-}
-.sc-sv-btn:hover {
-  background: rgba(66, 133, 244, 0.18);
-  color: #aed4ff;
-  border-color: rgba(66, 133, 244, 0.5);
-}
-.sc-sv-btn--active {
-  background: rgba(66, 133, 244, 0.20);
-  color: #aed4ff;
-  border-color: rgba(66, 133, 244, 0.55);
-}
-
-/* ─── Street View panel per column ─────────────────────────────────────── */
-.sc-sv-panel {
-  width: 100%;
-  border: 1px solid rgba(66, 133, 244, 0.25);
-  border-radius: 8px;
-  overflow: hidden;
-  animation: sc-sv-in 0.18s ease;
-}
-
-@keyframes sc-sv-in {
-  from { opacity: 0; transform: translateY(-5px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* ─── SVG radar ──────────────────────────────────────────────────────────── */
-.sc-radar-wrap {
+.sc-card-score {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  max-width: 220px;
-}
-.sc-radar-svg {
-  width: 100%;
-  max-width: 200px;
-  height: auto;
+  gap: 2px;
 }
 
-/* SVG ring polygons */
-.sc-radar-ring {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.07);
-  stroke-width: 1;
-}
-.sc-radar-spoke {
-  stroke: rgba(255, 255, 255, 0.1);
-  stroke-width: 1;
-}
-.sc-radar-label {
-  font-size: 9px;
-  fill: rgba(255, 255, 255, 0.45);
-  font-family: 'Inter', sans-serif;
-  font-weight: 500;
+.sc-card-score-val {
+  font-size: 1.3rem;
+  font-weight: 300;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-/* KPI scores below chart */
-.sc-gauge-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 4px;
-}
-.sc-gauge-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 72px;
-  height: 52px;
-}
-.sc-gauge-label {
-  font-size: 0.6rem;
-  color: var(--sc-text-dim);
-  letter-spacing: 0.06em;
+.sc-card-score-label {
+  font-size: 0.48rem;
+  color: #999997;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sc-card-bar {
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
   margin-top: 2px;
 }
 
-/* legacy kept for reference */
-.sc-radar-scores {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+.sc-card-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
 }
-.sc-radar-kpi {
+
+.sc-card-fill--day { background: #A8FF40; }
+.sc-card-fill--night { background: #B8EEFF; }
+
+/* Axis mini bars */
+.sc-card-axes {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1px;
-}
-.sc-radar-kpi-val {
-  font-size: 1.4rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.sc-radar-kpi-label {
-  font-size: 0.62rem;
-  color: var(--sc-text-dim);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.sc-radar-divider {
-  width: 1px;
-  height: 30px;
-  background: var(--sc-border);
+  gap: 3px;
 }
 
-/* ─── Comparison table ───────────────────────────────────────────────────── */
-.sc-table {
-  margin: 0.75rem 1.25rem 0;
-  border: 1px solid var(--sc-border);
-  border-radius: 8px;
+.sc-card-axis {
+  display: grid;
+  grid-template-columns: 52px 1fr 24px;
+  align-items: center;
+  gap: 6px;
+}
+
+.sc-card-axis-label {
+  font-size: 0.52rem;
+  color: #999997;
+}
+
+.sc-card-axis-bar {
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
   overflow: hidden;
 }
-.sc-table-header {
-  display: grid;
-  grid-template-columns: 1fr 120px 1fr;
-  padding: 0.4rem 0.75rem;
-  background: rgba(255,255,255,0.04);
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--sc-text-dim);
-  letter-spacing: 0.05em;
+
+.sc-card-axis-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.sc-card-axis-val {
+  font-size: 0.52rem;
+  font-weight: 600;
+  color: #999997;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Street View toggle */
+.sc-sv-toggle {
+  font-size: 0.58rem;
+  font-weight: 500;
+  color: #999997;
+  background: none;
+  border: 1px solid #484847;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'Inter', sans-serif;
+  align-self: flex-start;
+}
+
+.sc-sv-toggle:hover { color: #F6F6F6; border-color: #999997; }
+
+.sc-sv-wrap {
+  border-top: 1px solid #484847;
+  padding-top: 8px;
+}
+
+/* ── Side-by-side comparison table ──────────────────────────────────────── */
+.sc-compare {
+  padding: 0 12px 12px;
+}
+
+.sc-compare-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0 6px;
+  font-size: 0.6rem;
+  font-weight: 600;
+}
+
+.sc-compare-mid {
+  color: #484847;
+  font-size: 0.5rem;
   text-transform: uppercase;
 }
-.sc-table-header span:last-child { text-align: right; }
-.sc-table-metric { text-align: center; color: var(--sc-text-muted); }
 
-.sc-row {
-  display: grid;
-  grid-template-columns: 1fr 120px 1fr;
-  padding: 0.35rem 0.75rem;
-  border-top: 1px solid rgba(255,255,255,0.04);
+.sc-kpi {
+  display: flex;
   align-items: center;
-  transition: background 0.12s;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-top: 1px solid rgba(72,72,71,0.4);
 }
-.sc-row:hover { background: rgba(255,255,255,0.03); }
-.sc-row-label {
+
+.sc-kpi-label {
+  font-size: 0.58rem;
+  color: #999997;
+  flex: 1;
   text-align: center;
-  font-size: 0.72rem;
-  color: var(--sc-text-dim);
 }
-.sc-row-val {
-  font-size: 0.8rem;
+
+.sc-kpi-vals {
+  display: flex;
+  gap: 0;
+  flex: 2;
+  justify-content: space-between;
+}
+
+.sc-kpi-val {
+  font-size: 0.62rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--sc-lose);
+  min-width: 50px;
+  text-align: center;
+  color: #C0C0BE;
 }
-.sc-row-val--right { text-align: right; }
-.sc-row-val--win   { color: var(--sc-win); font-weight: 700; }
 
-/* ─── Axis legend ────────────────────────────────────────────────────────── */
-.sc-axes-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1rem;
-  padding: 0.75rem 1.25rem 0.9rem;
-  border-top: 1px solid var(--sc-border);
-  margin-top: 0.75rem;
+.sc-kpi-val--win {
+  color: #5EC2A0;
 }
-.sc-axis-item {
-  display: flex;
-  align-items: baseline;
-  gap: 0.3rem;
-  font-size: 0.67rem;
-}
-.sc-axis-name {
-  font-weight: 700;
-  color: var(--sc-text-dim);
-}
-.sc-axis-desc {
-  color: var(--sc-text-muted);
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .sc-cards--two { grid-template-columns: 1fr; }
 }
