@@ -1296,10 +1296,10 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
     const cleanup = () => {
       if (!map.current) return
-      ;[LYR_WLK, 'walkability-idx-heatmap', LYR_STORY_GLOW, LYR_STORY].forEach(id => {
+      ;[LYR_WLK, 'walkability-idx-glow', LYR_STORY_GLOW, LYR_STORY].forEach(id => {
         if (map.current.getLayer(id)) map.current.removeLayer(id)
       })
-      ;[SRC_WLK, 'walkability-idx-heat-src', SRC_STORY].forEach(id => {
+      ;[SRC_WLK, SRC_STORY].forEach(id => {
         if (map.current.getSource(id)) map.current.removeSource(id)
       })
     }
@@ -1317,70 +1317,42 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
       ? thermalColorExpression('kpi_day',   thresholds || null)
       : safetyColorExpression('kpi_night',  thresholds || null)
 
-    // Build point source from segment centroids for heatmap
-    const SRC_HEAT = 'walkability-idx-heat-src'
-    const heatFeatures = (fc || EMPTY_FC).features
-      .filter(f => f.geometry && f.properties[kpiProp] != null)
-      .map(f => {
-        const coords = f.geometry.coordinates
-        let cx, cy
-        if (f.geometry.type === 'LineString' && coords.length > 0) {
-          const mid = coords[Math.floor(coords.length / 2)]
-          cx = mid[0]; cy = mid[1]
-        } else if (f.geometry.type === 'MultiLineString' && coords[0]?.length > 0) {
-          const seg = coords[0]; const mid = seg[Math.floor(seg.length / 2)]
-          cx = mid[0]; cy = mid[1]
-        } else { return null }
-        return { type: 'Feature', geometry: { type: 'Point', coordinates: [cx, cy] }, properties: { w: f.properties[kpiProp] ?? 0 } }
-      })
-      .filter(Boolean)
+    // CityPulse approach: grey → single theme color, scored by KPI.
+    // No heatmaps, no blobs. Just lines that glow.
+    const scoreColor = [
+      'interpolate', ['linear'], ['get', kpiProp],
+      0,    '#333333',
+      0.3,  wMode === 'day' ? '#5C6B4A' : '#2E4A66',
+      0.6,  wMode === 'day' ? '#5EC2A0' : '#5B9FCC',
+      1,    wMode === 'day' ? '#7CC715' : '#88D4F0',
+    ]
 
     map.current.addSource(SRC_WLK, { type: 'geojson', data: fc || EMPTY_FC })
-    map.current.addSource(SRC_HEAT, { type: 'geojson', data: { type: 'FeatureCollection', features: heatFeatures } })
 
-    // Heatmap layer — creates atmospheric glow from the network
+    // Soft glow — wider blurred duplicate underneath
     map.current.addLayer({
-      id: 'walkability-idx-heatmap',
-      type: 'heatmap',
-      source: SRC_HEAT,
+      id:     'walkability-idx-glow',
+      type:   'line',
+      source: SRC_WLK,
       paint: {
-        'heatmap-weight': ['interpolate', ['linear'], ['get', 'w'], 0, 0, 0.5, 0.4, 1, 1],
-        'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 11, 0.6, 14, 1.2, 16, 1.8],
-        'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 11, 15, 13, 25, 15, 40, 17, 60],
-        'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.7, 15, 0.5, 17, 0.3],
-        'heatmap-color': wMode === 'day'
-          ? [
-              'interpolate', ['linear'], ['heatmap-density'],
-              0,    'rgba(0,0,0,0)',
-              0.1,  'rgba(120,50,30,0.15)',
-              0.25, 'rgba(180,100,40,0.3)',
-              0.4,  'rgba(200,148,40,0.45)',
-              0.6,  'rgba(58,138,104,0.55)',
-              0.8,  'rgba(26,88,120,0.7)',
-              1,    'rgba(26,88,120,0.85)',
-            ]
-          : [
-              'interpolate', ['linear'], ['heatmap-density'],
-              0,    'rgba(0,0,0,0)',
-              0.1,  'rgba(10,21,32,0.2)',
-              0.25, 'rgba(21,40,80,0.35)',
-              0.4,  'rgba(36,88,136,0.45)',
-              0.6,  'rgba(50,144,184,0.55)',
-              0.8,  'rgba(82,192,212,0.7)',
-              1,    'rgba(82,192,212,0.85)',
-            ],
+        'line-color':   scoreColor,
+        'line-width':   ['interpolate', ['linear'], ['zoom'], 13, 8, 15, 14, 17, 22],
+        'line-opacity': ['interpolate', ['linear'], ['get', kpiProp], 0, 0, 0.3, 0.04, 0.6, 0.1, 1, 0.18],
+        'line-blur':    ['interpolate', ['linear'], ['zoom'], 13, 4, 17, 8],
+        'line-cap': 'round',
+        'line-join': 'round',
       }
     })
 
-    // Core line — thin, crisp, on top of the heatmap
+    // Core line
     map.current.addLayer({
       id:     LYR_WLK,
       type:   'line',
       source: SRC_WLK,
       paint: {
-        'line-color':   '#ffffff',
-        'line-width':   ['interpolate', ['linear'], ['zoom'], 12, 0.5, 14, 1, 16, 1.8],
-        'line-opacity': ['interpolate', ['linear'], ['get', kpiProp], 0, 0.05, 0.3, 0.1, 0.6, 0.2, 1, 0.35],
+        'line-color':   scoreColor,
+        'line-width':   ['interpolate', ['linear'], ['zoom'], 13, 2, 15, 3.5, 17, 5],
+        'line-opacity': ['interpolate', ['linear'], ['get', kpiProp], 0, 0.2, 0.3, 0.5, 0.6, 0.8, 1, 1],
         'line-cap': 'round',
         'line-join': 'round',
       }
