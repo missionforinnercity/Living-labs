@@ -130,8 +130,8 @@ const WalkabilityPanel = ({ onWalkabilityChange, compareCount, onSegmentClick })
       <div className="wlk-gradient">
         <div className="wlk-gradient-bar" style={{
           background: effectiveMode === 'day'
-            ? 'linear-gradient(90deg, #333333, #5C6B4A, #5EC2A0, #7CC715)'
-            : 'linear-gradient(90deg, #333333, #2E4A66, #5B9FCC, #88D4F0)'
+            ? 'linear-gradient(90deg, #444444, #6B7B50, #6DD4AA, #A8FF40)'
+            : 'linear-gradient(90deg, #444444, #3A5575, #6BB0DD, #B8EEFF)'
         }} />
         <div className="wlk-gradient-labels">
           <span>Low</span>

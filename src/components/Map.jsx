@@ -1321,10 +1321,11 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
     // No heatmaps, no blobs. Just lines that glow.
     const scoreColor = [
       'interpolate', ['linear'], ['get', kpiProp],
-      0,    '#333333',
-      0.3,  wMode === 'day' ? '#5C6B4A' : '#2E4A66',
-      0.6,  wMode === 'day' ? '#5EC2A0' : '#5B9FCC',
-      1,    wMode === 'day' ? '#7CC715' : '#88D4F0',
+      0,    '#444444',
+      0.2,  wMode === 'day' ? '#6B7B50' : '#3A5575',
+      0.5,  wMode === 'day' ? '#6DD4AA' : '#6BB0DD',
+      0.8,  wMode === 'day' ? '#90E830' : '#99DDF5',
+      1,    wMode === 'day' ? '#A8FF40' : '#B8EEFF',
     ]
 
     map.current.addSource(SRC_WLK, { type: 'geojson', data: fc || EMPTY_FC })
@@ -1337,7 +1338,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
       paint: {
         'line-color':   scoreColor,
         'line-width':   ['interpolate', ['linear'], ['zoom'], 13, 8, 15, 14, 17, 22],
-        'line-opacity': ['interpolate', ['linear'], ['get', kpiProp], 0, 0, 0.3, 0.04, 0.6, 0.1, 1, 0.18],
+        'line-opacity': ['interpolate', ['linear'], ['get', kpiProp], 0, 0, 0.3, 0.05, 0.6, 0.14, 1, 0.25],
         'line-blur':    ['interpolate', ['linear'], ['zoom'], 13, 4, 17, 8],
         'line-cap': 'round',
         'line-join': 'round',

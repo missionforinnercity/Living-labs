@@ -25,16 +25,16 @@
 
 .wlk-hero-num {
   font-size: 2.8rem;
-  font-weight: 200;
+  font-weight: 300;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: #F6F6F6;
+  color: #ffffff;
 }
 
 .wlk-hero-unit {
   font-size: 0.75rem;
   font-weight: 400;
-  color: #484847;
+  color: #999997;
 }
 
 .wlk-hero-meta {
@@ -51,7 +51,7 @@
 
 .wlk-hero-sub {
   font-size: 0.6rem;
-  color: #999997;
+  color: #C0C0BE;
   font-weight: 300;
 }
 
@@ -75,10 +75,10 @@
   cursor: pointer;
   transition: all 0.15s;
   background: transparent;
-  color: #484847;
+  color: #999997;
 }
 
-.wlk-toggle-btn:hover { color: #999997; }
+.wlk-toggle-btn:hover { color: #F6F6F6; }
 
 .wlk-toggle-btn--on {
   background: #1F1F1F;
@@ -115,7 +115,7 @@
 
 .wlk-chip-key {
   font-size: 0.48rem;
-  color: #484847;
+  color: #999997;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-top: 3px;
@@ -135,7 +135,7 @@
   display: flex;
   justify-content: space-between;
   font-size: 0.48rem;
-  color: #484847;
+  color: #999997;
   margin-top: 3px;
 }
 
@@ -157,12 +157,12 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #484847;
+  color: #999997;
   cursor: pointer;
   transition: color 0.15s;
 }
 
-.wlk-tab:hover { color: #999997; }
+.wlk-tab:hover { color: #F6F6F6; }
 .wlk-tab--on { color: #F6F6F6; border-bottom-color: #5076FF; }
 
 /* ── Tours ──────────────────────────────────────────────────────────────── */
@@ -199,16 +199,16 @@
 .wlk-tour-badge--night { opacity: 0.4; }
 
 .wlk-tour-quote {
-  font-size: 0.62rem;
-  color: #999997;
+  font-size: 0.65rem;
+  color: #C0C0BE;
   font-style: italic;
   margin: 3px 0 0;
   line-height: 1.3;
 }
 
 .wlk-tour-body {
-  font-size: 0.6rem;
-  color: #999997;
+  font-size: 0.62rem;
+  color: #C0C0BE;
   margin: 8px 0 0;
   line-height: 1.55;
 }
@@ -253,7 +253,7 @@
 .wlk-row-rank {
   font-size: 0.58rem;
   font-weight: 600;
-  color: #484847;
+  color: #999997;
   text-align: center;
 }
 
@@ -299,9 +299,9 @@
 
 /* ── Formula ────────────────────────────────────────────────────────────── */
 .wlk-formula {
-  font-size: 0.52rem;
+  font-size: 0.55rem;
   font-family: 'JetBrains Mono', monospace;
-  color: #484847;
+  color: #999997;
   padding: 10px 18px;
   border-top: 1px solid rgba(72,72,71,0.5);
   line-height: 1.4;
