@@ -1,92 +1,78 @@
-.app {
-  width: 100%;
+/* ═══════════════════════════════════════════════════════════════════════════
+   App Shell — CityPulse-inspired layout
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--grid-col) 1fr;
+  grid-template-rows: 1fr;
+  gap: var(--layout-gap);
+  padding: var(--layout-margin);
   height: 100vh;
+  width: 100vw;
+  background: var(--color-darkest);
+  transition: grid-template-columns 200ms ease;
+}
+
+.app-shell.nav-expanded {
+  grid-template-columns: calc(2 * var(--grid-col) + var(--layout-gap)) 1fr;
+}
+
+.app-content {
+  position: relative;
+  overflow: hidden;
+  grid-column: 2;
   display: flex;
   flex-direction: column;
-  background: #111118;
+  border-radius: var(--panel-radius);
+  background: var(--color-darkest);
 }
 
+/* ── Header ─────────────────────────────────────────────────────────────── */
 .app-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
-  height: 52px;
-  background: rgba(200, 210, 220, 0.11);
-  backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
-  -webkit-backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 4px 24px rgba(0, 0, 0, 0.30);
-  color: white;
-  z-index: 1000;
+  padding: 0 16px;
+  height: 40px;
+  background: var(--color-dark);
+  border-bottom: 1px solid var(--color-grey);
+  color: var(--color-white);
+  z-index: 100;
   gap: 12px;
+  flex-shrink: 0;
+  border-radius: var(--panel-radius) var(--panel-radius) 0 0;
 }
 
-/* Brand section — matches .we-brand */
 .app-brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .app-brand-title {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-white);
   letter-spacing: -0.01em;
   margin: 0;
-  line-height: 1.2;
+  line-height: 1;
 }
 
 .app-brand-sub {
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.6rem;
+  font-weight: 300;
+  color: var(--color-light);
   margin: 0;
   letter-spacing: 0.02em;
 }
 
-/* Actions section — right side */
-.app-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.app-back-btn {
-  padding: 6px 16px;
-  border-radius: 100px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.45);
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s, color 0.18s;
-  white-space: nowrap;
-}
-
-.app-back-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.85);
-}
-
 .app-brand-mark {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  border: 2px solid #00e5a0;
-  box-shadow: 0 0 10px rgba(0, 229, 160, 0.45),
-              inset 0 0 5px rgba(0, 229, 160, 0.08);
+  border: 1.5px solid var(--color-accent);
+  box-shadow: 0 0 8px rgba(80, 118, 255, 0.25);
   flex-shrink: 0;
   position: relative;
 }
@@ -97,64 +83,67 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background: #00e5a0;
-  box-shadow: 0 0 6px rgba(0, 229, 160, 0.8);
+  background: var(--color-accent);
 }
 
-
-.app-content {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+/* ── Main content area ─────────────────────────────────────────────────── */
+.app-main {
+  flex: 1;
   display: flex;
   overflow: hidden;
+  position: relative;
 }
 
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
 .sidebar {
-  position: absolute;
-  left: 0;
-  top: 52px;
-  bottom: 0;
-  width: 320px;
-  z-index: 100;
-  background: rgba(200, 210, 220, 0.11);
-  backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
-  -webkit-backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
-  border-right: 1px solid rgba(255, 255, 255, 0.14);
+  width: 300px;
+  z-index: 50;
+  background: var(--color-dark);
+  border-right: 1px solid var(--color-grey);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  flex-shrink: 0;
 }
 
+.sidebar--dark {
+  background: var(--color-dark);
+  border-right-color: var(--color-grey);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+.sidebar--dark::-webkit-scrollbar { width: 3px; }
+.sidebar--dark::-webkit-scrollbar-track { background: transparent; }
+.sidebar--dark::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+/* ── Map container ─────────────────────────────────────────────────────── */
 .map-container {
   flex: 1;
   position: relative;
-  background: #111118;
+  background: var(--color-darkest);
   width: 100%;
 }
 
+/* ── Loading ───────────────────────────────────────────────────────────── */
 .app-loading-screen,
 .app-map-loading,
 .app-panel-loading {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.78);
-  font-family: 'Space Grotesk', sans-serif;
-  letter-spacing: 0.02em;
+  color: var(--color-light);
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
 }
 
 .app-loading-screen,
 .app-map-loading {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top, rgba(0, 229, 160, 0.12), transparent 32%),
-    #111118;
+  background: var(--color-darkest);
 }
 
 .app-panel-loading {
@@ -162,112 +151,113 @@
   padding: 24px;
 }
 
-/* Dark sidebar for District Narrative Engine */
-.sidebar--dark {
-  background: rgba(200, 210, 220, 0.10);
-  border-right-color: rgba(255,255,255,0.10);
-  /* Visible scrollbar on dark background */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.18) transparent;
-}
-
-.sidebar--dark::-webkit-scrollbar {
-  width: 5px;
-}
-
-.sidebar--dark::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.03);
-}
-
-.sidebar--dark::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.18);
-  border-radius: 3px;
-}
-
-.sidebar--dark::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.35);
-}
-
-/* TemporalControls inside dark sidebar */
-.sidebar--dark .temporal-controls {
-  background: rgba(255, 255, 255, 0.04);
-  border-top-color: rgba(255,255,255,0.07);
-}
-
-.sidebar--dark .temporal-controls h2,
-.sidebar--dark .control-label {
-  color: #94a3b8;
-}
-
-.sidebar--dark .temporal-controls p,
-.sidebar--dark .temporal-controls span {
-  color: #64748b;
-}
-
-.sidebar--dark .season-btn,
-.sidebar--dark .time-btn {
-  background: rgba(255,255,255,0.05);
-  border-color: rgba(255,255,255,0.1);
-  color: #94a3b8;
-}
-
-.sidebar--dark .season-btn.active,
-.sidebar--dark .time-btn.active {
-  background: rgba(0, 229, 160, 0.12);
-  border-color: #00e5a0;
-  color: #00e5a0;
-}
-
-.sidebar--dark input[type="range"] {
-  accent-color: #00e5a0;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .app-content {
-    flex-direction: column;
-  }
-  
-  .sidebar {
-    width: 100%;
-    max-height: 40vh;
-    border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  }
-}
-
-/* ── Narrative sub-tab switcher ──────────────────────────────────────────── */
+/* ── Narrative tabs ────────────────────────────────────────────────────── */
 .narrative-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--color-grey);
   flex-shrink: 0;
+  background: var(--color-dark);
 }
 
 .narrative-tab {
   flex: 1;
-  padding: 12px 8px;
+  padding: 10px 8px;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: rgba(255,255,255,0.32);
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.68rem;
-  font-weight: 700;
+  color: var(--color-light);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
 
 .narrative-tab:hover {
-  color: rgba(255,255,255,0.6);
-  background: rgba(255, 255, 255, 0.025);
+  color: var(--color-white);
 }
 
 .narrative-tab--active {
-  color: #00e5a0;
-  border-bottom-color: #00e5a0;
-  background: rgba(0, 229, 160, 0.04);
+  color: var(--color-white);
+  border-bottom-color: var(--color-accent);
+}
+
+/* ── Dark sidebar overrides ────────────────────────────────────────────── */
+.sidebar--dark .temporal-controls {
+  background: var(--color-darkest);
+  border-top: 1px solid var(--color-grey);
+}
+
+.sidebar--dark .temporal-controls h2,
+.sidebar--dark .control-label {
+  color: var(--color-light);
+}
+
+.sidebar--dark .temporal-controls p,
+.sidebar--dark .temporal-controls span {
+  color: var(--color-grey);
+}
+
+.sidebar--dark .season-btn,
+.sidebar--dark .time-btn {
+  background: var(--color-darkest);
+  border-color: var(--color-grey);
+  color: var(--color-light);
+}
+
+.sidebar--dark .season-btn.active,
+.sidebar--dark .time-btn.active {
+  background: rgba(80, 118, 255, 0.1);
+  border-color: var(--color-accent);
+  color: var(--color-white);
+}
+
+.sidebar--dark input[type="range"] {
+  accent-color: var(--color-accent);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    padding: 0;
+  }
+
+  .app-main {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--color-grey);
+  }
+}
+
+/* ── View transitions ──────────────────────────────────────────────────── */
+.content-fade-enter {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.content-fade-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.content-fade-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.content-fade-exit-active {
+  opacity: 0;
+  transform: scale(1.01);
+  transition: opacity 200ms ease, transform 200ms ease;
 }

@@ -26,7 +26,7 @@
 }
 
 .nd-title {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 0.95rem;
   font-weight: 700;
   color: #fff;
@@ -65,7 +65,7 @@
   border: none;
   border-bottom: 2px solid transparent;
   color: rgba(255,255,255,0.3);
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.07em;
@@ -80,8 +80,8 @@
 }
 
 .nd-tab.active {
-  color: #00e5a0;
-  border-bottom-color: #00e5a0;
+  color: #F6F6F6;
+  border-bottom-color: #5076FF;
   background: transparent;
 }
 
@@ -107,8 +107,8 @@
 .nd-spinner {
   width: 28px;
   height: 28px;
-  border: 2.5px solid rgba(0,229,160,0.15);
-  border-top-color: #00e5a0;
+  border: 2.5px solid rgba(80,118,255,0.15);
+  border-top-color: #5076FF;
   border-radius: 50%;
   animation: nd-spin 0.8s linear infinite;
 }
@@ -198,7 +198,7 @@
 .nd-type-pill.active .nd-pill-name { color: #fff; font-weight: 600; }
 
 .nd-pill-count {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 0.62rem;
   font-weight: 700;
   color: var(--pill-color);
@@ -238,7 +238,7 @@
 .nd-cnav-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
 .nd-cnav-label {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 0.68rem;
   font-weight: 600;
   color: rgba(255,255,255,0.3);
@@ -285,6 +285,27 @@
   overflow: hidden;
 }
 
+.nd-card-glow-bg {
+  position: absolute;
+  inset: -20px;
+  opacity: 0.25;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.nd-card > *:not(.nd-card-glow-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+.nd-card-gauge {
+  flex-shrink: 0;
+  width: 72px;
+  height: 52px;
+  position: relative;
+  overflow: hidden;
+}
+
 .nd-card::before {
   content: '';
   position: absolute;
@@ -303,7 +324,7 @@
 .nd-card-meta { flex: 1; min-width: 0; }
 
 .nd-card-name {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 0.92rem;
   font-weight: 700;
   color: #fff;
@@ -343,7 +364,7 @@
 }
 
 .nd-overall-value {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 1.25rem;
   font-weight: 800;
   color: var(--card-color);
@@ -374,7 +395,7 @@
 .nd-categories-section { display: flex; flex-direction: column; gap: 0.35rem; }
 
 .nd-categories-heading {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 0.6rem;
   font-weight: 700;
   color: rgba(255,255,255,0.25);
@@ -423,9 +444,9 @@
   letter-spacing: 0.03em;
 }
 .nd-btn-regen:hover {
-  background: rgba(0,229,160,0.05);
-  border-color: rgba(0,229,160,0.25);
-  color: rgba(0,229,160,0.7);
+  background: rgba(80,118,255,0.05);
+  border-color: rgba(80,118,255,0.25);
+  color: rgba(80,118,255,0.7);
 }
 
 /* ─── Sources / Methodology pane ─────────────────────────────────────────── */
@@ -469,7 +490,7 @@
 }
 
 .nd-source-status {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 0.58rem;
   font-weight: 700;
   padding: 0.1rem 0.55rem;
@@ -481,9 +502,9 @@
   letter-spacing: 0.07em;
 }
 .nd-source-status.used {
-  background: rgba(0,229,160,0.08);
-  color: #00e5a0;
-  border-color: rgba(0,229,160,0.25);
+  background: rgba(80,118,255,0.08);
+  color: #F6F6F6;
+  border-color: rgba(80,118,255,0.25);
 }
 
 .nd-source-used-for {

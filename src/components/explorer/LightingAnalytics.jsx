@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react'
+import { GaugeDial } from '../charts'
+import { GlowDistributionChart } from '../charts'
 import './LightingAnalytics.css'
 
 const LightingAnalytics = ({
@@ -166,24 +168,28 @@ const LightingAnalytics = ({
             <div className="subsection-header">
               <h4>🔦 Infrastructure Status</h4>
             </div>
-            <div className="stats-grid">
-              <div className="stat-card primary">
-                <div className="stat-value">{lightStats.total}</div>
-                <div className="stat-label">Total Light Poles</div>
-                <div className="stat-sublabel">{lightStats.totalLightCount} individual lights</div>
+            <div className="lighting-aurora-row">
+              <div className="lighting-gauge-cell">
+                <GaugeDial themeKey="lighting" score={parseFloat(lightStats.uptime) / 100} active />
+                <span className="lighting-gauge-label">Uptime</span>
               </div>
-              
-              <div className="stat-card success">
-                <div className="stat-value">{lightStats.operational}</div>
-                <div className="stat-label">Operational Lights</div>
-                <div className="stat-sublabel">{lightStats.uptime}% uptime</div>
-              </div>
-              
-              <div className="stat-card warning">
-                <div className="stat-value">{lightStats.nonOperational}</div>
-                <div className="stat-label">Non-Operational</div>
-                <div className="stat-sublabel">
-                  {((lightStats.nonOperational / lightStats.total) * 100).toFixed(1)}% need repair
+              <div className="stats-grid" style={{ flex: 1 }}>
+                <div className="stat-card primary">
+                  <div className="stat-value">{lightStats.total}</div>
+                  <div className="stat-label">Total Light Poles</div>
+                  <div className="stat-sublabel">{lightStats.totalLightCount} individual lights</div>
+                </div>
+                <div className="stat-card success">
+                  <div className="stat-value">{lightStats.operational}</div>
+                  <div className="stat-label">Operational</div>
+                  <div className="stat-sublabel">{lightStats.uptime}% uptime</div>
+                </div>
+                <div className="stat-card warning">
+                  <div className="stat-value">{lightStats.nonOperational}</div>
+                  <div className="stat-label">Non-Operational</div>
+                  <div className="stat-sublabel">
+                    {((lightStats.nonOperational / lightStats.total) * 100).toFixed(1)}% need repair
+                  </div>
                 </div>
               </div>
             </div>
@@ -284,10 +290,21 @@ const LightingAnalytics = ({
           </>
         )}
         
+        {/* Aurora glow distribution chart */}
+        {categoryStats && stats && (
+          <div className="lighting-glow-dist">
+            <GlowDistributionChart
+              distribution={[categoryStats.bottom20, categoryStats.moderate, categoryStats.top20]}
+              themeKey="lighting"
+              title="Lighting Quality Distribution"
+            />
+          </div>
+        )}
+
         {/* Category Breakdown - Percentile Based */}
         {categoryStats && stats?.thresholds && (
           <div className="category-section">
-            <h4>Lighting Quality Distribution (Percentile-Based)</h4>
+            <h4>Percentile Breakdown</h4>
             <div className="category-list">
               <div className="category-item bottom20">
                 <div className="category-header">
@@ -302,7 +319,7 @@ const LightingAnalytics = ({
                     className="category-bar-fill"
                     style={{ 
                       width: `${(categoryStats.bottom20 / stats.analyzedSegments) * 100}%`,
-                      background: '#dc2626'
+                      background: '#A78BFA'
                     }}
                   />
                 </div>
@@ -324,7 +341,7 @@ const LightingAnalytics = ({
                     className="category-bar-fill"
                     style={{ 
                       width: `${(categoryStats.moderate / stats.analyzedSegments) * 100}%`,
-                      background: '#f59e0b'
+                      background: '#7B93FF'
                     }}
                   />
                 </div>
@@ -346,7 +363,7 @@ const LightingAnalytics = ({
                     className="category-bar-fill"
                     style={{ 
                       width: `${(categoryStats.top20 / stats.analyzedSegments) * 100}%`,
-                      background: '#10b981'
+                      background: '#5EC2A0'
                     }}
                   />
                 </div>
@@ -412,15 +429,15 @@ const LightingAnalytics = ({
         <h4>Percentile-Based Quality Scale</h4>
         <div className="legend-items">
           <div className="legend-item">
-            <div className="legend-color" style={{ background: '#dc2626' }}></div>
+            <div className="legend-color" style={{ background: '#A78BFA' }}></div>
             <span>Bottom 20% - Priority improvement areas</span>
           </div>
           <div className="legend-item">
-            <div className="legend-color" style={{ background: '#f59e0b' }}></div>
+            <div className="legend-color" style={{ background: '#7B93FF' }}></div>
             <span>Middle 60% - Moderate/adequate lighting</span>
           </div>
           <div className="legend-item">
-            <div className="legend-color" style={{ background: '#10b981' }}></div>
+            <div className="legend-color" style={{ background: '#5EC2A0' }}></div>
             <span>Top 20% - Best-performing areas</span>
           </div>
         </div>

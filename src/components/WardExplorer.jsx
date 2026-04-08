@@ -79,14 +79,14 @@ const LENS_CONFIG = {
     nameKey: 'display_name',
     searchPlaceholder: 'Search neighbourhoods...',
     metrics: [
-      { key: 'GreenBlue_Score', label: 'Nature Access Score', description: 'Combined access to green and blue amenities.', format: 'score', low: '#0f2b2b', high: '#3ce29f' },
-      { key: 'Green_Score', label: 'Green Space Score', description: 'Tree, park and vegetation strength.', format: 'score', low: '#112414', high: '#70f29f' },
-      { key: 'Blue_Score', label: 'Blue Space Score', description: 'Water-edge and blue infrastructure score.', format: 'score', low: '#0f2440', high: '#5cb8ff' },
-      { key: 'pop_total', label: 'Population', description: 'Estimated total residents.', format: 'integer', low: '#24183f', high: '#ff8b65' },
-      { key: 'population_density', label: 'Population Density', description: 'Residents per square kilometre.', format: 'density', low: '#1d1236', high: '#ff5b7a' },
-      { key: 'avg_income', label: 'Average Income', description: 'Estimated average personal income.', format: 'currency', low: '#34210d', high: '#ffc864' },
-      { key: 'employed', label: 'Employed Residents', description: 'Estimated employed residents.', format: 'integer', low: '#10283a', high: '#4ed5ff' },
-      { key: 'lights_per_sqkm', label: 'Street Lights per km²', description: 'Lighting intensity of the built environment.', format: 'decimal', low: '#2b1e08', high: '#ffe37c' }
+      { key: 'GreenBlue_Score', label: 'Nature Access Score', description: 'Combined access to green and blue amenities.', format: 'score', low: '#0f2b2b', high: '#3CB28D' },
+      { key: 'Green_Score', label: 'Green Space Score', description: 'Tree, park and vegetation strength.', format: 'score', low: '#112414', high: '#7CC715' },
+      { key: 'Blue_Score', label: 'Blue Space Score', description: 'Water-edge and blue infrastructure score.', format: 'score', low: '#0f2440', high: '#5076FF' },
+      { key: 'pop_total', label: 'Population', description: 'Estimated total residents.', format: 'integer', low: '#1a1530', high: '#7B93FF' },
+      { key: 'population_density', label: 'Population Density', description: 'Residents per square kilometre.', format: 'density', low: '#1a1530', high: '#A78BFA' },
+      { key: 'avg_income', label: 'Average Income', description: 'Estimated average personal income.', format: 'currency', low: '#1a2018', high: '#5EC2A0' },
+      { key: 'employed', label: 'Employed Residents', description: 'Estimated employed residents.', format: 'integer', low: '#141828', high: '#7B93FF' },
+      { key: 'lights_per_sqkm', label: 'Street Lights per km²', description: 'Lighting intensity of the built environment.', format: 'decimal', low: '#1a1a10', high: '#C4CDFF' }
     ],
     detailStats: [
       { key: 'pop_total', label: 'Population', format: 'integer' },
@@ -112,9 +112,9 @@ const LENS_CONFIG = {
     searchPlaceholder: 'Search planning suburbs...',
     metrics: [
       { key: 'pct_households_piped_water_inside_dwelling', label: 'Water Inside the Home', description: 'Share of households with a tap inside the home.', format: 'percent', low: '#1c1a42', high: '#53b6ff' },
-      { key: 'pct_households_refuse_removed_weekly', label: 'Weekly Refuse Removal', description: 'Share of households receiving weekly refuse collection.', format: 'percent', low: '#2c170f', high: '#ffbb6b' },
+      { key: 'pct_households_refuse_removed_weekly', label: 'Weekly Refuse Removal', description: 'Share of households receiving weekly refuse collection.', format: 'percent', low: '#151a18', high: '#5EC2A0' },
       { key: 'pct_households_cooking_mains', label: 'Cooking With Mains Electricity', description: 'Households using mains electricity for cooking.', format: 'percent', low: '#132434', high: '#4bd8ff' },
-      { key: 'pct_households_cooking_gas', label: 'Cooking With Gas', description: 'Households using gas for cooking.', format: 'percent', low: '#2c180f', high: '#ff9963' },
+      { key: 'pct_households_cooking_gas', label: 'Cooking With Gas', description: 'Households using gas for cooking.', format: 'percent', low: '#16141e', high: '#A78BFA' },
       { key: 'pct_commuters_under_30_minutes', label: 'Commutes Under 30 Minutes', description: 'Residents with shorter daily travel times.', format: 'percent', low: '#12261e', high: '#49e7a6' },
       { key: 'pct_commuters_mode_walking', label: 'Walking to Work or School', description: 'Share of commuters travelling on foot.', format: 'percent', low: '#171d38', high: '#8b8cff' },
       { key: 'pct_public_facility_use_park_monthly_within_suburb', label: 'Monthly Park Use', description: 'Residents using a park within the suburb each month.', format: 'percent', low: '#152116', high: '#9bff7e' },
@@ -142,13 +142,13 @@ const LENS_CONFIG = {
     searchPlaceholder: 'Search economic areas...',
     metrics: [
       { key: 'tax_employment_latest', label: 'Formal Jobs', description: 'Estimated formal jobs in the latest year.', format: 'integer', low: '#11243a', high: '#48d0ff' },
-      { key: 'tax_establishments_latest', label: 'Registered Establishments', description: 'Estimated registered establishments in the latest year.', format: 'integer', low: '#36210e', high: '#ffbf6c' },
+      { key: 'tax_establishments_latest', label: 'Registered Establishments', description: 'Estimated registered establishments in the latest year.', format: 'integer', low: '#151a18', high: '#5EC2A0' },
       { key: 'tax_median_income_latest', label: 'Median Income', description: 'Median income in the latest year.', format: 'currency', low: '#26163b', high: '#d191ff' },
       { key: 'tax_jobs_per_establishment_latest', label: 'Jobs per Establishment', description: 'Average number of jobs per establishment.', format: 'decimal', low: '#102d24', high: '#42e8ab' },
-      { key: 'tax_employment_pct_change_2014_2025', label: 'Employment Growth Since 2014', description: 'Percentage change in employment between 2014 and 2025.', format: 'signedPercent', low: '#251414', high: '#ff7c68' },
-      { key: 'tax_establishments_pct_change_2014_2025', label: 'Business Growth Since 2014', description: 'Percentage change in establishments between 2014 and 2025.', format: 'signedPercent', low: '#24160e', high: '#ffc461' },
+      { key: 'tax_employment_pct_change_2014_2025', label: 'Employment Growth Since 2014', description: 'Percentage change in employment between 2014 and 2025.', format: 'signedPercent', low: '#141420', high: '#7B93FF' },
+      { key: 'tax_establishments_pct_change_2014_2025', label: 'Business Growth Since 2014', description: 'Percentage change in establishments between 2014 and 2025.', format: 'signedPercent', low: '#151a18', high: '#5EC2A0' },
       { key: 'tax_youth_fte_share', label: 'Youth Employment Share', description: 'Share of jobs held by young people.', format: 'percent', low: '#142038', high: '#63a8ff' },
-      { key: 'tax_female_fte_share', label: 'Female Employment Share', description: 'Share of jobs held by women.', format: 'percent', low: '#321739', high: '#ff93c8' }
+      { key: 'tax_female_fte_share', label: 'Female Employment Share', description: 'Share of jobs held by women.', format: 'percent', low: '#16141e', high: '#A78BFA' }
     ],
     detailStats: [
       { key: 'tax_employment_2014', label: 'Jobs in 2014', format: 'integer' },
@@ -510,10 +510,20 @@ function StoryToggle({ options, value, onChange }) {
   )
 }
 
-function RankingChart({ data, metric }) {
+function RankingChart({ data, metric, onBarClick }) {
+  const handleBarClick = useCallback((barData) => {
+    if (onBarClick && barData?._feature) {
+      onBarClick(barData._feature)
+    }
+  }, [onBarClick])
+
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 12, left: 14, bottom: 4 }}>
+      <BarChart
+        data={data}
+        layout="vertical"
+        margin={{ top: 4, right: 12, left: 14, bottom: 4 }}
+      >
         <CartesianGrid stroke="rgba(255,255,255,0.07)" horizontal={false} />
         <XAxis
           type="number"
@@ -531,7 +541,14 @@ function RankingChart({ data, metric }) {
           tickLine={false}
         />
         <Tooltip content={<CustomChartTooltip formatters={{ value: (value) => formatMetricValue(metric.format, value) }} />} />
-        <Bar dataKey="value" name={metric.label} fill={metric.high} radius={[0, 8, 8, 0]} />
+        <Bar
+          dataKey="value"
+          name={metric.label}
+          fill={metric.high}
+          radius={[0, 8, 8, 0]}
+          cursor={onBarClick ? 'pointer' : undefined}
+          onClick={handleBarClick}
+        />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -777,7 +794,8 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
   const rankingChartData = useMemo(() => {
     return rankedFeatures.slice(0, 8).map((feature) => ({
       name: truncateLabel(feature.properties?.display_name, activeLensId === 'economy' ? 16 : 20),
-      value: Number(feature.properties?.[activeMetric.key] || 0)
+      value: Number(feature.properties?.[activeMetric.key] || 0),
+      _feature: feature
     }))
   }, [rankedFeatures, activeMetric.key, activeLensId])
 
@@ -1432,10 +1450,10 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               <YAxis tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}%`} />
               <Tooltip content={<CustomChartTooltip formatters={{ formal: (value) => `${DECIMAL_FORMATTER.format(value)}%`, informal: (value) => `${DECIMAL_FORMATTER.format(value)}%`, adi: (value) => `${DECIMAL_FORMATTER.format(value)}%`, city: (value) => `${DECIMAL_FORMATTER.format(value)}%` }} />} />
               <Legend wrapperStyle={{ color: 'rgba(236,243,255,0.65)', fontSize: 11 }} />
-              <Bar dataKey="formal" name="Formal" fill="#4bd8ff" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="informal" name="Informal" fill="#ff8d63" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="adi" name="ADI" fill="#55e3a8" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="city" name="Cape Town" fill="#d5dcff" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="formal" name="Formal" fill="#7B93FF" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="informal" name="Informal" fill="#E2E2E2" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="adi" name="ADI" fill="#5EC2A0" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="city" name="Cape Town" fill="#A78BFA" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </>
@@ -1467,8 +1485,8 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               <YAxis tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}%`} />
               <Tooltip content={<CustomChartTooltip formatters={{ survey2024: (value) => `${DECIMAL_FORMATTER.format(value)}%`, ghs2023: (value) => `${DECIMAL_FORMATTER.format(value)}%` }} />} />
               <Legend wrapperStyle={{ color: 'rgba(236,243,255,0.65)', fontSize: 11 }} />
-              <Bar dataKey="survey2024" name="2024 CCT Survey" fill="#62b8ff" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="ghs2023" name="2023 GHS" fill="#ff8d63" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="survey2024" name="2024 CCT Survey" fill="#7B93FF" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="ghs2023" name="2023 GHS" fill="#E2E2E2" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </>
@@ -1508,7 +1526,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
             <XAxis type="number" tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${DECIMAL_FORMATTER.format(value)}%`} />
             <YAxis type="category" dataKey="name" width={110} tick={{ fill: 'rgba(236,243,255,0.65)', fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip content={<CustomChartTooltip formatters={{ share: (value) => `${DECIMAL_FORMATTER.format(value)}%` }} />} />
-            <Bar dataKey="share" name="Share of all dwellings" fill="#ffc864" radius={[0, 8, 8, 0]} />
+            <Bar dataKey="share" name="Share of all dwellings" fill="#C4CDFF" radius={[0, 8, 8, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </>
@@ -1540,7 +1558,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               <XAxis dataKey="name" tick={{ fill: 'rgba(236,243,255,0.6)', fontSize: 11 }} axisLine={false} tickLine={false} interval={0} angle={-10} textAnchor="end" height={50} />
               <YAxis tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${DECIMAL_FORMATTER.format(value)}%`} />
               <Tooltip content={<CustomChartTooltip formatters={{ value: (value) => `${DECIMAL_FORMATTER.format(value)}%` }} />} />
-              <Bar dataKey="value" name="Households" fill="#63d8ff" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="value" name="Households" fill="#7B93FF" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </>
@@ -1572,8 +1590,8 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               <YAxis tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}%`} />
               <Tooltip content={<CustomChartTooltip formatters={{ cct: (value) => `${DECIMAL_FORMATTER.format(value)}%`, eskom: (value) => `${DECIMAL_FORMATTER.format(value)}%` }} />} />
               <Legend wrapperStyle={{ color: 'rgba(236,243,255,0.65)', fontSize: 11 }} />
-              <Bar dataKey="cct" name="CCT supply" fill="#47e4a6" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="eskom" name="Eskom supply" fill="#ffb96c" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="cct" name="CCT supply" fill="#7B93FF" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="eskom" name="Eskom supply" fill="#5EC2A0" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </>
@@ -1604,10 +1622,10 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
             <YAxis tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}%`} />
             <Tooltip content={<CustomChartTooltip formatters={{ formal: (value) => `${DECIMAL_FORMATTER.format(value)}%`, informal: (value) => `${DECIMAL_FORMATTER.format(value)}%`, adi: (value) => `${DECIMAL_FORMATTER.format(value)}%`, total: (value) => `${DECIMAL_FORMATTER.format(value)}%` }} />} />
             <Legend wrapperStyle={{ color: 'rgba(236,243,255,0.65)', fontSize: 11 }} />
-            <Bar dataKey="formal" name="Formal" fill="#63d8ff" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="informal" name="Informal" fill="#ff8d63" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="adi" name="ADI" fill="#47e4a6" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="total" name="Total" fill="#d6dcff" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="formal" name="Formal" fill="#7B93FF" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="informal" name="Informal" fill="#E2E2E2" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="adi" name="ADI" fill="#5EC2A0" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="total" name="Total" fill="#A78BFA" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </>
@@ -1640,9 +1658,9 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               <YAxis tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${DECIMAL_FORMATTER.format(value)}`} />
               <Tooltip content={<CustomChartTooltip formatters={{ jobs: (value) => `${DECIMAL_FORMATTER.format(value)} index`, businesses: (value) => `${DECIMAL_FORMATTER.format(value)} index`, income: (value) => `${DECIMAL_FORMATTER.format(value)} index` }} />} />
               <Legend wrapperStyle={{ color: 'rgba(236,243,255,0.65)', fontSize: 11 }} />
-              <Line type="monotone" dataKey="jobs" name="Jobs" stroke="#63d8ff" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="businesses" name="Businesses" stroke="#ffc864" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="income" name="Income" stroke="#d391ff" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="jobs" name="Jobs" stroke="#7B93FF" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="businesses" name="Businesses" stroke="#5EC2A0" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="income" name="Income" stroke="#A78BFA" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
             </LineChart>
           </ResponsiveContainer>
         </>
@@ -1673,7 +1691,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               <XAxis dataKey="name" tick={{ fill: 'rgba(236,243,255,0.6)', fontSize: 11 }} axisLine={false} tickLine={false} interval={0} angle={-10} textAnchor="end" height={52} />
               <YAxis tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${DECIMAL_FORMATTER.format(value)}%`} />
               <Tooltip content={<CustomChartTooltip formatters={{ value: (value) => `${DECIMAL_FORMATTER.format(value)}%` }} />} />
-              <Bar dataKey="value" name="Share" fill="#47e4a6" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="value" name="Share" fill="#5EC2A0" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </>
@@ -1703,7 +1721,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
             <XAxis type="number" tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${DECIMAL_FORMATTER.format(value)}%`} />
             <YAxis type="category" dataKey="name" width={104} tick={{ fill: 'rgba(236,243,255,0.65)', fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip content={<CustomChartTooltip formatters={{ growth: (value) => `${DECIMAL_FORMATTER.format(value)}%` }} />} />
-            <Bar dataKey="growth" name="Employment growth" fill="#ff8c68" radius={[0, 8, 8, 0]} />
+            <Bar dataKey="growth" name="Employment growth" fill="#A78BFA" radius={[0, 8, 8, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </>
@@ -1730,9 +1748,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
 
   return (
     <div className={`we-root ${isAnalyticsCollapsed ? 'we-root--analytics-collapsed' : 'we-root--analytics-open'}`}>
-      <div className="we-atmosphere we-atmosphere--one" />
-      <div className="we-atmosphere we-atmosphere--two" />
-      <div className="we-atmosphere we-atmosphere--three" />
+      {/* atmosphere glow removed for cleaner map view */}
       <div className="we-map" ref={mapEl} />
 
       <header className="we-header">
@@ -1784,42 +1800,30 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
         </div>
       </header>
 
-      <div className={`we-hero-card ${isHeroCollapsed ? 'we-hero-card--collapsed' : ''}`}>
-        <div className="we-panel-utility">
-          <div className="we-hero-kicker">{activeLens.badge}</div>
-          <button className="we-panel-toggle" onClick={() => setIsHeroCollapsed((current) => !current)}>
-            {isHeroCollapsed ? 'Show overview' : 'Hide overview'}
-          </button>
+      <div className="we-left-col">
+        <div className={`we-hero-card ${isHeroCollapsed ? 'we-hero-card--collapsed' : ''}`}>
+          <div className="we-panel-utility">
+            <div className="we-hero-kicker">{activeLens.badge}</div>
+            <button className="we-panel-toggle" onClick={() => setIsHeroCollapsed((current) => !current)}>
+              {isHeroCollapsed ? 'Show overview' : 'Hide overview'}
+            </button>
+          </div>
+          {!isHeroCollapsed ? (
+            <>
+              <h2 className="we-hero-title">{activeLens.title}</h2>
+              <p className="we-hero-desc">{activeLens.subtitle}</p>
+              <div className="we-overview-grid">
+                {cityOverviewStats.map((stat) => (
+                  <OverviewStat key={stat.label} label={stat.label} value={stat.value} hint={stat.hint} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="we-collapsed-note">Overview hidden so the map has more space.</p>
+          )}
         </div>
-        {!isHeroCollapsed ? (
-          <>
-            <h2 className="we-hero-title">{activeLens.title}</h2>
-            <p className="we-hero-desc">{activeLens.subtitle}</p>
-            <div className="we-overview-grid">
-              {cityOverviewStats.map((stat) => (
-                <OverviewStat key={stat.label} label={stat.label} value={stat.value} hint={stat.hint} />
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="we-collapsed-note">Overview hidden so the map has more space.</p>
-        )}
-      </div>
 
-      <div className="we-lens-switcher">
-        {Object.values(LENS_CONFIG).map((lens) => (
-          <button
-            key={lens.id}
-            className={`we-lens-btn ${activeLensId === lens.id ? 'we-lens-btn--active' : ''}`}
-            onClick={() => setActiveLensId(lens.id)}
-          >
-            <span className="we-lens-btn-label">{lens.label}</span>
-            <span className="we-lens-btn-sub">{lens.badge}</span>
-          </button>
-        ))}
-      </div>
-
-      <aside className={`we-left-panel ${isThemePanelCollapsed ? 'we-left-panel--collapsed' : ''}`}>
+        <aside className={`we-left-panel ${isThemePanelCollapsed ? 'we-left-panel--collapsed' : ''}`}>
         <div className="we-panel-header">
           <div className="we-panel-utility">
             <div className="we-panel-kicker">Map Theme</div>
@@ -1861,6 +1865,20 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
           <div className="we-collapsed-note">Theme picker hidden while you inspect map results.</div>
         )}
       </aside>
+      </div>
+
+      <div className="we-lens-switcher">
+        {Object.values(LENS_CONFIG).map((lens) => (
+          <button
+            key={lens.id}
+            className={`we-lens-btn ${activeLensId === lens.id ? 'we-lens-btn--active' : ''}`}
+            onClick={() => setActiveLensId(lens.id)}
+          >
+            <span className="we-lens-btn-label">{lens.label}</span>
+            <span className="we-lens-btn-sub">{lens.badge}</span>
+          </button>
+        ))}
+      </div>
 
       {hoveredFeature && !selectedFeature ? (
         <div
@@ -1961,7 +1979,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
                 </div>
                 <div className="we-chart-card-note">Based on the active map layer</div>
               </div>
-              <RankingChart data={rankingChartData} metric={activeMetric} />
+              <RankingChart data={rankingChartData} metric={activeMetric} onBarClick={handleSearchSelect} />
             </article>
 
             <article className="we-chart-card">

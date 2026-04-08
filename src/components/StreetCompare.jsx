@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react'
 import { RADAR_AXES } from '../utils/walkabilityEngine'
 import { StreetViewSnippet } from './StreetViewSnippet'
+import { GaugeDial } from './charts'
 import './StreetCompare.css'
 
-// ─── SVG Radar Chart ──────────────────────────────────────────────────────────
+// ─── SVG Radar Chart (clear stroked polygon — readable at small sizes) ────────
 
 const CX = 110
 const CY = 110
@@ -16,27 +17,22 @@ function axisPoint (i, r) {
   return [CX + r * Math.cos(angle), CY + r * Math.sin(angle)]
 }
 
-function polygonPoints (values) {
-  return values.map((v, i) => axisPoint(i, v * R))
-}
-
 function formatPt (pts) {
   return pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
 }
 
-function RadarChart ({ segment, color, label }) {
+function SegmentRadar ({ segment, color }) {
   const values = useMemo(
     () => RADAR_AXES.map(a => Math.max(0.02, Math.min(1, segment[a.key] ?? 0))),
     [segment]
   )
 
-  const dataPts  = polygonPoints(values)
+  const dataPts  = values.map((v, i) => axisPoint(i, v * R))
   const dataPath = formatPt(dataPts)
 
   return (
     <div className="sc-radar-wrap">
       <svg viewBox="0 0 220 220" className="sc-radar-svg">
-        {/* Concentric grid rings */}
         {LEVELS.map(level => (
           <polygon
             key={level}
@@ -44,74 +40,28 @@ function RadarChart ({ segment, color, label }) {
             className="sc-radar-ring"
           />
         ))}
-
-        {/* Axis spokes */}
         {RADAR_AXES.map((axis, i) => {
           const [x, y] = axisPoint(i, R)
-          return (
-            <line
-              key={axis.key}
-              x1={CX} y1={CY}
-              x2={x}  y2={y}
-              className="sc-radar-spoke"
-            />
-          )
+          return <line key={axis.key} x1={CX} y1={CY} x2={x} y2={y} className="sc-radar-spoke" />
         })}
-
-        {/* Data polygon — filled */}
-        <polygon
-          points={dataPath}
-          fill={color}
-          fillOpacity={0.2}
-          stroke={color}
-          strokeWidth={1.8}
-          strokeLinejoin="round"
-        />
-
-        {/* Data point dots */}
-        {dataPts.map(([x, y], i) => (
-          <circle
-            key={i}
-            cx={x} cy={y} r={3}
-            fill={color}
-            opacity={0.9}
-          />
-        ))}
-
-        {/* Axis labels */}
+        <polygon points={dataPath} fill={color} fillOpacity={0.2} stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
+        {dataPts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r={3} fill={color} opacity={0.9} />)}
         {RADAR_AXES.map((axis, i) => {
           const [x, y] = axisPoint(i, R + 18)
-          return (
-            <text
-              key={axis.key}
-              x={x} y={y}
-              textAnchor="middle"
-              dominantBaseline="central"
-              className="sc-radar-label"
-            >
-              {axis.label}
-            </text>
-          )
+          return <text key={axis.key} x={x} y={y} textAnchor="middle" dominantBaseline="central" className="sc-radar-label">{axis.label}</text>
         })}
-
-        {/* Centre ring reference */}
         <circle cx={CX} cy={CY} r={2} fill="rgba(255,255,255,0.3)" />
       </svg>
 
-      {/* Score summary below chart */}
-      <div className="sc-radar-scores">
-        <div className="sc-radar-kpi">
-          <span className="sc-radar-kpi-val" style={{ color }}>
-            {Math.round((segment.kpi_day ?? 0) * 100)}
-          </span>
-          <span className="sc-radar-kpi-label">Day</span>
+      {/* GaugeDials for day/night KPI */}
+      <div className="sc-gauge-row">
+        <div className="sc-gauge-cell">
+          <GaugeDial themeKey="walkability" score={segment.kpi_day ?? 0} active />
+          <span className="sc-gauge-label">Day</span>
         </div>
-        <div className="sc-radar-divider" />
-        <div className="sc-radar-kpi">
-          <span className="sc-radar-kpi-val" style={{ color }}>
-            {Math.round((segment.kpi_night ?? 0) * 100)}
-          </span>
-          <span className="sc-radar-kpi-label">Night</span>
+        <div className="sc-gauge-cell">
+          <GaugeDial themeKey="lighting" score={segment.kpi_night ?? 0} active />
+          <span className="sc-gauge-label">Night</span>
         </div>
       </div>
     </div>
@@ -198,7 +148,7 @@ const StreetCompare = ({ segments, onClose, onClear }) => {
       <div className={`sc-charts ${hasTwo ? 'sc-charts--two' : ''}`}>
         {/* Segment A */}
         <div className="sc-chart-col">
-          <RadarChart segment={aProps} color={COLORS[0]} label="A" />
+          <SegmentRadar segment={aProps} color={COLORS[0]} />
           <button
             className={`sc-sv-btn ${svOpen[0] ? 'sc-sv-btn--active' : ''}`}
             onClick={() => toggleSv(0)}
@@ -220,7 +170,7 @@ const StreetCompare = ({ segments, onClose, onClear }) => {
         {/* Segment B */}
         {hasTwo && (
           <div className="sc-chart-col">
-            <RadarChart segment={bProps} color={COLORS[1]} label="B" />
+            <SegmentRadar segment={bProps} color={COLORS[1]} />
             <button
               className={`sc-sv-btn ${svOpen[1] ? 'sc-sv-btn--active' : ''}`}
               onClick={() => toggleSv(1)}

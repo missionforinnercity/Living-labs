@@ -31,7 +31,7 @@
 }
 
 .map-popup strong {
-  color: #00e5a0;
+  color: #5076FF;
   font-weight: 600;
 }
 
@@ -234,9 +234,9 @@
   gap: 8px;
   padding: 8px 18px;
   background: rgba(15, 22, 18, 0.92);
-  border: 1px solid rgba(0, 229, 160, 0.45);
+  border: 1px solid rgba(80, 118, 255, 0.45);
   border-radius: 8px;
-  color: #00e5a0;
+  color: #5076FF;
   font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
   font-size: 0.78rem;
   font-weight: 600;
@@ -254,23 +254,23 @@
 
 .bbox-draw-rect {
   position: absolute;
-  border: 2px solid #00e5a0;
-  background: rgba(0, 229, 160, 0.08);
-  box-shadow: 0 0 16px rgba(0, 229, 160, 0.2);
+  border: 2px solid #5076FF;
+  background: rgba(80, 118, 255, 0.08);
+  box-shadow: 0 0 16px rgba(80, 118, 255, 0.2);
   pointer-events: none;
 }
 
 .bbox-fixed-box {
   pointer-events: auto;
-  border: 2.5px dashed #00e5a0;
+  border: 2.5px dashed #5076FF;
   border-radius: 4px;
-  background: rgba(0, 229, 160, 0.06);
-  box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.35), 0 0 24px rgba(0, 229, 160, 0.25);
+  background: rgba(80, 118, 255, 0.06);
+  box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.35), 0 0 24px rgba(80, 118, 255, 0.25);
   transition: box-shadow 0.15s;
 }
 
 .bbox-fixed-box:hover {
-  box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.35), 0 0 32px rgba(0, 229, 160, 0.4);
+  box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.35), 0 0 32px rgba(80, 118, 255, 0.4);
 }
 
 .bbox-confirm-btn {
@@ -282,21 +282,21 @@
   align-items: center;
   gap: 8px;
   padding: 10px 28px;
-  background: rgba(0, 229, 160, 0.15);
-  border: 1.5px solid #00e5a0;
+  background: rgba(80, 118, 255, 0.15);
+  border: 1.5px solid #5076FF;
   border-radius: 10px;
-  color: #00e5a0;
+  color: #5076FF;
   font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   cursor: pointer;
   transition: all 0.15s;
-  box-shadow: 0 4px 24px rgba(0, 229, 160, 0.2);
+  box-shadow: 0 4px 24px rgba(80, 118, 255, 0.2);
   z-index: 21;
 }
 
 .bbox-confirm-btn:hover {
-  background: rgba(0, 229, 160, 0.25);
-  box-shadow: 0 4px 32px rgba(0, 229, 160, 0.35);
+  background: rgba(80, 118, 255, 0.25);
+  box-shadow: 0 4px 32px rgba(80, 118, 255, 0.35);
 }

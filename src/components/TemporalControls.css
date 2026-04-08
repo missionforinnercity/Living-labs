@@ -57,10 +57,10 @@
 }
 
 .season-button.active {
-  background: rgba(0, 229, 160, 0.08);
-  border-color: rgba(0, 229, 160, 0.35);
-  color: #00e5a0;
-  box-shadow: 0 0 12px rgba(0, 229, 160, 0.1);
+  background: rgba(80, 118, 255, 0.08);
+  border-color: rgba(80, 118, 255, 0.35);
+  color: #5076FF;
+  box-shadow: 0 0 12px rgba(80, 118, 255, 0.1);
 }
 
 .season-icon {
@@ -102,10 +102,10 @@
 }
 
 .time-button.active {
-  background: rgba(0, 229, 160, 0.08);
-  border-color: rgba(0, 229, 160, 0.35);
-  color: #00e5a0;
-  box-shadow: 0 0 12px rgba(0, 229, 160, 0.1);
+  background: rgba(80, 118, 255, 0.08);
+  border-color: rgba(80, 118, 255, 0.35);
+  color: #5076FF;
+  box-shadow: 0 0 12px rgba(80, 118, 255, 0.1);
 }
 
 .time-icon {
@@ -127,7 +127,7 @@
   background: rgba(255, 255, 255, 0.08);
   outline: none;
   -webkit-appearance: none;
-  accent-color: #00e5a0;
+  accent-color: #5076FF;
 }
 
 .hour-slider::-webkit-slider-thumb {
@@ -136,19 +136,19 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #00e5a0;
+  background: #5076FF;
   cursor: pointer;
-  box-shadow: 0 0 8px rgba(0, 229, 160, 0.4);
+  box-shadow: 0 0 8px rgba(80, 118, 255, 0.4);
 }
 
 .hour-slider::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #00e5a0;
+  background: #5076FF;
   cursor: pointer;
   border: none;
-  box-shadow: 0 0 8px rgba(0, 229, 160, 0.4);
+  box-shadow: 0 0 8px rgba(80, 118, 255, 0.4);
 }
 
 .hour-labels {

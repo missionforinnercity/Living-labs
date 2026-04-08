@@ -1296,7 +1296,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
     const cleanup = () => {
       if (!map.current) return
-      ;[LYR_WLK, LYR_STORY_GLOW, LYR_STORY].forEach(id => {
+      ;[LYR_WLK, 'walkability-idx-line-glow', LYR_STORY_GLOW, LYR_STORY].forEach(id => {
         if (map.current.getLayer(id)) map.current.removeLayer(id)
       })
       ;[SRC_WLK, SRC_STORY].forEach(id => {
@@ -1312,17 +1312,35 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
     cleanup()
 
     // Main walkability layer — quintile step colours when thresholds are available
+    const kpiProp = wMode === 'day' ? 'kpi_day' : 'kpi_night'
+    const colorExpr = wMode === 'day'
+      ? thermalColorExpression('kpi_day',   thresholds || null)
+      : safetyColorExpression('kpi_night',  thresholds || null)
+
     map.current.addSource(SRC_WLK, { type: 'geojson', data: fc || EMPTY_FC })
+
+    // Soft line glow underneath — subtle neon tube effect
+    map.current.addLayer({
+      id:     'walkability-idx-line-glow',
+      type:   'line',
+      source: SRC_WLK,
+      paint: {
+        'line-color':   colorExpr,
+        'line-width':   ['interpolate', ['linear'], ['zoom'], 13, 5, 16, 10],
+        'line-opacity': 0.08,
+        'line-blur':    3,
+      }
+    })
+
+    // Core line layer
     map.current.addLayer({
       id:     LYR_WLK,
       type:   'line',
       source: SRC_WLK,
       paint: {
-        'line-color':   wMode === 'day'
-          ? thermalColorExpression('kpi_day',   thresholds || null)
-          : safetyColorExpression('kpi_night',  thresholds || null),
-        'line-width':   3,
-        'line-opacity': 0.9,
+        'line-color':   colorExpr,
+        'line-width':   ['interpolate', ['linear'], ['zoom'], 13, 1.5, 16, 3],
+        'line-opacity': 0.85,
       }
     })
 

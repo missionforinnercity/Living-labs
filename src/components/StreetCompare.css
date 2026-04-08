@@ -218,6 +218,27 @@
 }
 
 /* KPI scores below chart */
+.sc-gauge-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 4px;
+}
+.sc-gauge-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 72px;
+  height: 52px;
+}
+.sc-gauge-label {
+  font-size: 0.6rem;
+  color: var(--sc-text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* legacy kept for reference */
 .sc-radar-scores {
   display: flex;
   align-items: center;

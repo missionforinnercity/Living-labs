@@ -5,6 +5,8 @@ import {
   getDistrictBounds
 } from '../utils/districtEngine'
 import { loadBusinessData, loadLightingData, loadWalkabilityData } from '../utils/dataLoader'
+import { GlowCircle } from './charts'
+import { GaugeDial } from './charts'
 import './NarrativeDistricts.css'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -280,6 +282,11 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
                     style={{ '--card-color': activeDef.color, '--card-glow': activeDef.glowColor }}
                     key={p.clusterId}
                   >
+                    {/* Aurora glow background */}
+                    <div className="nd-card-glow-bg">
+                      <GlowCircle themeKey="districts" score={Math.max(0.15, (p.overallScore ?? 0) / 100)} />
+                    </div>
+
                     <div className="nd-card-accent" style={{ background: activeDef.color }} />
 
                     {/* Card header */}
@@ -289,9 +296,8 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
                         <p className="nd-card-cluster-label">{p.clusterLabel} &mdash; {p.poiCount} businesses</p>
                         <p className="nd-card-tagline">{activeDef.tagline}</p>
                       </div>
-                      <div className="nd-card-overall">
-                        <span className="nd-overall-value">{p.overallScore}</span>
-                        <span className="nd-overall-label">/100</span>
+                      <div className="nd-card-gauge">
+                        <GaugeDial themeKey="districts" score={(p.overallScore ?? 0) / 100} active color={activeDef.color} />
                       </div>
                     </div>
 

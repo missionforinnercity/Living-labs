@@ -58,7 +58,7 @@
 
 .control-group select:focus {
   outline: none;
-  border-color: #00e5a0;
+  border-color: #5076FF;
 }
 
 .stats-container {
@@ -248,7 +248,7 @@
 }
 
 .info-box h4 {
-  color: #00e5a0;
+  color: #5076FF;
   font-size: 0.875rem;
   font-weight: 600;
   margin: 0 0 0.75rem 0;

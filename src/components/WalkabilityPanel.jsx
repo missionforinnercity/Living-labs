@@ -7,6 +7,8 @@ import {
   quintileLabel,
 } from '../utils/walkabilityEngine'
 import { StreetViewSnippet } from './StreetViewSnippet'
+import { GaugeDial } from './charts'
+import { GlowDistributionChart } from './charts'
 import './WalkabilityPanel.css'
 
 
@@ -211,38 +213,42 @@ const WalkabilityPanel = ({ onWalkabilityChange, compareCount, onSegmentClick })
 
       {status === 'ready' && stats && (
         <>
-          {/* Stats strip */}
-          <div className="wlk-stats">
-            <div className="wlk-stat">
-              <span className="wlk-stat-val">{stats.mean}<span className="wlk-stat-unit">%</span></span>
-              <span className="wlk-stat-key">city avg</span>
+          {/* Aurora gauge + stats strip */}
+          <div className="wlk-aurora-stats">
+            <div className="wlk-gauge-wrap">
+              <GaugeDial themeKey="walkability" score={stats.mean / 100} active />
+              <span className="wlk-gauge-caption">City Avg</span>
             </div>
-            <div className="wlk-stat wlk-stat--good">
-              <span className="wlk-stat-val">{stats.bands.top20}</span>
-              <span className="wlk-stat-key">top 20%</span>
-            </div>
-            <div className="wlk-stat wlk-stat--poor">
-              <span className="wlk-stat-val">{stats.bands.bottom20}</span>
-              <span className="wlk-stat-key">bottom 20%</span>
+            <div className="wlk-stats">
+              <div className="wlk-stat wlk-stat--good">
+                <span className="wlk-stat-val">{stats.bands.top20}</span>
+                <span className="wlk-stat-key">top 20%</span>
+              </div>
+              <div className="wlk-stat wlk-stat--poor">
+                <span className="wlk-stat-val">{stats.bands.bottom20}</span>
+                <span className="wlk-stat-key">bottom 20%</span>
+              </div>
             </div>
           </div>
 
-          {/* 5-band distribution bar */}
-          <div className="wlk-dist">
-            <div className="wlk-dist-track">
-              <div className="wlk-dist-b20"      style={{ width: `${stats.pctBottom20}%` }}  title={`Bottom 20%: ${stats.bands.bottom20}`} />
-              <div className="wlk-dist-below"    style={{ width: `${stats.pctBelowAvg}%` }}  title={`Below Avg: ${stats.bands.belowAvg}`} />
-              <div className="wlk-dist-avg"      style={{ width: `${stats.pctAvg}%` }}        title={`Average: ${stats.bands.avg}`} />
-              <div className="wlk-dist-above"    style={{ width: `${stats.pctAboveAvg}%` }}  title={`Above Avg: ${stats.bands.aboveAvg}`} />
-              <div className="wlk-dist-t20"      style={{ width: `${stats.pctTop20}%` }}      title={`Top 20%: ${stats.bands.top20}`} />
-            </div>
-            <div className="wlk-dist-legend">
-              <span>Bot 20%</span>
-              <span>Below</span>
-              <span>Avg</span>
-              <span>Above</span>
-              <span>Top 20%</span>
-            </div>
+          {/* Aurora glow distribution chart */}
+          <div className="wlk-glow-dist">
+            <GlowDistributionChart
+              distribution={[
+                stats.bands.bottom20,
+                stats.bands.belowAvg,
+                stats.bands.avg,
+                stats.bands.aboveAvg,
+                stats.bands.top20,
+              ]}
+              themeKey="walkability"
+              title={`${effectiveMode === 'day' ? 'Daytime' : 'Nighttime'} Distribution`}
+              quartiles={[
+                stats.pctBottom20 / 100,
+                (stats.pctBottom20 + stats.pctBelowAvg + stats.pctAvg / 2) / 100,
+                1 - stats.pctTop20 / 100,
+              ]}
+            />
           </div>
 
           {/* Section: Story Tours */}

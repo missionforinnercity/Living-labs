@@ -8,7 +8,7 @@
 
 .explorer-header {
   position: absolute;
-  top: 52px;
+  top: 0;
   left: 0;
   right: 0;
   background: rgba(200, 210, 220, 0.11);
@@ -74,10 +74,10 @@
 }
 
 .mode-btn.active {
-  background: rgba(0, 229, 160, 0.14);
-  border-color: rgba(0, 229, 160, 0.45);
-  color: #00e5a0;
-  box-shadow: 0 0 12px rgba(0, 229, 160, 0.12);
+  background: rgba(80, 118, 255, 0.14);
+  border-color: rgba(80, 118, 255, 0.45);
+  color: #7B93FF;
+  box-shadow: 0 0 12px rgba(80, 118, 255, 0.12);
 }
 
 .mode-icon {
@@ -95,7 +95,7 @@
 /* ── Category sub-nav ──────────────────────────────────────────────────── */
 .category-subnav {
   position: absolute;
-  top: 96px;
+  top: 44px;
   left: 0;
   right: 0;
   display: flex;
@@ -142,9 +142,9 @@
 }
 
 .category-pill.active {
-  background: rgba(0, 229, 160, 0.1);
-  border-color: rgba(0, 229, 160, 0.45);
-  color: #00e5a0;
+  background: rgba(80, 118, 255, 0.1);
+  border-color: rgba(80, 118, 255, 0.45);
+  color: #7B93FF;
 }
 
 .category-pill-dot {
@@ -157,8 +157,8 @@
 }
 
 .category-pill.active .category-pill-dot {
-  background: #00e5a0;
-  box-shadow: 0 0 6px rgba(0, 229, 160, 0.7);
+  background: #7B93FF;
+  box-shadow: 0 0 6px rgba(80, 118, 255, 0.7);
 }
 
 .category-pill-label {
@@ -192,16 +192,16 @@
 }
 
 .category-pill--all.active {
-  background: rgba(0, 229, 160, 0.12);
-  border-color: rgba(0, 229, 160, 0.5);
-  color: #00e5a0;
-  box-shadow: 0 0 12px rgba(0, 229, 160, 0.15);
+  background: rgba(80, 118, 255, 0.12);
+  border-color: rgba(80, 118, 255, 0.5);
+  color: #7B93FF;
+  box-shadow: 0 0 12px rgba(80, 118, 255, 0.15);
 }
 
 .category-pill--all.active .category-pill-dot--all {
   border-color: #00e5a0;
   background: rgba(0, 229, 160, 0.4);
-  box-shadow: 0 0 6px rgba(0, 229, 160, 0.7);
+  box-shadow: 0 0 6px rgba(80, 118, 255, 0.7);
 }
 
 /* ── Content area ──────────────────────────────────────────────────────── */
@@ -218,7 +218,7 @@
 .explorer-sidebar {
   position: absolute;
   right: 16px;
-  top: 152px;
+  top: 100px;
   bottom: 16px;
   width: 360px; /* default; overridden by inline style when resizing */
   background: rgba(200, 210, 220, 0.11);
@@ -942,7 +942,7 @@
 }
 
 .explorer-sidebar::-webkit-scrollbar-thumb:hover {
-  background: #00e5a0;
+  background: #7B93FF;
 }
 
 /* Category Selector — legacy styles (kept for any residual usage) */
@@ -1296,7 +1296,7 @@
 }
 
 .sidebar-resize-handle:hover::after {
-  background: #00e5a0;
+  background: #7B93FF;
   height: 56px;
   box-shadow: 0 0 8px rgba(0, 229, 160, 0.5);
 }
@@ -1467,7 +1467,7 @@
 }
 
 .biz-rating-row--clickable.selected .biz-rating-bar-fill {
-  background: #00e5a0;
+  background: #7B93FF;
   box-shadow: 0 0 6px rgba(0, 229, 160, 0.4);
 }
 

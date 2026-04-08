@@ -1,37 +1,60 @@
 /* Mapbox GL styles - must be first */
 @import 'mapbox-gl/dist/mapbox-gl.css';
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   DESIGN TOKENS — single source of truth for the entire UI
+   DESIGN TOKENS — CityPulse + Mission Urban Lab unified system
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  /* ── Backgrounds ────────────────────────────────────── */
-  --bg-base:    #111118;                   /* deepest: root/map backdrop */
-  --bg-surface: rgba(255, 255, 255, 0.06); /* sidebars, panels */
-  --bg-card:    rgba(255, 255, 255, 0.04); /* inline cards, list items */
+  /* ── CityPulse neutral palette ──────────────────────── */
+  --color-darkest: #141414;
+  --color-dark:    #1F1F1F;
+  --color-grey:    #484847;
+  --color-light:   #999997;
+  --color-white:   #F6F6F6;
+  --color-accent:  #5076FF;
+
+  /* ── Layout tokens (CityPulse grid system) ─────────── */
+  --layout-gap:    0.375rem;
+  --layout-margin: 0.9375rem;
+  --panel-radius:  0.375rem;
+  --grid-col:      48px;
+
+  /* ── Legacy backgrounds (preserved for existing components) */
+  --bg-base:    #141414;
+  --bg-surface: rgba(255, 255, 255, 0.06);
+  --bg-card:    rgba(255, 255, 255, 0.04);
 
   /* ── Borders ─────────────────────────────────────────── */
   --border-faint:   rgba(255, 255, 255, 0.05);
   --border:         rgba(255, 255, 255, 0.08);
   --border-strong:  rgba(255, 255, 255, 0.14);
-  --border-accent:  rgba(0, 229, 160, 0.22);
+  --border-accent:  rgba(80, 118, 255, 0.22);
 
   /* ── Text ────────────────────────────────────────────── */
-  --text:       #e4e6f0;
+  --text:       #F6F6F6;
   --text-dim:   rgba(255, 255, 255, 0.55);
-  --text-muted: rgba(255, 255, 255, 0.32);
+  --text-muted: #999997;
   --text-faint: rgba(255, 255, 255, 0.18);
 
   /* ── Accent ──────────────────────────────────────────── */
-  --accent:        #00e5a0;
-  --accent-bg:     rgba(0, 229, 160, 0.08);
-  --accent-border: rgba(0, 229, 160, 0.25);
+  --accent:        #5076FF;
+  --accent-bg:     rgba(80, 118, 255, 0.08);
+  --accent-border: rgba(80, 118, 255, 0.25);
+
+  /* ── Legacy green accent (for existing components) ──── */
+  --accent-green:        #00e5a0;
+  --accent-green-bg:     rgba(0, 229, 160, 0.08);
+  --accent-green-border: rgba(0, 229, 160, 0.25);
+
+  /* ── NavRail tokens ─────────────────────────────────── */
+  --nr-surface: #1F1F1F;
+  --nr-text:    #999997;
 
   /* ── Semantic status ─────────────────────────────────── */
-  --color-good: #3a9e70;
-  --color-warn: #d49030;
-  --color-poor: #b84040;
+  --color-good: #3CB28D;
+  --color-warn: #FAFF44;
+  --color-poor: #FF5820;
 
   /* ── Radius ──────────────────────────────────────────── */
   --r-sm:   6px;
@@ -52,14 +75,128 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 300;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
-  background: #111118;
-  color: #ffffff;
+  background: var(--color-darkest);
+  color: var(--color-white);
 }
 
 #root {
   width: 100vw;
   height: 100vh;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   View Transitions — fade + subtle scale (CityPulse pattern)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.view-enter {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.view-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.view-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.view-exit-active {
+  opacity: 0;
+  transform: scale(1.01);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Panel & Pane styles (CityPulse pattern)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.panel {
+  background: var(--color-dark);
+  border-radius: var(--panel-radius);
+}
+
+.pane {
+  background: var(--color-dark);
+  border-top: 1px solid var(--color-grey);
+  border-bottom: 1px solid var(--color-grey);
+  color: var(--color-white);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+  min-width: 200px;
+}
+
+.pane-header {
+  border-bottom: 1px solid var(--color-grey);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Button styles (CityPulse pattern)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.btn {
+  background: var(--color-dark);
+  color: var(--color-white);
+  font-size: 0.75rem;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+}
+
+.btn:hover {
+  color: var(--color-darkest);
+  background: var(--color-white);
+}
+
+.btn:active {
+  transform: scale(0.95);
+  background: rgba(246, 246, 246, 0.8);
+}
+
+.btn-selected {
+  color: var(--color-darkest);
+  background: var(--color-white);
+}
+
+/* Touch targets */
+.btn-touch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  height: 44px;
+  width: 44px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tooltip (CityPulse pattern)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.tooltip {
+  background: var(--color-darkest);
+  color: var(--color-white);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  box-shadow: var(--shadow-panel);
+  animation: tooltip-fade 150ms ease;
+}
+
+@keyframes tooltip-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
