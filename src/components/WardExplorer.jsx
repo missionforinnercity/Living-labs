@@ -804,14 +804,26 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
 
     if (activeLensId === 'neighbourhoods') {
       const totalPopulation = sumMeaningfulFeatureValues(activeFeatures, 'pop_total', 'integer')
-      const avgIncome = averageMeaningfulFeatureValue(activeFeatures, 'avg_income', 'currency')
-      const totalLights = sumMeaningfulFeatureValues(activeFeatures, 'total_lights', 'integer')
-      const natureLeader = rankedFeatures[0]
+      const totalAreaSqm = sumMeaningfulFeatureValues(activeFeatures, 'nb_area_sqm', 'decimal')
+      const totalAreaKm = totalAreaSqm ? (totalAreaSqm / 1e6).toFixed(0) : null
+
+      // City-wide stat for the active metric
+      const metricAvg = averageMeaningfulFeatureValue(activeFeatures, activeMetric.key, activeMetric.format)
+      const metricFormatted = metricAvg !== null
+        ? formatMetricValue(activeMetric.format, metricAvg)
+        : 'No data'
+
+      // Find best and worst for the active metric
+      const sorted = [...rankedFeatures]
+      const best = sorted[0]
+      const worst = sorted[sorted.length - 1]
+
       return [
         { label: 'Neighbourhoods', value: INTEGER_FORMATTER.format(activeFeatures.length) },
         { label: 'Population', value: COMPACT_FORMATTER.format(totalPopulation) },
-        { label: 'Average Income', value: avgIncome ? CURRENCY_FORMATTER.format(avgIncome) : 'No data' },
-        { label: 'Top Area', value: natureLeader?.properties?.display_name || 'No data', hint: activeMetric.label }
+        { label: `City Avg ${activeMetric.label}`, value: metricFormatted },
+        { label: 'Best', value: best?.properties?.display_name || '—', hint: best ? formatMetricValue(activeMetric.format, best.properties?.[activeMetric.key]) : '' },
+        { label: 'Worst', value: worst?.properties?.display_name || '—', hint: worst ? formatMetricValue(activeMetric.format, worst.properties?.[activeMetric.key]) : '' },
       ]
     }
 
