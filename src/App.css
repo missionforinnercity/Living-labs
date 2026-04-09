@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   App Shell — CityPulse-inspired layout
+   App Shell — NavRail grid + transitions (layout handled by DashboardLayout)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .app-shell {
@@ -18,117 +18,7 @@
   grid-template-columns: 180px 1fr;
 }
 
-.app-content {
-  position: relative;
-  overflow: hidden;
-  grid-column: 2;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--panel-radius);
-  background: var(--color-darkest);
-}
-
-/* ── Header ─────────────────────────────────────────────────────────────── */
-.app-header {
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  height: 40px;
-  background: var(--color-dark);
-  border-bottom: 1px solid var(--color-grey);
-  color: var(--color-white);
-  z-index: 100;
-  gap: 12px;
-  flex-shrink: 0;
-  border-radius: var(--panel-radius) var(--panel-radius) 0 0;
-}
-
-.app-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.app-brand-title {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--color-white);
-  letter-spacing: -0.01em;
-  margin: 0;
-  line-height: 1;
-}
-
-.app-brand-sub {
-  font-size: 0.6rem;
-  font-weight: 300;
-  color: var(--color-light);
-  margin: 0;
-  letter-spacing: 0.02em;
-}
-
-.app-brand-mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1.5px solid var(--color-accent);
-  box-shadow: 0 0 8px rgba(80, 118, 255, 0.25);
-  flex-shrink: 0;
-  position: relative;
-}
-
-.app-brand-mark::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--color-accent);
-}
-
-/* ── Main content area ─────────────────────────────────────────────────── */
-.app-main {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-  position: relative;
-}
-
-/* ── Sidebar ───────────────────────────────────────────────────────────── */
-.sidebar {
-  width: 300px;
-  z-index: 50;
-  background: var(--color-dark);
-  border-right: 1px solid var(--color-grey);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
-.sidebar--dark {
-  background: var(--color-dark);
-  border-right-color: var(--color-grey);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.1) transparent;
-}
-
-.sidebar--dark::-webkit-scrollbar { width: 3px; }
-.sidebar--dark::-webkit-scrollbar-track { background: transparent; }
-.sidebar--dark::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-
-/* ── Map container ─────────────────────────────────────────────────────── */
-.map-container {
-  flex: 1;
-  position: relative;
-  background: var(--color-darkest);
-  width: 100%;
-}
-
-/* ── Loading ───────────────────────────────────────────────────────────── */
+/* ── Loading states ────────────────────────────────────────────────────── */
 .app-loading-screen,
 .app-map-loading,
 .app-panel-loading {
@@ -151,113 +41,10 @@
   padding: 24px;
 }
 
-/* ── Narrative tabs ────────────────────────────────────────────────────── */
-.narrative-tabs {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--color-grey);
-  flex-shrink: 0;
-  background: var(--color-dark);
-}
-
-.narrative-tab {
-  flex: 1;
-  padding: 10px 8px;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--color-light);
-  font-family: 'Inter', sans-serif;
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-  white-space: nowrap;
-}
-
-.narrative-tab:hover {
-  color: var(--color-white);
-}
-
-.narrative-tab--active {
-  color: var(--color-white);
-  border-bottom-color: var(--color-accent);
-}
-
-/* ── Dark sidebar overrides ────────────────────────────────────────────── */
-.sidebar--dark .temporal-controls {
-  background: var(--color-darkest);
-  border-top: 1px solid var(--color-grey);
-}
-
-.sidebar--dark .temporal-controls h2,
-.sidebar--dark .control-label {
-  color: var(--color-light);
-}
-
-.sidebar--dark .temporal-controls p,
-.sidebar--dark .temporal-controls span {
-  color: var(--color-grey);
-}
-
-.sidebar--dark .season-btn,
-.sidebar--dark .time-btn {
-  background: var(--color-darkest);
-  border-color: var(--color-grey);
-  color: var(--color-light);
-}
-
-.sidebar--dark .season-btn.active,
-.sidebar--dark .time-btn.active {
-  background: rgba(80, 118, 255, 0.1);
-  border-color: var(--color-accent);
-  color: var(--color-white);
-}
-
-.sidebar--dark input[type="range"] {
-  accent-color: var(--color-accent);
-}
-
 /* ── Responsive ────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .app-shell {
     grid-template-columns: 1fr;
     padding: 0;
   }
-
-  .app-main {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    width: 100%;
-    max-height: 40vh;
-    border-right: none;
-    border-bottom: 1px solid var(--color-grey);
-  }
-}
-
-/* ── View transitions ──────────────────────────────────────────────────── */
-.content-fade-enter {
-  opacity: 0;
-  transform: scale(0.98);
-}
-
-.content-fade-enter-active {
-  opacity: 1;
-  transform: scale(1);
-  transition: opacity 200ms ease, transform 200ms ease;
-}
-
-.content-fade-exit {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.content-fade-exit-active {
-  opacity: 0;
-  transform: scale(1.01);
-  transition: opacity 200ms ease, transform 200ms ease;
 }

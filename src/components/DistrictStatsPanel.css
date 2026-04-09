@@ -3,18 +3,11 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .dsp {
-  position: absolute;
-  bottom: 12px;
-  left: 332px;
-  right: 12px;
-  z-index: 200;
-  background: #1F1F1F;
-  border: 1px solid #484847;
-  border-radius: 14px;
+  background: var(--color-dark, #1F1F1F);
   overflow: hidden;
   max-height: 320px;
   transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 .dsp--expanded {
