@@ -1180,33 +1180,31 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
       })
     }
 
-    // Soft glow (wide blurred outline)
-    map.current.addLayer({
-      id: GLOW_ID,
-      type: 'line',
-      source: SOURCE_ID,
-      paint: {
-        'line-color': ['get', 'color'],
-        'line-width': [
-          'case',
-          ['==', ['get', 'clusterId'], selectedDistrictId || ''], 18, 8
-        ],
-        'line-opacity': 0.20,
-        'line-blur': 8
-      }
-    })
+    const isSelected = ['==', ['get', 'clusterId'], selectedDistrictId || '']
 
-    // Semi-transparent fill
+    // Soft fill — very subtle, just enough to show the area
     map.current.addLayer({
       id: FILL_ID,
       type: 'fill',
       source: SOURCE_ID,
       paint: {
         'fill-color': ['get', 'color'],
-        'fill-opacity': [
-          'case',
-          ['==', ['get', 'clusterId'], selectedDistrictId || ''], 0.22, 0.10
-        ]
+        'fill-opacity': ['case', isSelected, 0.12, 0.05]
+      }
+    })
+
+    // Outer glow — soft border bleed
+    map.current.addLayer({
+      id: GLOW_ID,
+      type: 'line',
+      source: SOURCE_ID,
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['case', isSelected, 14, 6],
+        'line-opacity': ['case', isSelected, 0.2, 0.08],
+        'line-blur': ['case', isSelected, 6, 4],
+        'line-cap': 'round',
+        'line-join': 'round',
       }
     })
 
@@ -1217,14 +1215,10 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
       source: SOURCE_ID,
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': [
-          'case',
-          ['==', ['get', 'clusterId'], selectedDistrictId || ''], 2.5, 1.5
-        ],
-        'line-opacity': [
-          'case',
-          ['==', ['get', 'clusterId'], selectedDistrictId || ''], 1.0, 0.7
-        ]
+        'line-width': ['case', isSelected, 2, 1],
+        'line-opacity': ['case', isSelected, 0.9, 0.4],
+        'line-cap': 'round',
+        'line-join': 'round',
       }
     })
 
