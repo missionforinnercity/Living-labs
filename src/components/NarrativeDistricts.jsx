@@ -5,68 +5,26 @@ import {
   getDistrictBounds
 } from '../utils/districtEngine'
 import { loadBusinessData, loadLightingData, loadWalkabilityData } from '../utils/dataLoader'
-import { GlowCircle } from './charts'
 import { GaugeDial } from './charts'
 import './NarrativeDistricts.css'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Methodology catalogue
+// Methodology & Data Sources
 // ─────────────────────────────────────────────────────────────────────────────
 
 const METHODOLOGY = [
-  {
-    attr: 'Business Density',
-    formula: 'POI count per ha',
-    detail: 'Total points of interest within each DBSCAN cluster boundary divided by the convex-hull area in hectares. Higher density indicates a more compact commercial district.'
-  },
-  {
-    attr: 'Business Diversity',
-    formula: 'Shannon entropy of categories',
-    detail: 'Shannon’s H index computed across the Google Places category distribution within each cluster. A higher score means a broader mix of business types.'
-  },
-  {
-    attr: 'Lighting Score',
-    formula: '% segments ≥ 5 lux',
-    detail: 'Road segments within or adjacent to the cluster are intersected with CoCT lighting KPI data. Score = percentage of segments whose mean lux value exceeds the 5 lux safety threshold.'
-  },
-  {
-    attr: 'Connectivity Score',
-    formula: 'Normalised betweenness centrality',
-    detail: 'Network betweenness centrality (400 m radius) averaged across all street-network nodes within the cluster boundary, normalised 0–100 city-wide.'
-  },
-  {
-    attr: 'Overall Score',
-    formula: '35% Density · 20% Diversity · 25% Lighting · 20% Connect.',
-    detail: 'Weighted linear combination of the four sub-scores. Weights reflect the relative importance of commercial vitality (density + diversity) and public-realm quality (lighting + connectivity).'
-  },
-  {
-    attr: 'Clustering Method',
-    formula: 'DBSCAN ε=80 m, minPts=4',
-    detail: 'Density-Based Spatial Clustering of Applications with Noise. Parameters: 80 m neighbourhood radius, minimum 4 POIs to form a core point. Noise points (isolated POIs) are excluded from districts.'
-  },
+  { attr: 'Business Density', formula: 'POI count per ha', detail: 'Total points of interest within each DBSCAN cluster boundary divided by the convex-hull area in hectares.' },
+  { attr: 'Business Diversity', formula: 'Shannon entropy', detail: "Shannon's H index computed across the Google Places category distribution within each cluster." },
+  { attr: 'Lighting Score', formula: '% segments above 5 lux', detail: 'Road segments within the cluster intersected with CoCT lighting KPI data. Score = percentage above 5 lux threshold.' },
+  { attr: 'Connectivity Score', formula: 'Normalised betweenness', detail: 'Network betweenness centrality (400 m radius) averaged across all nodes within the cluster, normalised 0-100.' },
+  { attr: 'Overall Score', formula: '35% Density, 20% Diversity, 25% Lighting, 20% Connect.', detail: 'Weighted linear combination of the four sub-scores.' },
 ]
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Data sources catalogue
-// ─────────────────────────────────────────────────────────────────────────────
 
 const DATA_SOURCES = [
-  { label: 'Business POI',         usedFor: 'District clustering and scoring' },
-  { label: 'Network Connectivity', usedFor: 'Connectivity score'               },
-  { label: 'Street Lighting',      usedFor: 'Lighting score'                   },
+  { label: 'Business POI', usedFor: 'District clustering and scoring' },
+  { label: 'Network Connectivity', usedFor: 'Connectivity score' },
+  { label: 'Street Lighting', usedFor: 'Lighting score' },
 ]
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Category badge
-// ─────────────────────────────────────────────────────────────────────────────
-
-function CategoryBadge ({ type, count }) {
-  return (
-    <span className="nd-category-badge">
-      {type.replace(/_/g, ' ')} <em>{count}</em>
-    </span>
-  )
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
@@ -77,15 +35,11 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
   const [districtFC,   setDistrictFC]   = useState(null)
   const [status,       setStatus]       = useState('idle')
   const [errorMsg,     setErrorMsg]     = useState('')
-  // which district TYPE is selected
   const [activeTypeId, setActiveTypeId] = useState(DISTRICT_DEFINITIONS[0].id)
-  // per-type cluster cursor  {typeId: index}
   const [clusterIdx,   setClusterIdx]   = useState({})
 
-  // ── Derived ───────────────────────────────────────────────────────────────
   const allClusters = districtFC?.features ?? []
 
-  // Map typeId → array of cluster features, ordered
   const clustersByType = useMemo(() => {
     const map = {}
     DISTRICT_DEFINITIONS.forEach(d => { map[d.id] = [] })
@@ -101,7 +55,6 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
   const currentIdx     = clusterIdx[activeTypeId] ?? 0
   const currentFeature = typeClusters[currentIdx] ?? null
 
-  // ── Load & generate ───────────────────────────────────────────────────────
   const handleGenerate = useCallback(async () => {
     setStatus('loading')
     setErrorMsg('')
@@ -113,14 +66,12 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
       ])
       const poi = bizResult?.poi ?? null
       if (!poi?.features?.length) throw new Error('POI data unavailable.')
-      // Pass road segments for lighting + network nodes for connectivity
       const lighting    = lightResult?.roadSegments ?? null
       const walkability = walkResult?.network ?? null
       const fc = generateDistricts({ poi, lighting, walkability })
       setDistrictFC(fc)
       setStatus('done')
 
-      // Auto-select first cluster of first type
       if (fc.features.length > 0) {
         const first  = fc.features[0]
         const bounds = getDistrictBounds(first)
@@ -138,7 +89,6 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
     if (status === 'idle') handleGenerate()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Navigation helpers ────────────────────────────────────────────────────
   const goToCluster = useCallback((typeId, idx) => {
     const clusters = clustersByType[typeId] ?? []
     const clamped  = Math.max(0, Math.min(clusters.length - 1, idx))
@@ -151,7 +101,6 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
 
   const selectType = useCallback((typeId) => {
     setActiveTypeId(typeId)
-    // trigger map fly-to on the current cluster for that type
     const clusters = clustersByType[typeId] ?? []
     const idx  = clusterIdx[typeId] ?? 0
     const feat = clusters[idx]
@@ -167,7 +116,6 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
 
   const parseTopCats = (raw) => { try { return JSON.parse(raw) } catch { return [] } }
 
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="nd-root">
 
@@ -179,21 +127,14 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
 
       {/* Tabs */}
       <div className="nd-tabs">
-        <button className={`nd-tab ${tab === 'districts' ? 'active' : ''}`} onClick={() => setTab('districts')}>
-          Districts
-        </button>
-        <button className={`nd-tab ${tab === 'methodology' ? 'active' : ''}`} onClick={() => setTab('methodology')}>
-          Methodology
-        </button>
-        <button className={`nd-tab ${tab === 'sources' ? 'active' : ''}`} onClick={() => setTab('sources')}>
-          Data Sources
-        </button>
+        <button className={`nd-tab ${tab === 'districts' ? 'active' : ''}`} onClick={() => setTab('districts')}>Districts</button>
+        <button className={`nd-tab ${tab === 'methodology' ? 'active' : ''}`} onClick={() => setTab('methodology')}>Methodology</button>
+        <button className={`nd-tab ${tab === 'sources' ? 'active' : ''}`} onClick={() => setTab('sources')}>Sources</button>
       </div>
 
-      {/* ── DISTRICTS TAB ──────────────────────────────────────────── */}
+      {/* ── Districts tab ───────────────────────────────────────── */}
       {tab === 'districts' && (
         <div className="nd-districts-pane">
-
           {status === 'loading' && (
             <div className="nd-loading">
               <div className="nd-spinner" />
@@ -215,105 +156,90 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
 
           {status === 'done' && allClusters.length > 0 && (
             <>
-              {/* ── TYPE SELECTOR PILLS ───────────────────────────── */}
-              <div className="nd-type-pills">
+              {/* Type selector — horizontal chips */}
+              <div className="nd-types">
                 {DISTRICT_DEFINITIONS.map(def => {
                   const count = (clustersByType[def.id] ?? []).length
+                  const on = activeTypeId === def.id
                   return (
                     <button
                       key={def.id}
-                      className={`nd-type-pill ${activeTypeId === def.id ? 'active' : ''}`}
-                      style={{ '--pill-color': def.color, '--pill-glow': def.glowColor }}
+                      className={`nd-type ${on ? 'nd-type--on' : ''}`}
+                      style={{ '--t-color': def.color }}
                       onClick={() => selectType(def.id)}
                     >
-                      <span className="nd-pill-swatch" style={{ background: def.color }} />
-                      <span className="nd-pill-name">{def.name.replace(' & ', '\u00a0&\u00a0')}</span>
-                      {count > 0 && <span className="nd-pill-count">{count}</span>}
+                      <span className="nd-type-dot" style={{ background: def.color }} />
+                      <span className="nd-type-name">{def.name}</span>
+                      <span className="nd-type-count">{count}</span>
                     </button>
                   )
                 })}
               </div>
 
-              {/* ── CLUSTER NAV ───────────────────────────────────── */}
+              {/* Cluster navigation */}
               {typeClusters.length > 0 && (
-                <div className="nd-cluster-nav">
-                  <button
-                    className="nd-cnav-btn"
-                    disabled={currentIdx === 0}
-                    onClick={() => goToCluster(activeTypeId, currentIdx - 1)}
-                  >
-                    ← Prev
-                  </button>
-                  <span className="nd-cnav-label">
-                    Cluster {currentIdx + 1} of {typeClusters.length}
-                  </span>
-                  <button
-                    className="nd-cnav-btn"
-                    disabled={currentIdx === typeClusters.length - 1}
-                    onClick={() => goToCluster(activeTypeId, currentIdx + 1)}
-                  >
-                    Next →
-                  </button>
+                <div className="nd-nav">
+                  <button className="nd-nav-btn" disabled={currentIdx === 0} onClick={() => goToCluster(activeTypeId, currentIdx - 1)}>‹</button>
+                  <div className="nd-nav-dots">
+                    {typeClusters.map((_, i) => (
+                      <button
+                        key={i}
+                        className={`nd-nav-dot ${i === currentIdx ? 'nd-nav-dot--on' : ''}`}
+                        style={{ '--d-color': activeDef.color }}
+                        onClick={() => goToCluster(activeTypeId, i)}
+                      />
+                    ))}
+                  </div>
+                  <button className="nd-nav-btn" disabled={currentIdx === typeClusters.length - 1} onClick={() => goToCluster(activeTypeId, currentIdx + 1)}>›</button>
                 </div>
               )}
 
-              {/* ── CLUSTER DOTS ──────────────────────────────────── */}
-              {typeClusters.length > 1 && (
-                <div className="nd-cluster-dots">
-                  {typeClusters.map((f, i) => (
-                    <button
-                      key={f.properties.clusterId}
-                      className={`nd-cdot ${i === currentIdx ? 'active' : ''}`}
-                      style={{ '--dot-color': activeDef.color }}
-                      onClick={() => goToCluster(activeTypeId, i)}
-                      title={f.properties.clusterLabel}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* ── DISTRICT CARD ─────────────────────────────────── */}
+              {/* District card */}
               {currentFeature && activeDef && (() => {
                 const p       = currentFeature.properties
                 const topCats = parseTopCats(p.topCategories)
+                const score   = p.overallScore ?? 0
+
                 return (
-                  <div
-                    className="nd-card"
-                    style={{ '--card-color': activeDef.color, '--card-glow': activeDef.glowColor }}
-                    key={p.clusterId}
-                  >
-                    {/* Aurora glow background */}
-                    <div className="nd-card-glow-bg">
-                      <GlowCircle themeKey="districts" score={Math.max(0.15, (p.overallScore ?? 0) / 100)} />
-                    </div>
-
-                    <div className="nd-card-accent" style={{ background: activeDef.color }} />
-
-                    {/* Card header */}
-                    <div className="nd-card-header">
-                      <div className="nd-card-meta">
+                  <div className="nd-card" style={{ '--c-color': activeDef.color }}>
+                    {/* Top row: name + score */}
+                    <div className="nd-card-top">
+                      <div className="nd-card-info">
                         <h3 className="nd-card-name">{p.name}</h3>
-                        <p className="nd-card-cluster-label">{p.clusterLabel} &mdash; {p.poiCount} businesses</p>
-                        <p className="nd-card-tagline">{activeDef.tagline}</p>
+                        <p className="nd-card-label">{p.clusterLabel} — {p.poiCount} businesses</p>
                       </div>
                       <div className="nd-card-gauge">
-                        <GaugeDial themeKey="districts" score={(p.overallScore ?? 0) / 100} active color={activeDef.color} />
+                        <GaugeDial themeKey="districts" score={score / 100} active color={activeDef.color} />
                       </div>
                     </div>
 
+                    {/* KPI row */}
+                    <div className="nd-kpis">
+                      {[
+                        { k: 'densityScore', l: 'Density' },
+                        { k: 'lightingScore', l: 'Lighting' },
+                        { k: 'diversityScore', l: 'Diversity' },
+                        { k: 'connectivityScore', l: 'Connect.' },
+                      ].map(({ k, l }) => (
+                        <div key={k} className="nd-kpi">
+                          <span className="nd-kpi-val">{p[k] ?? '—'}</span>
+                          <span className="nd-kpi-label">{l}</span>
+                          <div className="nd-kpi-bar"><div className="nd-kpi-fill" style={{ width: `${p[k] ?? 0}%`, background: activeDef.color }} /></div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Narrative */}
                     <p className="nd-card-narrative">{activeDef.narrative}</p>
 
-                    {/* Top categories */}
+                    {/* Categories */}
                     {topCats.length > 0 && (
-                      <div className="nd-categories-section">
-                        <p className="nd-categories-heading">Top Business Types</p>
-                        <div className="nd-categories-list">
-                          {topCats.map(c => <CategoryBadge key={c.type} type={c.type} count={c.count} />)}
-                        </div>
+                      <div className="nd-cats">
+                        {topCats.slice(0, 5).map(c => (
+                          <span key={c.type} className="nd-cat">{c.type.replace(/_/g, ' ')} <em>{c.count}</em></span>
+                        ))}
                       </div>
                     )}
-
-                    {/* Compare by clicking districts on the map */}
                   </div>
                 )
               })()}
@@ -324,15 +250,13 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
         </div>
       )}
 
-      {/* ── METHODOLOGY TAB ────────────────────────────────────────── */}
+      {/* ── Methodology tab ─────────────────────────────────────── */}
       {tab === 'methodology' && (
-        <div className="nd-sources-pane">
-          <p className="nd-sources-intro">
-            How each district score is computed from the underlying data.
-          </p>
+        <div className="nd-meth-pane">
+          <p>Each attribute is computed at cluster level then combined with the weights below.</p>
           {METHODOLOGY.map(m => (
             <div key={m.attr} className="nd-meth-row">
-              <div className="nd-meth-header">
+              <div className="nd-meth-title">
                 <span className="nd-meth-name">{m.attr}</span>
                 <span className="nd-meth-formula">{m.formula}</span>
               </div>
@@ -342,19 +266,14 @@ const NarrativeDistricts = ({ selectedDistrictId, onDistrictSelect, onLayersChan
         </div>
       )}
 
-      {/* ── DATA SOURCES TAB ───────────────────────────────────────── */}
+      {/* ── Sources tab ─────────────────────────────────────────── */}
       {tab === 'sources' && (
-        <div className="nd-sources-pane">
-          <p className="nd-sources-intro">
-            Datasets powering the District Narrative Engine.
-          </p>
+        <div className="nd-src-pane">
+          <p>The datasets below were used to compute district scores.</p>
           {DATA_SOURCES.map(s => (
-            <div key={s.label} className="nd-source-card active">
-              <div className="nd-source-header">
-                <span className="nd-source-label">{s.label}</span>
-                <span className="nd-source-status used">Used</span>
-              </div>
-              <p className="nd-source-used-for">{s.usedFor}</p>
+            <div key={s.label} className="nd-src-row">
+              <div className="nd-src-name">{s.label}</div>
+              <div className="nd-src-explorer">{s.usedFor}</div>
             </div>
           ))}
         </div>
