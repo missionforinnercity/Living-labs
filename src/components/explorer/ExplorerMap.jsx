@@ -304,6 +304,7 @@ const ExplorerMap = ({
   transitData,
   busStopsData,
   trainStationData,
+  roadSteepnessData,
   lightingSegments,
   streetLights,
   missionInterventions,
@@ -851,8 +852,8 @@ const ExplorerMap = ({
     const feature = walkabilityFeature || event.features?.[0]
     console.log('Map clicked:', { feature, source: feature?.source, layerId: feature?.layer?.id })
     if (feature) {
-      // For temperature dashboard, set selected segment for bottom panel
-      if (dashboardMode === 'temperature' && feature.source === 'temperature-segments') {
+      // For climate dashboard, set selected segment for bottom panel
+      if (dashboardMode === 'climate' && feature.source === 'temperature-segments') {
         onSegmentSelect?.(feature.properties)
       }
       
@@ -860,6 +861,16 @@ const ExplorerMap = ({
       if (dashboardMode === 'walkability' && (feature.source === 'pedestrian-routes' || feature.source === 'cycling-routes' || feature.source === 'transit-accessibility' || feature.source === 'anomaly-routes')) {
         onRouteSegmentClick?.(feature.properties, feature.source === 'transit-accessibility' ? 'transit' : 'activity')
         return // Don't show popup for route segments
+      }
+
+      if (feature.source === 'road-steepness') {
+        setSelectedFeature(feature)
+        setPopupInfo({
+          longitude: event.lngLat.lng,
+          latitude: event.lngLat.lat,
+          feature
+        })
+        return
       }
       
       // For bus stops and train station, show a basic popup
@@ -1106,6 +1117,7 @@ const ExplorerMap = ({
           'pedestrian-routes-layer',
           'cycling-routes-layer',
           'anomaly-routes-layer',
+          'road-steepness-layer',
           'transit-accessibility-layer',
           'bus-stops-layer',
           'train-station-fill',
@@ -1713,6 +1725,96 @@ const ExplorerMap = ({
                 ],
                 'line-dasharray': [1.2, 1.2],
                 'line-opacity': 0.92
+              }}
+            />
+          </Source>
+        )}
+
+        {shouldRenderCategory('roadSteepness') && roadSteepnessData?.features?.length > 0 && (
+          <Source id="road-steepness" type="geojson" data={roadSteepnessData}>
+            <Layer
+              id="road-steepness-glow"
+              type="line"
+              paint={{
+                'line-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'abs_net_grade_pct'], 0],
+                  0, '#22c55e',
+                  4, '#facc15',
+                  8, '#f97316',
+                  12, '#dc2626',
+                  18, '#7f1d1d'
+                ],
+                'line-width': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'abs_net_grade_pct'], 0],
+                  0, 5,
+                  8, 8,
+                  14, 12
+                ],
+                'line-blur': 5,
+                'line-opacity': 0.28
+              }}
+            />
+            <Layer
+              id="road-steepness-layer"
+              type="line"
+              paint={{
+                'line-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'abs_net_grade_pct'], 0],
+                  0, '#22c55e',
+                  4, '#facc15',
+                  8, '#f97316',
+                  12, '#dc2626',
+                  18, '#7f1d1d'
+                ],
+                'line-width': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'abs_net_grade_pct'], 0],
+                  0, 2.5,
+                  4, 4,
+                  8, 5.5,
+                  14, 7
+                ],
+                'line-opacity': 0.92
+              }}
+            />
+            <Layer
+              id="road-steepness-uphill-arrows"
+              type="symbol"
+              layout={{
+                'symbol-placement': 'line',
+                'symbol-spacing': 70,
+                'text-field': '➜',
+                'text-size': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  13, 13,
+                  16, 18
+                ],
+                'text-allow-overlap': true,
+                'text-ignore-placement': true,
+                'text-rotation-alignment': 'map',
+                'text-keep-upright': false
+              }}
+              paint={{
+                'text-color': '#f8fafc',
+                'text-halo-color': '#111827',
+                'text-halo-width': 1.5,
+                'text-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'abs_net_grade_pct'], 0],
+                  0, 0.35,
+                  3, 0.75,
+                  8, 1
+                ]
               }}
             />
           </Source>
@@ -2937,7 +3039,26 @@ const ExplorerMap = ({
                 </>
               )}
               
-              {dashboardMode === 'walkability' && popupInfo.feature.source !== 'bus-stops' && popupInfo.feature.source !== 'train-station' && (
+              {dashboardMode === 'walkability' && popupInfo.feature.source === 'road-steepness' && (() => {
+                const p = popupInfo.feature.properties
+                const grade = Math.abs(Number(p.net_grade_pct) || 0)
+                const from = Number(p.uphill_from_elev_m)
+                const to = Number(p.uphill_to_elev_m)
+                const feel = grade < 1 ? 'Flat' : grade < 4 ? 'Gentle' : grade < 8 ? 'Moderate' : grade < 12 ? 'Steep' : 'Very steep'
+                return (
+                  <>
+                    <h3>{p.street_name || 'Street Segment'}</h3>
+                    <p><strong>Grade:</strong> {grade.toFixed(1)}% ({feel})</p>
+                    <p><strong>Uphill:</strong> follow the arrows on the map</p>
+                    {Number.isFinite(from) && Number.isFinite(to) && (
+                      <p><strong>Elevation:</strong> {from.toFixed(1)} m → {to.toFixed(1)} m</p>
+                    )}
+                    {p.length_m != null && <p><strong>Length:</strong> {Number(p.length_m).toFixed(0)} m</p>}
+                  </>
+                )
+              })()}
+
+              {dashboardMode === 'walkability' && popupInfo.feature.source !== 'bus-stops' && popupInfo.feature.source !== 'train-station' && popupInfo.feature.source !== 'road-steepness' && (
                 <>
                   <h3>{popupInfo.feature.properties.street_name || popupInfo.feature.properties.STR_NAME || 'Street Segment'}</h3>
                   {popupInfo.feature.properties.total_count && (
@@ -3079,7 +3200,7 @@ const ExplorerMap = ({
                 </>
               )}
               
-              {dashboardMode === 'temperature' && (() => {
+              {dashboardMode === 'climate' && popupInfo.feature.source === 'temperature-segments' && (() => {
                 const props = popupInfo.feature.properties
                 const streetName = props.street_name || 'Street Segment'
                 

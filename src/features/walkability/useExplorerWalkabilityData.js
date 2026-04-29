@@ -20,6 +20,7 @@ export function useExplorerWalkabilityData({
   const [transitData, setTransitData] = useState(null)
   const [busStopsData, setBusStopsData] = useState(null)
   const [trainStationData, setTrainStationData] = useState(null)
+  const [roadSteepnessData, setRoadSteepnessData] = useState(null)
 
   useEffect(() => {
     const loadWalkabilityExplorerState = async () => {
@@ -33,12 +34,14 @@ export function useExplorerWalkabilityData({
           anomalies,
           transit,
           busStops,
-          trainStation
+          trainStation,
+          roadSteepness
         } = await loadExplorerWalkabilityData()
 
         console.log('Active mobility data loaded:', {
           network: network.features?.length,
           transit: transit.features?.length,
+          roadSteepness: roadSteepness?.features?.length,
           busStops: busStops.features?.length,
           trainStation: trainStation.features?.length
         })
@@ -52,12 +55,13 @@ export function useExplorerWalkabilityData({
         setTransitData(transit)
         setBusStopsData(busStops)
         setTrainStationData(trainStation)
+        setRoadSteepnessData(roadSteepness)
       } catch (error) {
         console.error('Error loading walkability data:', error)
       }
     }
 
-    const hasLockedWalkabilityLayer = ['activeMobility', 'mobilityAnomalies', 'networkAnalysis', 'transitAccessibility'].some((id) => lockedLayers.has(id))
+    const hasLockedWalkabilityLayer = ['activeMobility', 'mobilityAnomalies', 'networkAnalysis', 'transitAccessibility', 'roadSteepness'].some((id) => lockedLayers.has(id))
     if (dashboardMode === 'walkability' || hasLockedWalkabilityLayer) {
       loadWalkabilityExplorerState()
     }
@@ -97,6 +101,7 @@ export function useExplorerWalkabilityData({
     transitData,
     busStopsData,
     trainStationData,
+    roadSteepnessData,
     selectedRouteHistory,
     compareRouteHistory,
     effectiveSelectedMonth

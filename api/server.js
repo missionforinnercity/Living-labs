@@ -267,6 +267,108 @@ app.get('/api/environment/green-destinations', async (_req, res) => {
   }
 })
 
+app.get('/api/transport/road-steepness', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      WITH steepness AS (
+        SELECT
+          ogc_fid,
+          globalid,
+          NULLIF(objectid, '')::numeric::int AS objectid,
+          NULLIF(sl_str_name_key, '')::numeric::int AS sl_str_name_key,
+          NULLIF(str_name, '') AS str_name,
+          NULLIF(length_m, '')::double precision AS length_m,
+          NULLIF(start_elev_m, '')::double precision AS start_elev_m,
+          NULLIF(end_elev_m, '')::double precision AS end_elev_m,
+          NULLIF(elev_gain_m, '')::double precision AS elev_gain_m,
+          NULLIF(elev_loss_m, '')::double precision AS elev_loss_m,
+          NULLIF(net_elev_change_m, '')::double precision AS net_elev_change_m,
+          NULLIF(mean_abs_grade_pct, '')::double precision AS mean_abs_grade_pct,
+          NULLIF(max_grade_pct, '')::double precision AS max_grade_pct,
+          NULLIF(net_grade_pct, '')::double precision AS net_grade_pct,
+          NULLIF(steepness_valid, '')::boolean AS steepness_valid
+        FROM transport.road_steepness
+        WHERE NULLIF(objectid, '') IS NOT NULL
+      )
+      SELECT
+        s.ogc_fid,
+        s.globalid,
+        s.objectid,
+        s.sl_str_name_key,
+        COALESCE(s.str_name, r."STR_NAME") AS street_name,
+        s.length_m,
+        s.start_elev_m,
+        s.end_elev_m,
+        s.elev_gain_m,
+        s.elev_loss_m,
+        s.net_elev_change_m,
+        s.mean_abs_grade_pct,
+        s.max_grade_pct,
+        s.net_grade_pct,
+        abs(s.net_grade_pct) AS abs_net_grade_pct,
+        CASE
+          WHEN abs(s.net_grade_pct) < 1 THEN 'flat'
+          WHEN abs(s.net_grade_pct) < 4 THEN 'gentle'
+          WHEN abs(s.net_grade_pct) < 8 THEN 'moderate'
+          WHEN abs(s.net_grade_pct) < 12 THEN 'steep'
+          ELSE 'very_steep'
+        END AS steepness_class,
+        CASE
+          WHEN s.net_grade_pct > 0.25 THEN 'with_geometry'
+          WHEN s.net_grade_pct < -0.25 THEN 'against_geometry'
+          ELSE 'mostly_flat'
+        END AS uphill_direction,
+        CASE
+          WHEN s.net_grade_pct < -0.25 THEN s.end_elev_m
+          ELSE s.start_elev_m
+        END AS uphill_from_elev_m,
+        CASE
+          WHEN s.net_grade_pct < -0.25 THEN s.start_elev_m
+          ELSE s.end_elev_m
+        END AS uphill_to_elev_m,
+        s.steepness_valid,
+        ST_AsGeoJSON(
+          ST_Transform(
+            CASE WHEN s.net_grade_pct < -0.25 THEN ST_Reverse(r.geom) ELSE r.geom END,
+            4326
+          )
+        )::json AS geometry
+      FROM steepness s
+      JOIN transport."Roads_innercity_CCID" r ON s.objectid = r."OBJECTID"
+      WHERE r.geom IS NOT NULL
+      ORDER BY abs(s.net_grade_pct) DESC NULLS LAST, COALESCE(s.str_name, r."STR_NAME") NULLS LAST
+    `)
+
+    const [{ rows: summaryRows }] = await Promise.all([
+      pool.query(`
+        WITH steepness AS (
+          SELECT
+            NULLIF(objectid, '')::numeric::int AS objectid,
+            NULLIF(net_grade_pct, '')::double precision AS net_grade_pct,
+            NULLIF(steepness_valid, '')::boolean AS steepness_valid
+          FROM transport.road_steepness
+          WHERE NULLIF(objectid, '') IS NOT NULL
+        )
+        SELECT
+          count(*) AS segment_count,
+          count(*) FILTER (WHERE abs(net_grade_pct) >= 8) AS steep_segment_count,
+          round(avg(abs(net_grade_pct))::numeric, 2) AS avg_abs_grade_pct,
+          round(max(abs(net_grade_pct))::numeric, 2) AS max_abs_grade_pct
+        FROM steepness
+        WHERE steepness_valid IS DISTINCT FROM false
+      `)
+    ])
+
+    res.json(buildGeoFeatureCollection(rows, {
+      source: 'transport.road_steepness',
+      metadata: summaryRows[0] || {}
+    }))
+  } catch (err) {
+    console.error('[API] /transport/road-steepness error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.get('/api/planning/events', async (_req, res) => {
   try {
     const { rows } = await pool.query(`

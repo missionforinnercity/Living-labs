@@ -28,12 +28,13 @@ function addTripPercentiles(featureCollection) {
 }
 
 export async function loadExplorerWalkabilityData() {
-  const [walkability, anomalies, transit, busStops, trainStation] = await Promise.all([
+  const [walkability, anomalies, transit, busStops, trainStation, roadSteepness] = await Promise.all([
     loadActiveMobilityData(),
     fetchJson('/data/walkabilty/strava_metro_anomalies.geojson', 'Anomalies file failed'),
     fetchJson('/data/walkabilty/roads_with_walking_times.geojson', 'Transit walking times file failed'),
     fetchJson('/data/walkabilty/bus stops.geojson', 'Bus stops file failed'),
-    fetchJson('/data/walkabilty/trainStation.geojson', 'Train station file failed')
+    fetchJson('/data/walkabilty/trainStation.geojson', 'Train station file failed'),
+    fetchJson('/api/transport/road-steepness', 'Road steepness API load failed')
   ])
 
   const { network, pedestrian, cycling, stravaAggregated } = walkability
@@ -47,6 +48,7 @@ export async function loadExplorerWalkabilityData() {
     anomalies,
     transit,
     busStops,
-    trainStation
+    trainStation,
+    roadSteepness
   }
 }

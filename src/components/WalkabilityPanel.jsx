@@ -105,7 +105,7 @@ const METHODOLOGY = [
 
 const DATA_SOURCES = [
   { layer: 'Road Lighting KPIs',    explorer: 'Street Lighting › Street Lighting KPIs',          provider: 'City of Cape Town' },
-  { layer: 'Surface Temperature',   explorer: 'Surface Temperature › Surface Temperature',        provider: 'City of Cape Town' },
+  { layer: 'Surface Temperature',   explorer: 'Climate › Surface Temperature',                    provider: 'City of Cape Town' },
   { layer: 'Tree Canopy',           explorer: 'Greenery › Tree Canopy',                          provider: 'City of Cape Town' },
   { layer: 'Sky View Factor (SVF)', explorer: 'Greenery › Greenery & Sky View',                  provider: 'City of Cape Town' },
   { layer: 'Digital Terrain Model', explorer: 'Slope — used in index only',                      provider: 'City of Cape Town' },

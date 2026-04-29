@@ -10,6 +10,28 @@ const NETWORK_METRICS = [
   { id: 'harmonic_800', label: 'Closeness 800m', field: 'cc_harmonic_800' }
 ]
 
+const classifyGrade = (grade) => {
+  const abs = Math.abs(Number(grade) || 0)
+  if (abs < 1) return 'Flat'
+  if (abs < 4) return 'Gentle'
+  if (abs < 8) return 'Moderate'
+  if (abs < 12) return 'Steep'
+  return 'Very steep'
+}
+
+const formatGrade = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${Math.abs(numeric).toFixed(1)}%` : '—'
+}
+
+const directionCopy = (feature) => {
+  const props = feature?.properties || feature || {}
+  const from = Number(props.uphill_from_elev_m)
+  const to = Number(props.uphill_to_elev_m)
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 'Arrow points uphill'
+  return `Arrow points uphill: ${from.toFixed(1)} m to ${to.toFixed(1)} m`
+}
+
 const WalkabilityAnalytics = ({
   walkabilityMode,
   onWalkabilityModeChange,
@@ -29,6 +51,7 @@ const WalkabilityAnalytics = ({
   anomaliesData,
   networkData,
   transitData,
+  roadSteepnessData,
   selectedSegment = null
 }) => {
   const [localTransitView, setLocalTransitView] = useState(transitView || 'combined')
@@ -82,6 +105,43 @@ const WalkabilityAnalytics = ({
     }
   }, [pedestrianData, cyclingData])
 
+  const steepnessStats = useMemo(() => {
+    const features = roadSteepnessData?.features || []
+    const valid = features
+      .map((feature) => ({
+        feature,
+        grade: Number(feature.properties?.net_grade_pct),
+        absGrade: Math.abs(Number(feature.properties?.net_grade_pct) || 0)
+      }))
+      .filter((item) => Number.isFinite(item.grade))
+      .sort((a, b) => b.absGrade - a.absGrade)
+
+    const uphill = valid.filter((item) => item.grade > 0.25).length
+    const downhill = valid.filter((item) => item.grade < -0.25).length
+    const steep = valid.filter((item) => item.absGrade >= 8).length
+    const avg = valid.length
+      ? valid.reduce((sum, item) => sum + item.absGrade, 0) / valid.length
+      : 0
+
+    return {
+      total: valid.length,
+      uphill,
+      downhill,
+      steep,
+      avg,
+      top: valid.slice(0, 8),
+      topStreets: Object.values(valid.reduce((acc, item) => {
+        const name = item.feature.properties?.street_name || 'Unnamed street'
+        if (!acc[name] || item.absGrade > acc[name].absGrade) {
+          acc[name] = { ...item, name }
+        }
+        return acc
+      }, {}))
+        .sort((a, b) => b.absGrade - a.absGrade)
+        .slice(0, 5)
+    }
+  }, [roadSteepnessData])
+
   return (
     <div className="walkability-analytics">
       <div className="walkability-temporal-shell">
@@ -92,6 +152,7 @@ const WalkabilityAnalytics = ({
           </div>
           <div className="temporal-mode-pills">
             <button className={`temporal-pill ${walkabilityMode === 'activity' ? 'active' : ''}`} onClick={() => onWalkabilityModeChange('activity')}>Routes</button>
+            <button className={`temporal-pill ${walkabilityMode === 'steepness' ? 'active' : ''}`} onClick={() => onWalkabilityModeChange('steepness')}>Steepness</button>
             <button className={`temporal-pill ${walkabilityMode === 'network' ? 'active' : ''}`} onClick={() => onWalkabilityModeChange('network')}>Network</button>
             <button className={`temporal-pill ${walkabilityMode === 'transit' ? 'active' : ''}`} onClick={() => onWalkabilityModeChange('transit')}>Transit</button>
           </div>
@@ -181,6 +242,76 @@ const WalkabilityAnalytics = ({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {walkabilityMode === 'steepness' && (
+          <div className="temporal-insight-panel">
+            <h3>Road Steepness</h3>
+            <p>
+              Lines are coloured by walking grade. Arrow markers point uphill along each road segment; walking the other way is downhill. Use the table to spot streets that may feel like a climb, a drop, or an easy flat link.
+            </p>
+            <div className="temporal-summary-grid temporal-summary-grid--compact steepness-summary-grid">
+              <div className="temporal-card">
+                <span className="temporal-card-label">Segments</span>
+                <strong>{steepnessStats.total}</strong>
+                <span>Roads with elevation samples</span>
+              </div>
+              <div className="temporal-card">
+                <span className="temporal-card-label">Avg Grade</span>
+                <strong>{steepnessStats.avg.toFixed(1)}%</strong>
+                <span>Mean absolute street grade</span>
+              </div>
+              <div className="temporal-card">
+                <span className="temporal-card-label">Steep Links</span>
+                <strong>{steepnessStats.steep}</strong>
+                <span>Segments at 8% grade or higher</span>
+              </div>
+            </div>
+            <div className="steepness-direction-card">
+              <div>
+                <span>Uphill direction</span>
+                <strong>Follow the arrows</strong>
+              </div>
+              <div>
+                <span>Downhill direction</span>
+                <strong>Walk against the arrows</strong>
+              </div>
+            </div>
+            <div className="steepness-top-streets">
+              {steepnessStats.topStreets.map(({ feature, grade, name }, index) => (
+                <div key={`${name}-${index}`} className="steepness-street-card">
+                  <span>#{index + 1}</span>
+                  <strong>{name}</strong>
+                  <small>{formatGrade(grade)} {classifyGrade(grade).toLowerCase()} grade · {directionCopy(feature)}</small>
+                </div>
+              ))}
+            </div>
+            <div className="steepness-table-wrap">
+              <table className="steepness-table">
+                <thead>
+                  <tr>
+                    <th>Street</th>
+                    <th>Grade</th>
+                    <th>Feel</th>
+                    <th>Direction</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {steepnessStats.top.map(({ feature, grade }) => {
+                    const props = feature.properties || {}
+                    return (
+                      <tr key={`${props.objectid}-${props.ogc_fid}`}>
+                        <td>{props.street_name || 'Unnamed street'}</td>
+                        <td>{formatGrade(grade)}</td>
+                        <td>{classifyGrade(grade)}</td>
+                        <td>{directionCopy(feature)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

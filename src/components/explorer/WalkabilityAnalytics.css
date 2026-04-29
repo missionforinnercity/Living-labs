@@ -321,6 +321,108 @@
   color: #fff;
 }
 
+.steepness-summary-grid {
+  margin-top: 1rem;
+}
+
+.steepness-direction-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+  margin-top: 0.9rem;
+}
+
+.steepness-direction-card > div {
+  padding: 0.85rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.steepness-direction-card span {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.steepness-direction-card strong {
+  color: #f8fafc;
+}
+
+.steepness-table-wrap {
+  margin-top: 1rem;
+  overflow-x: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.steepness-top-streets {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.steepness-street-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.65rem;
+  padding: 0.85rem;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(249, 115, 22, 0.16), rgba(127, 29, 29, 0.18));
+  border: 1px solid rgba(249, 115, 22, 0.22);
+}
+
+.steepness-street-card span {
+  grid-row: span 2;
+  color: #fdba74;
+  font-weight: 800;
+}
+
+.steepness-street-card strong {
+  color: #f8fafc;
+}
+
+.steepness-street-card small {
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.35;
+}
+
+.steepness-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+  font-size: 0.8rem;
+}
+
+.steepness-table th,
+.steepness-table td {
+  padding: 0.65rem 0.7rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  vertical-align: top;
+}
+
+.steepness-table th {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.steepness-table td {
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.35;
+}
+
+.steepness-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 @media (max-width: 900px) {
   .temporal-summary-grid {
     grid-template-columns: 1fr;

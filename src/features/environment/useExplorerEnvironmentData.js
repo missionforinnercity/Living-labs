@@ -29,7 +29,7 @@ export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season
     }
 
     const hasLockedTempLayer = lockedLayers.has('surfaceTemperature')
-    if (dashboardMode === 'temperature' || hasLockedTempLayer) {
+    if (dashboardMode === 'climate' || hasLockedTempLayer) {
       loadTemperatureExplorerState()
     }
   }, [dashboardMode, lockedLayers])
@@ -79,7 +79,7 @@ export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season
     }
 
     const hasLockedEnvLayer = ['greeneryIndex', 'treeCanopy', 'parksNearby', 'airQuality', 'urbanHeatConcrete'].some((id) => lockedLayers.has(id))
-    if (dashboardMode === 'environment' || hasLockedEnvLayer) {
+    if (dashboardMode === 'environment' || dashboardMode === 'climate' || hasLockedEnvLayer) {
       loadShadeExplorerState()
       loadGreeneryExplorerState()
       loadAirQualityExplorerState()

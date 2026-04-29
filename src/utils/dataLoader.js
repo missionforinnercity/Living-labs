@@ -573,9 +573,129 @@ export async function loadRoadSegmentsData () {
 }
 
 export async function loadWalkabilityRanked () {
-  const r = await fetch('/data/processed/walkability/walkability_ranked.geojson')
-  if (!r.ok) throw new Error('Failed to load walkability_ranked.geojson')
-  return r.json()
+  const [rankedResponse, steepnessResponse] = await Promise.all([
+    fetch('/data/processed/walkability/walkability_ranked.geojson'),
+    fetch('/api/transport/road-steepness')
+  ])
+  if (!rankedResponse.ok) throw new Error('Failed to load walkability_ranked.geojson')
+  if (!steepnessResponse.ok) throw new Error('Failed to load road steepness from API')
+
+  const ranked = await rankedResponse.json()
+  const steepness = await steepnessResponse.json()
+  return applyRoadSteepnessToWalkability(ranked, steepness)
+}
+
+function applyRoadSteepnessToWalkability(ranked, steepness) {
+  if (!ranked?.features?.length || !steepness?.features?.length) return ranked
+
+  const steepnessIndex = steepness.features.map((feature) => ({
+    feature,
+    centroid: featureCentroid(feature.geometry)
+  }))
+
+  let matched = 0
+  ranked.features.forEach((feature) => {
+    const centroid = featureCentroid(feature.geometry)
+    let bestFeature = null
+    let bestDistance = Infinity
+
+    steepnessIndex.forEach((candidate) => {
+      const distance = haversineDistance(centroid, candidate.centroid)
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestFeature = candidate.feature
+      }
+    })
+
+    if (!bestFeature || bestDistance > 12) return
+    matched += 1
+    applySteepnessScore(feature.properties, bestFeature.properties)
+  })
+
+  const dayRanked = [...ranked.features].sort((a, b) => b.properties.kpi_day - a.properties.kpi_day)
+  const nightRanked = [...ranked.features].sort((a, b) => b.properties.kpi_night - a.properties.kpi_night)
+  dayRanked.forEach((feature, index) => { feature.properties.day_rank = index + 1 })
+  nightRanked.forEach((feature, index) => { feature.properties.night_rank = index + 1 })
+
+  return {
+    ...ranked,
+    metadata: {
+      ...(ranked.metadata || {}),
+      roadSteepnessSource: '/api/transport/road-steepness',
+      roadSteepnessMatchedFeatures: matched
+    }
+  }
+}
+
+function applySteepnessScore(properties, steepnessProperties) {
+  const rawSlope = gradePenalty(steepnessProperties)
+  const slopeBuffer = (properties.retail_poi || 0) >= 5 ? 0.5 : 1
+  const slopeScore = clamp01(rawSlope * slopeBuffer + (1 - slopeBuffer))
+  const trafficMultiplier = properties.congestion_level === 'Unknown'
+    ? 1.15
+    : properties.congestion_level === 'Med'
+      ? 0.92
+      : properties.congestion_level === 'High'
+        ? 0.8
+        : 1
+
+  properties.slope_penalty = round2(rawSlope)
+  properties.net_grade_pct = finiteRound(steepnessProperties.net_grade_pct)
+  properties.mean_abs_grade_pct = finiteRound(steepnessProperties.mean_abs_grade_pct)
+  properties.uphill_from_elev_m = finiteRound(steepnessProperties.uphill_from_elev_m)
+  properties.uphill_to_elev_m = finiteRound(steepnessProperties.uphill_to_elev_m)
+  properties._s_slope = round2(slopeScore)
+  properties.kpi_day = round2(Math.min(1, (
+    0.35 * slopeScore
+    + 0.25 * (properties._s_shade || 0)
+    + 0.15 * (properties._s_temp || 0)
+    + 0.25 * (properties._s_retail || 0)
+  ) * trafficMultiplier))
+  properties.kpi_night = round2(
+    0.45 * (properties._s_lux || 0)
+    + 0.30 * (properties._s_night || 0)
+    + 0.25 * slopeScore
+  )
+}
+
+function gradePenalty(properties) {
+  const grade = Math.abs(Number(properties?.net_grade_pct ?? properties?.mean_abs_grade_pct))
+  if (!Number.isFinite(grade)) return 1
+  return clamp01(1 - Math.min(grade, 14) / 18)
+}
+
+function featureCentroid(geometry) {
+  const coords = geometry?.type === 'MultiLineString'
+    ? geometry.coordinates.flat()
+    : geometry?.coordinates || []
+  if (!coords.length) return [0, 0]
+  return [
+    coords.reduce((sum, coord) => sum + coord[0], 0) / coords.length,
+    coords.reduce((sum, coord) => sum + coord[1], 0) / coords.length
+  ]
+}
+
+function haversineDistance(a, b) {
+  const toRad = (value) => value * Math.PI / 180
+  const earthRadiusM = 6371000
+  const dLat = toRad(b[1] - a[1])
+  const dLng = toRad(b[0] - a[0])
+  const x = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLng / 2) ** 2
+  return 2 * earthRadiusM * Math.asin(Math.sqrt(x))
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value))
+}
+
+function round2(value) {
+  return Math.round(value * 100) / 100
+}
+
+function finiteRound(value) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? round2(numeric) : null
 }
 
 export async function loadTreeCanopyData () {

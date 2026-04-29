@@ -104,7 +104,7 @@ const DASHBOARD_MODES = [
   { id: 'business', label: 'Business Analytics' },
   { id: 'walkability', label: 'Active Mobility' },
   { id: 'lighting', label: 'Street Lighting' },
-  { id: 'temperature', label: 'Surface Temperature' },
+  { id: 'climate', label: 'Climate' },
   { id: 'environment', label: 'Environment' },
   { id: 'traffic', label: 'Traffic' }
 ]
@@ -122,17 +122,18 @@ const LAYER_CATEGORIES = [
   // Walkability layers
   { id: 'activeMobility', label: 'Walking, Running & Cycling', dashboard: 'walkability', dataKey: 'activeMobility' },
   { id: 'mobilityAnomalies', label: 'Mobility Anomalies', dashboard: 'walkability', dataKey: 'activeMobilityAnomalies' },
+  { id: 'roadSteepness', label: 'Road Steepness', dashboard: 'walkability', dataKey: 'roadSteepness' },
   { id: 'networkAnalysis', label: 'Network Analysis', dashboard: 'walkability', dataKey: 'network' },
   { id: 'transitAccessibility', label: 'Transit Accessibility', dashboard: 'walkability', dataKey: 'transitData' },
   // Lighting layers
   { id: 'streetLighting', label: 'Street Lighting KPIs', dashboard: 'lighting', dataKey: 'lightingSegments' },
   { id: 'municipalLights', label: 'Municipal Street Lights', dashboard: 'lighting', dataKey: 'streetLights' },
   { id: 'missionInterventions', label: 'Mission Interventions', dashboard: 'lighting', dataKey: 'missionInterventions' },
-  // Temperature layers
-  { id: 'surfaceTemperature', label: 'Surface Temperature', dashboard: 'temperature', dataKey: 'temperatureSegments' },
-  // Environment layers (greenery + air quality)
-  { id: 'airQuality',   label: 'Air Quality',  dashboard: 'environment', dataKey: 'airQualityVoronoi' },
-  { id: 'urbanHeatConcrete', label: 'Heat Islands & Cool Islands', dashboard: 'environment', dataKey: 'ecologyHeat' },
+  // Climate layers
+  { id: 'surfaceTemperature', label: 'Surface Temperature', dashboard: 'climate', dataKey: 'temperatureSegments' },
+  { id: 'urbanHeatConcrete', label: 'Heat Islands & Cool Islands', dashboard: 'climate', dataKey: 'ecologyHeat' },
+  { id: 'airQuality',   label: 'Air Quality',  dashboard: 'climate', dataKey: 'airQualityVoronoi' },
+  // Environment layers
   { id: 'greeneryIndex', label: 'Greenery Access', dashboard: 'environment', dataKey: 'greenerySegments' },
   { id: 'treeCanopy', label: 'Tree Canopy', dashboard: 'environment', dataKey: 'treeCanopy' },
   // Traffic layers
@@ -143,12 +144,15 @@ const getExplorerUrlState = () => {
   if (typeof window === 'undefined') return {}
 
   const params = new URLSearchParams(window.location.search)
-  const dashboardMode = params.get('explorerMode')
-  const activeCategory = params.get('explorerCategory')
+  const dashboardModeParam = params.get('explorerMode')
+  const requestedDashboardMode = dashboardModeParam === 'temperature' ? 'climate' : dashboardModeParam
+  const requestedActiveCategory = params.get('explorerCategory')
+  const activeCategoryConfig = LAYER_CATEGORIES.find((category) => category.id === requestedActiveCategory)
+  const dashboardMode = activeCategoryConfig?.dashboard || requestedDashboardMode
 
   return {
     dashboardMode: DASHBOARD_MODES.some((mode) => mode.id === dashboardMode) ? dashboardMode : null,
-    activeCategory: LAYER_CATEGORIES.some((category) => category.id === activeCategory) ? activeCategory : null
+    activeCategory: activeCategoryConfig ? requestedActiveCategory : null
   }
 }
 
@@ -238,6 +242,7 @@ const UnifiedDataExplorer = () => {
     network: false,
     pedestrianActivity: false,
     cyclingActivity: false,
+    roadSteepness: false,
     // Lighting layers
     lightingSegments: false,
     streetLights: false,
@@ -282,6 +287,7 @@ const UnifiedDataExplorer = () => {
     transitData,
     busStopsData,
     trainStationData,
+    roadSteepnessData,
     selectedRouteHistory,
     compareRouteHistory,
     effectiveSelectedMonth
@@ -689,13 +695,13 @@ const UnifiedDataExplorer = () => {
   }, [])
 
   useEffect(() => {
-    if (dashboardMode !== 'environment' || activeCategory === 'urbanHeatConcrete') return
+    if (dashboardMode !== 'climate' || activeCategory === 'urbanHeatConcrete') return
     setSelectedEcologyFeatureKeys([])
     setEcologyPanelMinimized(false)
   }, [dashboardMode, activeCategory])
 
   useEffect(() => {
-    const greeneryCategoryActive = dashboardMode === 'environment' && activeCategory !== 'airQuality' && activeCategory !== 'urbanHeatConcrete'
+    const greeneryCategoryActive = dashboardMode === 'environment'
     if (!greeneryCategoryActive && greeneryInsightsExpanded) {
       setGreeneryInsightsExpanded(false)
     }
@@ -797,13 +803,14 @@ const UnifiedDataExplorer = () => {
       const modeMap = {
         activeMobility: 'activity',
         mobilityAnomalies: 'activity',
+        roadSteepness: 'steepness',
         networkAnalysis: 'network',
         transitAccessibility: 'transit'
       }
       if (modeMap[categoryId]) {
         setWalkabilityMode(modeMap[categoryId])
       }
-    } else if (category.dashboard === 'environment') {
+    } else if (category.dashboard === 'climate') {
       if (categoryId === 'airQuality') setEnvIndex('uaqi')
     }
     
@@ -897,8 +904,8 @@ const UnifiedDataExplorer = () => {
     ))
   }
 
-  const showEnvironmentAllLayersToggle = useMemo(() => {
-    if (dashboardMode !== 'environment') return false
+  const showAllLayersToggle = useMemo(() => {
+    if (dashboardMode !== 'environment' && dashboardMode !== 'climate') return false
     return getCurrentDashboardCategories().length > 1
   }, [dashboardMode])
 
@@ -1029,6 +1036,7 @@ const UnifiedDataExplorer = () => {
         cyclingData,
         networkData,
         transitData,
+        roadSteepnessData,
         lightingSegments,
         streetLights,
         missionInterventions,
@@ -1043,7 +1051,7 @@ const UnifiedDataExplorer = () => {
     } finally {
       setIsExporting(false)
     }
-  }, [map, layerStack, businessesData, streetStallsData, propertiesData, filteredEventsData, pedestrianData, cyclingData, networkData, transitData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
+  }, [map, layerStack, businessesData, streetStallsData, propertiesData, filteredEventsData, pedestrianData, cyclingData, networkData, transitData, roadSteepnessData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
 
   // Resize drag handlers
   const startSidebarDrag = useCallback((e) => {
@@ -1191,7 +1199,7 @@ const UnifiedDataExplorer = () => {
       {/* Category sub-nav — horizontal pill bar below mode tabs */}
       <div className="category-subnav">
         {/* All Layers toggle — only for dashboards with multiple layer types */}
-        {showEnvironmentAllLayersToggle && (() => {
+        {showAllLayersToggle && (() => {
           const dashCats = getCurrentDashboardCategories()
           const allActive = dashCats.every(c => layerStack.some(l => l.id === c.id))
           return (
@@ -1219,6 +1227,7 @@ const UnifiedDataExplorer = () => {
       <div className="explorer-content">
         <aside className={`explorer-sidebar ${greeneryInsightsExpanded ? 'explorer-sidebar--wide' : ''}`} style={{ width: effectiveSidebarWidth }}>
           <div className="sidebar-resize-handle" onMouseDown={startSidebarDrag} />
+          <div className="explorer-sidebar-main">
           {/* Dashboard-specific content */}
           <Suspense fallback={<div className="app-panel-loading">Loading analytics panel...</div>}>
             {dashboardMode === 'business' && (
@@ -1351,6 +1360,7 @@ const UnifiedDataExplorer = () => {
                   // Map walkability mode back to category
                   const categoryMap = {
                     activity: 'activeMobility',
+                    steepness: 'roadSteepness',
                     network: 'networkAnalysis',
                     transit: 'transitAccessibility'
                   }
@@ -1377,6 +1387,7 @@ const UnifiedDataExplorer = () => {
                 anomaliesData={filteredStravaAnomalies}
                 networkData={networkData}
                 transitData={transitData}
+                roadSteepnessData={roadSteepnessData}
                 hideLayerControls={true}
                 selectedSegment={selectedRouteSegment}
               />
@@ -1392,14 +1403,7 @@ const UnifiedDataExplorer = () => {
               />
             )}
           
-            {dashboardMode === 'temperature' && (
-              <TemperatureAnalytics
-                temperatureData={temperatureData}
-                hideLayerControls={true}
-              />
-            )}
-          
-            {dashboardMode === 'environment' && (
+            {dashboardMode === 'climate' && (
               <>
                 {activeCategory === 'urbanHeatConcrete' ? (
                   <EcologyHeatAnalytics
@@ -1423,21 +1427,30 @@ const UnifiedDataExplorer = () => {
                     onEnvDateChange={setEnvDate}
                   />
                 ) : (
-                  <GreeneryAnalytics
-                    greeneryAndSkyview={greeneryAndSkyview}
-                    parksData={parksData}
+                  <TemperatureAnalytics
+                    temperatureData={temperatureData}
                     hideLayerControls={true}
-                    allLayersActive={LAYER_CATEGORIES.filter(c => c.dashboard === 'environment').every(c => layerStack.some(l => l.id === c.id))}
-                    showGreenDestinations={showGreenDestinations}
-                    onToggleGreenDestinations={() => setShowGreenDestinations((current) => !current)}
-                    insightsExpanded={greeneryInsightsExpanded}
-                    onInsightsExpandedChange={setGreeneryInsightsExpanded}
-                    greeneryMapMode={greeneryMapMode}
-                    onGreeneryMapModeChange={setGreeneryMapMode}
-                    showUnderservedGreenery={showUnderservedGreenery}
-                    onShowUnderservedGreeneryChange={setShowUnderservedGreenery}
                   />
                 )}
+              </>
+            )}
+          
+            {dashboardMode === 'environment' && (
+              <>
+                <GreeneryAnalytics
+                  greeneryAndSkyview={greeneryAndSkyview}
+                  parksData={parksData}
+                  hideLayerControls={true}
+                  allLayersActive={LAYER_CATEGORIES.filter(c => c.dashboard === 'environment').every(c => layerStack.some(l => l.id === c.id))}
+                  showGreenDestinations={showGreenDestinations}
+                  onToggleGreenDestinations={() => setShowGreenDestinations((current) => !current)}
+                  insightsExpanded={greeneryInsightsExpanded}
+                  onInsightsExpandedChange={setGreeneryInsightsExpanded}
+                  greeneryMapMode={greeneryMapMode}
+                  onGreeneryMapModeChange={setGreeneryMapMode}
+                  showUnderservedGreenery={showUnderservedGreenery}
+                  onShowUnderservedGreeneryChange={setShowUnderservedGreenery}
+                />
               </>
             )}
           </Suspense>
@@ -1453,6 +1466,7 @@ const UnifiedDataExplorer = () => {
               hideLayerControls={true}
             />
           )}
+          </div>
 
           {/* Active Layers — inline at sidebar bottom */}
           {layerStack.length > 0 && (
@@ -1500,6 +1514,7 @@ const UnifiedDataExplorer = () => {
               transitData={transitData}
               busStopsData={busStopsData}
               trainStationData={trainStationData}
+              roadSteepnessData={roadSteepnessData}
               lightingSegments={lightingSegments}
               streetLights={streetLights}
               missionInterventions={missionInterventions}
@@ -1921,7 +1936,7 @@ const UnifiedDataExplorer = () => {
           )}
 
           {/* Bottom panel for temperature seasonal charts */}
-          {dashboardMode === 'temperature' && selectedSegment && (
+          {dashboardMode === 'climate' && activeCategory === 'surfaceTemperature' && selectedSegment && (
             <div className="bottom-panel">
               <div className="panel-header">
                 <h3>{selectedSegment.street_name || 'Street Segment'} - Temperature Across Seasons</h3>
@@ -2240,7 +2255,7 @@ const UnifiedDataExplorer = () => {
           })()}
 
           {/* ── Environment detail bottom panel ── */}
-          {dashboardMode === 'environment' && envDetailGrid && (() => {
+          {dashboardMode === 'climate' && activeCategory === 'airQuality' && envDetailGrid && (() => {
             const gridRow = envDisplayData?.rows?.find(r => r.grid_id === envDetailGrid) || envCurrentData?.rows?.find(r => r.grid_id === envDetailGrid)
             const currentGridRow = envCurrentData?.rows?.find(r => r.grid_id === envDetailGrid)
             const histRows = (envHistoryData?.rows || []).filter(r => r.grid_id === envDetailGrid)
@@ -2492,7 +2507,7 @@ const UnifiedDataExplorer = () => {
             )
           })()}
 
-          {dashboardMode === 'environment' && activeCategory === 'urbanHeatConcrete' && selectedEcologyFeature && (
+          {dashboardMode === 'climate' && activeCategory === 'urbanHeatConcrete' && selectedEcologyFeature && (
             <Suspense fallback={<div className="app-panel-loading">Loading ecology detail...</div>}>
               <EcologyHeatDetailPanel
                 featureSeries={selectedEcologyFeatureSeries}
