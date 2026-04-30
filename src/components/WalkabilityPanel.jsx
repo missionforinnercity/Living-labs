@@ -67,9 +67,9 @@ const METHODOLOGY = [
     detail: 'Each road segment is buffered 20 m. Canopy fraction is computed against 1 873 CoCT tree polygons. Sky View Factor (SVF) captures how much sky is blocked by buildings. Using Max(canopy, 1−SVF) recognises that in a CBD, tall buildings provide \u201carchitectural shade\u201d just as effectively as trees (e.g. Bree Street\'s high-rise corridor). A sqrt transform ensures partial shade scores well — a pedestrian can walk on the shaded side even if coverage isn\'t total.'
   },
   {
-    attr: 'Surface Temperature',
-    formula: 'Peak summer mean (°C) — weight 15%',
-    detail: 'Nearest surface-temperature segment matched by centroid distance (≤500 m). Peak value from the summer_temperatures timeseries. Weight reduced from 30% to 15% because Cape Town pedestrians compensate by walking on the shady side of streets (captured by the shade score), not by staying indoors.'
+    attr: 'Heat Streets',
+    formula: 'Modelled heat LST (°C) — weight 15%',
+    detail: 'Nearest climate.heat_streets segment matched by centroid distance (≤500 m). The score uses the DB-backed modelled street heat value. Weight remains 15% because Cape Town pedestrians compensate by walking on the shady side of streets (captured by the shade score), not by staying indoors.'
   },
   {
     attr: 'Retail Curation',
@@ -105,7 +105,7 @@ const METHODOLOGY = [
 
 const DATA_SOURCES = [
   { layer: 'Road Lighting KPIs',    explorer: 'Street Lighting › Street Lighting KPIs',          provider: 'City of Cape Town' },
-  { layer: 'Surface Temperature',   explorer: 'Climate › Surface Temperature',                    provider: 'City of Cape Town' },
+  { layer: 'Heat Streets',          explorer: 'Climate › Heat Streets',                            provider: 'City of Cape Town' },
   { layer: 'Tree Canopy',           explorer: 'Greenery › Tree Canopy',                          provider: 'City of Cape Town' },
   { layer: 'Sky View Factor (SVF)', explorer: 'Greenery › Greenery & Sky View',                  provider: 'City of Cape Town' },
   { layer: 'Digital Terrain Model', explorer: 'Slope — used in index only',                      provider: 'City of Cape Town' },

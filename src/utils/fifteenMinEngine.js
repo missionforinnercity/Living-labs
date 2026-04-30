@@ -428,7 +428,13 @@ function buildSurfaceTempIndex (fc) {
     ...fc,
     features: fc.features.map(f => {
       const arr = f.properties.summer_temperatures
-      let maxTemp = 40
+      const directTemp = Number(
+        f.properties.max_summer_temp ??
+        f.properties.surface_temp ??
+        f.properties.mean_heat_model_lst_c ??
+        f.properties.overall_max_temp
+      )
+      let maxTemp = Number.isFinite(directTemp) ? directTemp : 40
       if (Array.isArray(arr) && arr.length) {
         maxTemp = arr.reduce((m, t) => ((t?.temperature_mean ?? 0) > m ? t.temperature_mean : m), 0)
       }

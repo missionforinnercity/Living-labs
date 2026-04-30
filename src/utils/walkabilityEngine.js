@@ -212,7 +212,7 @@ export function segmentNarrative (feature, mode) {
     if (p.slope_penalty < 0.6 && (p.retail_poi ?? 0) >= 5) parts.push('steep but retail-rich')
     if ((p._s_shade ?? 0) < 0.3)  parts.push('no shade')
     if ((p._s_shade ?? 0) >= 0.7) parts.push('well shaded')
-    if (p.surface_temp  > 38)   parts.push(`${p.surface_temp}°C`)
+    if (p.surface_temp  > 38)   parts.push(`${p.surface_temp}°C heat`)
     if (p.slope_penalty > 0.9)  parts.push('flat')
     if (p.surface_temp  < 33)   parts.push('cooler')
     if ((p.retail_poi ?? 0) >= 10) parts.push(`${p.retail_poi} retail`)
@@ -232,7 +232,7 @@ export function segmentNarrative (feature, mode) {
 export const RADAR_AXES = [
   { key: '_s_slope',   label: 'Slope',     description: 'Terrain penalty — Tobler from 5m DEM, buffered by retail density' },
   { key: '_s_shade',   label: 'Shade',     description: 'Max(canopy, urban enclosure) — trees OR tall buildings' },
-  { key: '_s_temp',    label: 'Comfort',   description: 'Inverted peak summer surface temperature' },
+  { key: '_s_temp',    label: 'Comfort',   description: 'Inverted DB heat-street modelled LST' },
   { key: '_s_retail',  label: 'Retail',    description: 'Curated retail density — restaurants, bakeries, galleries' },
   { key: '_s_lux',     label: 'Lighting',  description: 'Min-lux safety score' },
   { key: '_s_night',   label: 'Activity',  description: 'Night-time venue density' },

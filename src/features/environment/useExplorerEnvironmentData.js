@@ -2,13 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import {
   loadExplorerAirQualityData,
   loadExplorerGreeneryData,
+  loadExplorerEstimatedWindData,
+  loadExplorerHeatGridData,
   loadExplorerShadeData,
   loadExplorerTemperatureData
 } from './data'
 
 export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season, timeOfDay }) {
   const [temperatureData, setTemperatureData] = useState(null)
+  const [heatGridData, setHeatGridData] = useState(null)
   const [shadeData, setShadeData] = useState(null)
+  const [estimatedWindData, setEstimatedWindData] = useState(null)
   const [greeneryAndSkyview, setGreeneryAndSkyview] = useState(null)
   const [treeCanopyData, setTreeCanopyData] = useState(null)
   const [parksData, setParksData] = useState(null)
@@ -18,19 +22,29 @@ export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season
   const envLastFetch = useRef(0)
 
   useEffect(() => {
-    const loadTemperatureExplorerState = async () => {
+    const loadClimateExplorerState = async () => {
       try {
-        const data = await loadExplorerTemperatureData()
-        setTemperatureData(data)
-        console.log('Loaded temperature timeseries data:', data.features?.length, 'segments')
+        const [heatStreets, heatGrid, estimatedWind] = await Promise.all([
+          loadExplorerTemperatureData(),
+          loadExplorerHeatGridData(),
+          loadExplorerEstimatedWindData()
+        ])
+        setTemperatureData(heatStreets)
+        setHeatGridData(heatGrid)
+        setEstimatedWindData(estimatedWind)
+        console.log('Loaded climate DB layers:', {
+          heatStreets: heatStreets.features?.length,
+          heatGrid: heatGrid.features?.length,
+          estimatedWind: estimatedWind.features?.length
+        })
       } catch (error) {
-        console.error('Error loading temperature data:', error)
+        console.error('Error loading climate data:', error)
       }
     }
 
-    const hasLockedTempLayer = lockedLayers.has('surfaceTemperature')
-    if (dashboardMode === 'climate' || hasLockedTempLayer) {
-      loadTemperatureExplorerState()
+    const hasLockedClimateLayer = ['heatStreets', 'heatGrid', 'estimatedWind'].some((id) => lockedLayers.has(id))
+    if (dashboardMode === 'climate' || hasLockedClimateLayer) {
+      loadClimateExplorerState()
     }
   }, [dashboardMode, lockedLayers])
 
@@ -78,7 +92,7 @@ export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season
       }
     }
 
-    const hasLockedEnvLayer = ['greeneryIndex', 'treeCanopy', 'parksNearby', 'airQuality', 'urbanHeatConcrete'].some((id) => lockedLayers.has(id))
+    const hasLockedEnvLayer = ['greeneryIndex', 'treeCanopy', 'parksNearby', 'airQuality', 'urbanHeatConcrete', 'climateShade'].some((id) => lockedLayers.has(id))
     if (dashboardMode === 'environment' || dashboardMode === 'climate' || hasLockedEnvLayer) {
       loadShadeExplorerState()
       loadGreeneryExplorerState()
@@ -88,7 +102,9 @@ export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season
 
   return {
     temperatureData,
+    heatGridData,
     shadeData,
+    estimatedWindData,
     greeneryAndSkyview,
     treeCanopyData,
     parksData,

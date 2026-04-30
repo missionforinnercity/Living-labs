@@ -573,16 +573,79 @@ export async function loadRoadSegmentsData () {
 }
 
 export async function loadWalkabilityRanked () {
-  const [rankedResponse, steepnessResponse] = await Promise.all([
+  const [rankedResponse, steepnessResponse, heatResponse] = await Promise.all([
     fetch('/data/processed/walkability/walkability_ranked.geojson'),
-    fetch('/api/transport/road-steepness')
+    fetch('/api/transport/road-steepness'),
+    fetch('/api/climate/heat-streets')
   ])
   if (!rankedResponse.ok) throw new Error('Failed to load walkability_ranked.geojson')
   if (!steepnessResponse.ok) throw new Error('Failed to load road steepness from API')
+  if (!heatResponse.ok) throw new Error('Failed to load heat streets from API')
 
   const ranked = await rankedResponse.json()
   const steepness = await steepnessResponse.json()
-  return applyRoadSteepnessToWalkability(ranked, steepness)
+  const heatStreets = await heatResponse.json()
+  return applyRoadSteepnessToWalkability(
+    applyClimateHeatToWalkability(ranked, heatStreets),
+    steepness
+  )
+}
+
+function applyClimateHeatToWalkability(ranked, heatStreets) {
+  if (!ranked?.features?.length || !heatStreets?.features?.length) return ranked
+
+  const heatIndex = heatStreets.features.map((feature) => ({
+    feature,
+    centroid: featureCentroid(feature.geometry)
+  }))
+
+  const matches = []
+  ranked.features.forEach((feature) => {
+    const centroid = featureCentroid(feature.geometry)
+    let bestFeature = null
+    let bestDistance = Infinity
+
+    heatIndex.forEach((candidate) => {
+      const distance = haversineDistance(centroid, candidate.centroid)
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestFeature = candidate.feature
+      }
+    })
+
+    if (!bestFeature || bestDistance > 500) return
+    const properties = bestFeature.properties || {}
+    const heatTemp = Number(properties.mean_heat_model_lst_c ?? properties.surface_temp ?? properties.overall_max_temp)
+    if (!Number.isFinite(heatTemp)) return
+    matches.push({ feature, heatFeature: bestFeature, heatTemp })
+  })
+
+  if (!matches.length) return ranked
+
+  const temps = matches.map(match => match.heatTemp)
+  const tempMin = Math.min(...temps)
+  const tempRange = Math.max(...temps) - tempMin || 1
+
+  matches.forEach(({ feature, heatFeature, heatTemp }) => {
+    const heatProps = heatFeature.properties || {}
+    const properties = feature.properties
+    properties.surface_temp = round2(heatTemp)
+    properties.hot_street_score = finiteRound(heatProps.hot_street_score)
+    properties.hot_street_class = heatProps.hot_street_class || null
+    properties.mean_pedestrian_heat_score = finiteRound(heatProps.mean_pedestrian_heat_score)
+    properties.mean_effective_canopy_pct = finiteRound(heatProps.mean_effective_canopy_pct)
+    properties._s_temp = round2(1 - (heatTemp - tempMin) / tempRange)
+    recalculateWalkabilityScores(properties)
+  })
+
+  return {
+    ...ranked,
+    metadata: {
+      ...(ranked.metadata || {}),
+      heatStreetsSource: '/api/climate/heat-streets',
+      heatStreetsMatchedFeatures: matches.length
+    }
+  }
 }
 
 function applyRoadSteepnessToWalkability(ranked, steepness) {
@@ -631,6 +694,17 @@ function applySteepnessScore(properties, steepnessProperties) {
   const rawSlope = gradePenalty(steepnessProperties)
   const slopeBuffer = (properties.retail_poi || 0) >= 5 ? 0.5 : 1
   const slopeScore = clamp01(rawSlope * slopeBuffer + (1 - slopeBuffer))
+
+  properties.slope_penalty = round2(rawSlope)
+  properties.net_grade_pct = finiteRound(steepnessProperties.net_grade_pct)
+  properties.mean_abs_grade_pct = finiteRound(steepnessProperties.mean_abs_grade_pct)
+  properties.uphill_from_elev_m = finiteRound(steepnessProperties.uphill_from_elev_m)
+  properties.uphill_to_elev_m = finiteRound(steepnessProperties.uphill_to_elev_m)
+  properties._s_slope = round2(slopeScore)
+  recalculateWalkabilityScores(properties, slopeScore)
+}
+
+function recalculateWalkabilityScores(properties, slopeScore = properties._s_slope || 0) {
   const trafficMultiplier = properties.congestion_level === 'Unknown'
     ? 1.15
     : properties.congestion_level === 'Med'
@@ -639,12 +713,6 @@ function applySteepnessScore(properties, steepnessProperties) {
         ? 0.8
         : 1
 
-  properties.slope_penalty = round2(rawSlope)
-  properties.net_grade_pct = finiteRound(steepnessProperties.net_grade_pct)
-  properties.mean_abs_grade_pct = finiteRound(steepnessProperties.mean_abs_grade_pct)
-  properties.uphill_from_elev_m = finiteRound(steepnessProperties.uphill_from_elev_m)
-  properties.uphill_to_elev_m = finiteRound(steepnessProperties.uphill_to_elev_m)
-  properties._s_slope = round2(slopeScore)
   properties.kpi_day = round2(Math.min(1, (
     0.35 * slopeScore
     + 0.25 * (properties._s_shade || 0)
@@ -719,7 +787,7 @@ export async function loadFrictionData () {
     fetch('/data/greenery/greenryandSkyview.geojson').then(r => r.json()),
     fetch('/data/lighting/new_Lights/road_segments_lighting_kpis_all.geojson').then(r => r.json()),
     fetch('/data/processed/walkability/network_connectivity.geojson').then(r => r.json()),
-    fetch('/data/surfaceTemp/annual_surface_temperature_timeseries_20260211_1332.geojson').then(r => r.json()),
+    fetch('/api/climate/heat-streets').then(r => r.json()),
     fetch('/data/greenery/tree_canopy.geojson').then(r => r.json()),
   ])
   return { greeneryFC: greenery, lightingRoadsFC: lightingRoads, networkFC: network, surfaceTempFC: surfaceTemp, canopyFC: canopy }

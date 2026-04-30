@@ -111,6 +111,129 @@ function buildGeoFeatureCollection(rows, {
   }
 }
 
+async function getGeometryColumn(schemaName, tableName) {
+  const { rows } = await pool.query(`
+    SELECT f_geometry_column AS column_name
+    FROM geometry_columns
+    WHERE f_table_schema = $1 AND f_table_name = $2
+    LIMIT 1
+  `, [schemaName, tableName])
+
+  if (rows[0]?.column_name) return rows[0].column_name
+
+  const fallback = await pool.query(`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = $1
+      AND table_name = $2
+      AND column_name IN ('wkb_geometry', 'geom', 'geometry')
+    ORDER BY CASE column_name
+      WHEN 'wkb_geometry' THEN 1
+      WHEN 'geom' THEN 2
+      ELSE 3
+    END
+    LIMIT 1
+  `, [schemaName, tableName])
+
+  return fallback.rows[0]?.column_name || null
+}
+
+async function getTableColumns(schemaName, tableName, excludedColumns = []) {
+  const { rows } = await pool.query(`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = $1 AND table_name = $2
+    ORDER BY ordinal_position
+  `, [schemaName, tableName])
+
+  const excluded = new Set(excludedColumns)
+  return rows
+    .map((row) => row.column_name)
+    .filter((column) => !excluded.has(column))
+}
+
+function quoteIdentifier(identifier) {
+  return `"${String(identifier).replaceAll('"', '""')}"`
+}
+
+const CLIMATE_TABLES = {
+  heat_grid: {
+    source: 'climate.heat_grid',
+    orderColumns: ['analysis_year', 'analysis_month', 'thermal_percentile', 'urban_heat_score', 'feature_id', 'ogc_fid'],
+    summaryColumns: ['heat_model_lst_c', 'mean_lst_c', 'thermal_percentile', 'urban_heat_score', 'pedestrian_heat_score', 'cool_island_score', 'shade_deficit_score']
+  },
+  shade: {
+    source: 'climate.shade',
+    orderColumns: ['hour', 'ogc_fid'],
+    summaryColumns: ['area_m2']
+  },
+  est_wind: {
+    source: 'climate.est_wind',
+    orderColumns: ['estimated_speed_kmh', 'class_value', 'ogc_fid'],
+    summaryColumns: ['estimated_speed_kmh', 'wind_speed_factor', 'frequency_weight', 'area_m2']
+  }
+}
+
+async function buildClimateTableFeatureCollection(tableName, filters = {}) {
+  const config = CLIMATE_TABLES[tableName]
+  if (!config) throw new Error(`Unsupported climate table: ${tableName}`)
+
+  const schemaName = 'climate'
+  const geometryColumn = await getGeometryColumn(schemaName, tableName)
+  if (!geometryColumn) {
+    throw new Error(`No geometry column found for climate.${tableName}`)
+  }
+
+  const propertyColumns = await getTableColumns(schemaName, tableName, [geometryColumn])
+  const selectedProperties = propertyColumns.length
+    ? `${propertyColumns.map(quoteIdentifier).join(',')},`
+    : ''
+
+  const where = [`${quoteIdentifier(geometryColumn)} IS NOT NULL`]
+  const params = []
+  if (filters.hour && propertyColumns.includes('hour')) {
+    params.push(filters.hour)
+    where.push(`${quoteIdentifier('hour')} = $${params.length}`)
+  }
+
+  const orderCandidates = config.orderColumns.filter((column) => propertyColumns.includes(column))
+  const orderClause = orderCandidates.length
+    ? `ORDER BY ${orderCandidates.map((column) => `${quoteIdentifier(column)} DESC NULLS LAST`).join(', ')}`
+    : ''
+
+  const { rows } = await pool.query(`
+    SELECT
+      ${selectedProperties}
+      ST_AsGeoJSON(${quoteIdentifier(geometryColumn)})::json AS geometry
+    FROM ${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}
+    WHERE ${where.join(' AND ')}
+    ${orderClause}
+  `, params)
+
+  const numericColumnSummary = config.summaryColumns
+    .filter((column) => propertyColumns.includes(column))
+    .map((column) => `round(avg(${quoteIdentifier(column)})::numeric, 2) AS ${quoteIdentifier(`avg_${column}`)}`)
+
+  const summaryRows = numericColumnSummary.length
+    ? (await pool.query(`
+        SELECT
+          count(*) AS feature_count,
+          ${numericColumnSummary.join(',')}
+        FROM ${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}
+        WHERE ${where.join(' AND ')}
+      `, params)).rows
+    : [{ feature_count: rows.length }]
+
+  return buildGeoFeatureCollection(rows, {
+    source: config.source,
+    metadata: {
+      ...(summaryRows[0] || {}),
+      geometryColumn,
+      filters
+    }
+  })
+}
+
 // Current environment grid data — latest record per grid cell derived from history
 app.get('/api/environment/current', async (_req, res) => {
   try {
@@ -365,6 +488,178 @@ app.get('/api/transport/road-steepness', async (_req, res) => {
     }))
   } catch (err) {
     console.error('[API] /transport/road-steepness error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/climate/heat-streets', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        ogc_fid,
+        feature_id,
+        analysis_year,
+        analysis_month,
+        analysis_mode,
+        analysis_window_start,
+        analysis_window_end,
+        analysis_window_days,
+        analysis_window_label,
+        analysis_month_label,
+        analysis_temporal_scope,
+        analysis_unit_type,
+        street_name,
+        road_segment_length_m,
+        road_buffer_m,
+        sampled_unit_count,
+        thermal_source,
+        model_product,
+        model_version,
+        heat_model_lst_source,
+        heat_model_basis,
+        fusion_model_type,
+        mean_heat_model_lst_c,
+        mean_surface_air_delta_c,
+        mean_heat_exposure_c,
+        mean_urban_heat_score,
+        mean_pedestrian_heat_score,
+        mean_effective_canopy_pct,
+        mean_shade_deficit_score,
+        mean_retained_heat_score,
+        mean_road_edge_heat_penalty,
+        mean_thermal_confidence_score,
+        hot_street_score,
+        hot_street_class,
+        cool_street_score,
+        hot_street_score AS temp_percentile,
+        mean_heat_model_lst_c AS overall_max_temp,
+        mean_heat_model_lst_c AS overall_avg_temp,
+        mean_heat_model_lst_c AS surface_temp,
+        ST_AsGeoJSON(wkb_geometry)::json AS geometry
+      FROM climate.heat_streets
+      WHERE wkb_geometry IS NOT NULL
+      ORDER BY hot_street_score DESC NULLS LAST, street_name NULLS LAST
+    `)
+
+    const [{ rows: summaryRows }] = await Promise.all([
+      pool.query(`
+        SELECT
+          count(*) AS segment_count,
+          count(*) FILTER (WHERE hot_street_score >= 80) AS critical_or_hot_count,
+          round(avg(mean_heat_model_lst_c)::numeric, 2) AS avg_heat_model_lst_c,
+          round(max(mean_heat_model_lst_c)::numeric, 2) AS max_heat_model_lst_c,
+          round(avg(hot_street_score)::numeric, 2) AS avg_hot_street_score,
+          round(max(hot_street_score)::numeric, 2) AS max_hot_street_score
+        FROM climate.heat_streets
+        WHERE wkb_geometry IS NOT NULL
+      `)
+    ])
+
+    res.json(buildGeoFeatureCollection(rows, {
+      source: 'climate.heat_streets',
+      metadata: summaryRows[0] || {}
+    }))
+  } catch (err) {
+    console.error('[API] /climate/heat-streets error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/climate/heat-zones', async (_req, res) => {
+  const schemaName = 'climate'
+  const tableName = 'heat_zones'
+
+  try {
+    const geometryColumn = await getGeometryColumn(schemaName, tableName)
+    if (!geometryColumn) {
+      throw new Error('No geometry column found for climate.heat_zones')
+    }
+
+    const propertyColumns = await getTableColumns(schemaName, tableName, [geometryColumn])
+    const selectedProperties = propertyColumns.length
+      ? `${propertyColumns.map(quoteIdentifier).join(',')},`
+      : ''
+    const orderCandidates = [
+      'analysis_year',
+      'analysis_month',
+      'thermal_percentile',
+      'urban_heat_score',
+      'feature_id',
+      'ogc_fid'
+    ].filter((column) => propertyColumns.includes(column))
+    const orderClause = orderCandidates.length
+      ? `ORDER BY ${orderCandidates.map((column) => `${quoteIdentifier(column)} DESC NULLS LAST`).join(', ')}`
+      : ''
+
+    const { rows } = await pool.query(`
+      SELECT
+        ${selectedProperties}
+        ST_AsGeoJSON(${quoteIdentifier(geometryColumn)})::json AS geometry
+      FROM ${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}
+      WHERE ${quoteIdentifier(geometryColumn)} IS NOT NULL
+      ${orderClause}
+    `)
+
+    const numericColumnSummary = propertyColumns
+      .filter((column) => [
+        'urban_heat_score',
+        'thermal_percentile',
+        'cool_island_score',
+        'health_score',
+        'surface_air_delta_c',
+        'mean_lst_c',
+        'heat_impact'
+      ].includes(column))
+      .map((column) => `round(avg(${quoteIdentifier(column)})::numeric, 2) AS ${quoteIdentifier(`avg_${column}`)}`)
+
+    const summaryRows = numericColumnSummary.length
+      ? (await pool.query(`
+          SELECT
+            count(*) AS zone_count,
+            ${numericColumnSummary.join(',')}
+          FROM ${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}
+          WHERE ${quoteIdentifier(geometryColumn)} IS NOT NULL
+        `)).rows
+      : [{ zone_count: rows.length }]
+
+    res.json(buildGeoFeatureCollection(rows, {
+      source: 'climate.heat_zones',
+      metadata: {
+        ...(summaryRows[0] || {}),
+        geometryColumn
+      }
+    }))
+  } catch (err) {
+    console.error('[API] /climate/heat-zones error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/climate/heat-grid', async (_req, res) => {
+  try {
+    res.json(await buildClimateTableFeatureCollection('heat_grid'))
+  } catch (err) {
+    console.error('[API] /climate/heat-grid error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/climate/shade', async (req, res) => {
+  try {
+    res.json(await buildClimateTableFeatureCollection('shade', {
+      hour: typeof req.query.hour === 'string' ? req.query.hour : null
+    }))
+  } catch (err) {
+    console.error('[API] /climate/shade error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/climate/est-wind', async (_req, res) => {
+  try {
+    res.json(await buildClimateTableFeatureCollection('est_wind'))
+  } catch (err) {
+    console.error('[API] /climate/est-wind error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })

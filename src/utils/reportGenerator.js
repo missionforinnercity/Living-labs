@@ -326,7 +326,7 @@ async function ensureAllData(data) {
   if (!data.streetStallsData?.features?.length) loads.push(fetchGeoJSON('/data/business/streetStalls.geojson').then(d => { if (d) data.streetStallsData = d }))
   if (!data.lightingSegments?.features?.length) loads.push(fetchGeoJSON('/data/lighting/new_Lights/road_segments_lighting_kpis_all.geojson').then(d => { if (d) data.lightingSegments = d }))
   if (!data.streetLights?.features?.length) loads.push(fetchGeoJSON('/data/lighting/new_Lights/Street_lights.geojson').then(d => { if (d) data.streetLights = d }))
-  if (!data.temperatureData?.features?.length) loads.push(fetchGeoJSON('/data/surfaceTemp/annual_surface_temperature_timeseries_20260211_1332.geojson').then(d => { if (d) data.temperatureData = d }))
+  if (!data.temperatureData?.features?.length) loads.push(fetchGeoJSON('/api/climate/heat-streets').then(d => { if (d) data.temperatureData = d }))
   if (!data.greeneryAndSkyview?.features?.length) loads.push(fetchGeoJSON('/data/greenery/greenryandSkyview.geojson').then(d => { if (d) data.greeneryAndSkyview = d }))
   if (!data.treeCanopyData?.features?.length) loads.push(fetchGeoJSON('/data/greenery/tree_canopy.geojson').then(d => { if (d) data.treeCanopyData = reprojectGeoJSON3857to4326(d) }))
   if (!data.parksData?.features?.length) loads.push(fetchGeoJSON('/data/greenery/parks_nearby.geojson').then(d => { if (d) data.parksData = d }))
@@ -344,7 +344,8 @@ async function ensureAllData(data) {
   if (!data.trainStations?.features?.length) loads.push(fetchGeoJSON('/data/walkabilty/trainStation.geojson').then(d => { if (d) data.trainStations = d }))
   await Promise.all(loads)
 
-  // Compute temp_percentile if not already present (app normally does this on load)
+  // Compute a heat percentile if not already present. The DB route normally
+  // supplies hot_street_score/temp_percentile, but this keeps reports tolerant.
   if (data.temperatureData?.features?.length && data.temperatureData.features[0]?.properties?.temp_percentile == null) {
     const allMaxTemps = []
     data.temperatureData.features.forEach(f => {
@@ -358,6 +359,13 @@ async function ensureAllData(data) {
         f.properties.overall_max_temp = Math.max(...readings)
         f.properties.overall_avg_temp = readings.reduce((a, b) => a + b, 0) / readings.length
         allMaxTemps.push(f.properties.overall_max_temp)
+      } else {
+        const directTemp = Number(f.properties.mean_heat_model_lst_c ?? f.properties.overall_max_temp ?? f.properties.surface_temp)
+        if (Number.isFinite(directTemp)) {
+          f.properties.overall_max_temp = directTemp
+          f.properties.overall_avg_temp = directTemp
+          allMaxTemps.push(directTemp)
+        }
       }
     })
     if (allMaxTemps.length > 0) {
@@ -389,7 +397,7 @@ const KNOWN_DATA_LAYERS = [
   'lighting-segments-layer',
   'mission-interventions-outer-glow', 'mission-interventions-glow', 'mission-interventions-layer',
   'municipal-lights-layer',
-  'temperature-segments-layer',
+  'heat-streets-layer',
   'greenery-skyview-layer', 'tree-canopy-layer',
   'parks-nearby-layer', 'parks-nearby-outline',
   'events-heatmap-layer', 'events-points-layer',
@@ -443,9 +451,9 @@ const SECTION_LEGENDS = {
     ],
   },
   temperature: {
-    title: 'Surface Temperature',
+    title: 'Heat Streets',
     items: [
-      { type: 'gradient', label: 'Temperature Percentile', colors: ['#3b82f6','#10b981','#fbbf24','#f59e0b','#ef4444'], labels: ['Cool (0%)','20%','40%','60%','Hot (80%+)'] },
+      { type: 'gradient', label: 'Hot Street Score', colors: ['#3b82f6','#10b981','#fbbf24','#f59e0b','#ef4444'], labels: ['Low','20','40','60','80+'] },
     ],
   },
   greenery: {
@@ -585,8 +593,8 @@ function buildSectionTempLayers(sectionId, filtered) {
         sources.push({ id: '_rpt_temp', data: fc(filtered.temperature) })
         layers.push({ id: '_rpt_temp_l', type: 'line', source: '_rpt_temp', paint: {
           'line-color': ['case',
-            ['has', 'temp_percentile'],
-            ['step', ['get', 'temp_percentile'],
+            ['any', ['has', 'hot_street_score'], ['has', 'temp_percentile']],
+            ['step', ['coalesce', ['get', 'hot_street_score'], ['get', 'temp_percentile'], 0],
               '#3b82f6', 20, '#10b981', 40, '#fbbf24', 60, '#f59e0b', 80, '#ef4444'],
             '#4b5563'],
           'line-width': 5, 'line-opacity': 0.9,
@@ -1210,118 +1218,58 @@ function renderTemperatureSection(doc, y, filtered, pw, ph, margin, cw, state, s
   const temps = filtered.temperature || []
 
   y = ensureSpace(doc, y, 20, pw, ph, state)
-  y = sectionTitle(doc, y, `Surface Temperature (${temps.length} segments in view)`, pw, SECTION_COLORS.temperature)
+  y = sectionTitle(doc, y, `Heat Streets (${temps.length} streets in view)`, pw, SECTION_COLORS.temperature)
   y = embedSectionMap(doc, y, sectionImage, pw, ph, margin, cw, state, 'temperature')
 
   if (temps.length === 0) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...C.muted)
-    doc.text('No temperature data found in the current viewport.', margin + 4, y + 4)
+    doc.text('No heat street data found in the current viewport.', margin + 4, y + 4)
     return y + 10
   }
 
-  // Compute per-season averages
-  const seasons = ['summer', 'autumn', 'winter', 'spring']
-  const seasonStats = {}
-  for (const season of seasons) {
-    const key = `${season}_temperatures`
-    const allTemps = []
-    for (const f of temps) {
-      const arr = f.properties[key]
-      if (Array.isArray(arr)) {
-        for (const entry of arr) {
-          if (entry.temperature_mean != null) allTemps.push(entry.temperature_mean)
-        }
-      }
-    }
-    if (allTemps.length > 0) {
-      seasonStats[season] = {
-        avg: (allTemps.reduce((a, b) => a + b, 0) / allTemps.length).toFixed(1),
-        max: Math.max(...allTemps).toFixed(1),
-        min: Math.min(...allTemps).toFixed(1),
-        count: allTemps.length
-      }
-    }
-  }
+  const heatScores = temps.map(f => Number(f.properties.hot_street_score ?? f.properties.temp_percentile)).filter(Number.isFinite)
+  const lstValues = temps.map(f => Number(f.properties.mean_heat_model_lst_c ?? f.properties.overall_avg_temp)).filter(Number.isFinite)
+  const pedestrianScores = temps.map(f => Number(f.properties.mean_pedestrian_heat_score)).filter(Number.isFinite)
+  const canopyValues = temps.map(f => Number(f.properties.mean_effective_canopy_pct)).filter(Number.isFinite)
+  const avg = (values) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
 
   const metrics = [
-    { label: 'Segments Analyzed', value: temps.length },
-    { label: 'Summer Avg (°C)', value: seasonStats.summer?.avg || '—' },
-    { label: 'Summer Max (°C)', value: seasonStats.summer?.max || '—' },
-    { label: 'Autumn Avg (°C)', value: seasonStats.autumn?.avg || '—' },
-    { label: 'Winter Avg (°C)', value: seasonStats.winter?.avg || '—' },
-    { label: 'Winter Min (°C)', value: seasonStats.winter?.min || '—' },
-    { label: 'Spring Avg (°C)', value: seasonStats.spring?.avg || '—' },
-    { label: 'Spring Max (°C)', value: seasonStats.spring?.max || '—' },
+    { label: 'Streets Analyzed', value: temps.length },
+    { label: 'Avg Hot Score', value: avg(heatScores)?.toFixed(1) || '-' },
+    { label: 'Peak Hot Score', value: heatScores.length ? Math.max(...heatScores).toFixed(1) : '-' },
+    { label: 'Critical Hot Streets', value: heatScores.filter(v => v >= 80).length },
+    { label: 'Avg Heat LST (°C)', value: avg(lstValues)?.toFixed(1) || '-' },
+    { label: 'Peak Heat LST (°C)', value: lstValues.length ? Math.max(...lstValues).toFixed(1) : '-' },
+    { label: 'Avg Pedestrian Heat', value: avg(pedestrianScores)?.toFixed(1) || '-' },
+    { label: 'Avg Canopy (%)', value: avg(canopyValues)?.toFixed(1) || '-' },
   ]
   y = metricRow(doc, y, metrics, margin, cw)
 
-  // Draw seasonal temperature bar chart
-  const chartSeasons = seasons.filter(s => seasonStats[s])
-  if (chartSeasons.length > 0) {
-    y = ensureSpace(doc, y, 45, pw, ph, state)
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.text)
-    doc.text('Seasonal Temperature Profile', margin + 2, y + 4)
-    y += 8
-
-    const chartH = 30, chartW = cw - 10, chartX = margin + 5
-    doc.setFillColor(...C.card)
-    doc.roundedRect(chartX - 2, y - 2, chartW + 4, chartH + 12, 2, 2, 'F')
-
-    // Find max temp for scale
-    const maxVal = Math.max(...chartSeasons.map(s => parseFloat(seasonStats[s].max)))
-    const barWidth = (chartW / chartSeasons.length) - 4
-    const seasonColors = { summer: C.danger, autumn: C.warm, winter: C.cool, spring: C.green }
-
-    for (let i = 0; i < chartSeasons.length; i++) {
-      const s = chartSeasons[i]
-      const stat = seasonStats[s]
-      const avgH = (parseFloat(stat.avg) / maxVal) * chartH
-      const maxH = (parseFloat(stat.max) / maxVal) * chartH
-      const bx = chartX + i * (barWidth + 4) + 2
-      const col = seasonColors[s] || C.accent
-
-      // Max bar (lighter)
-      doc.setFillColor(col[0], col[1], col[2])
-      doc.setGState(new doc.GState({ opacity: 0.3 }))
-      doc.roundedRect(bx, y + chartH - maxH, barWidth, maxH, 1, 1, 'F')
-
-      // Avg bar
-      doc.setGState(new doc.GState({ opacity: 1 }))
-      doc.setFillColor(col[0], col[1], col[2])
-      doc.roundedRect(bx, y + chartH - avgH, barWidth, avgH, 1, 1, 'F')
-
-      // Label
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(...C.muted)
-      doc.text(s.charAt(0).toUpperCase() + s.slice(1, 3), bx + barWidth / 2, y + chartH + 5, { align: 'center' })
-
-      // Value on bar
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(5.5); doc.setTextColor(...C.white)
-      doc.text(`${stat.avg}°`, bx + barWidth / 2, y + chartH - avgH - 2, { align: 'center' })
-    }
-    y += chartH + 12
-  }
-
   // Hottest streets
   const hotStreets = [...temps]
-    .filter(f => f.properties.summer_temperatures?.length)
     .map(f => {
-      const summerTemps = f.properties.summer_temperatures
-      const maxTemp = Math.max(...summerTemps.map(t => t.temperature_mean || 0))
-      return { name: f.properties.street_name || 'Unknown', temp: maxTemp }
+      const score = Number(f.properties.hot_street_score ?? f.properties.temp_percentile)
+      const lst = Number(f.properties.mean_heat_model_lst_c ?? f.properties.overall_avg_temp)
+      return {
+        name: f.properties.street_name || 'Unknown',
+        score: Number.isFinite(score) ? score : 0,
+        lst: Number.isFinite(lst) ? lst : null
+      }
     })
-    .sort((a, b) => b.temp - a.temp)
+    .sort((a, b) => b.score - a.score)
     .slice(0, 8)
 
   if (hotStreets.length > 0) {
     y = ensureSpace(doc, y, 10 + hotStreets.length * 6, pw, ph, state)
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.text)
-    doc.text('Hottest Streets (Summer Peak)', margin + 2, y + 4)
+    doc.text('Top Heat Streets', margin + 2, y + 4)
     y += 7
     for (const st of hotStreets) {
       y = ensureSpace(doc, y, 7, pw, ph, state)
       doc.setFillColor(...C.card); doc.roundedRect(margin, y, cw, 6, 1, 1, 'F')
       doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(...C.danger)
-      doc.text(`${st.name}: ${st.temp.toFixed(1)}°C`, margin + 3, y + 4.5)
+      const lstText = st.lst == null ? '' : ` · ${st.lst.toFixed(1)}°C LST`
+      doc.text(`${st.name}: ${st.score.toFixed(1)} hot score${lstText}`, margin + 3, y + 4.5)
       y += 7
     }
   }
@@ -1608,7 +1556,7 @@ export async function generateReport(mapInstance, layerStack, data, dashboardMod
     { label: 'Transit Stops', value: filtered.busStops.length + filtered.trainStations.length },
     { label: 'Lighting Segments', value: filtered.lightingSegments.length },
     { label: 'Light Poles', value: filtered.streetLights.length },
-    { label: 'Temperature Segments', value: filtered.temperature.length },
+    { label: 'Heat Streets', value: filtered.temperature.length },
     { label: 'Greenery Segments', value: filtered.greenery.length },
     { label: 'Parks', value: filtered.parks.length },
     { label: 'Traffic Segments', value: filtered.traffic.length },
@@ -1637,7 +1585,7 @@ export async function generateReport(mapInstance, layerStack, data, dashboardMod
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...C.muted)
   const methodLines = [
     'Data sourced from municipal datasets, Google Places API and satellite imagery.',
-    'Lighting KPIs derived from calibrated night-time imagery. Temperature data from Landsat thermal bands.',
+    'Lighting KPIs derived from calibrated night-time imagery. Heat street data comes from climate.heat_streets.',
     'Each section map shows only the relevant layers for that domain. All features filtered to user-drawn bbox.'
   ]
   methodLines.forEach((line, i) => { doc.text(line, margin + 4, y + 10 + i * 4) })

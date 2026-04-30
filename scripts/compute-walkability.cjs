@@ -9,7 +9,7 @@
  *
  * Data sources consumed:
  *   - Road segments + lighting : data/lighting/new_Lights/road_segments_lighting_kpis_all.geojson
- *   - Surface temperature      : data/surfaceTemp/annual_surface_temperature_timeseries_20260211_1332.geojson
+ *   - Heat streets             : GET /api/climate/heat-streets (climate.heat_streets)
  *   - Night-active POI          : data/processed/business/POI_simplified.geojson
  *   - Retail-curated POI        : data/processed/business/POI_simplified.geojson  (filtered subset)
  *   - Slope (from DEM)          : data/processed/walkability/segment_slopes.json   [pre-computed]
@@ -28,7 +28,7 @@
  *   kpi_night      0-1  Nighttime Walkability Index
  *   slope_penalty  0-1  Tobler slope from real DEM
  *   canopy_cover   0-1  Tree canopy fraction within 20m buffer
- *   surface_temp   °C   Peak summer temperature
+ *   surface_temp   °C   Heat-street modelled LST
  *   min_lux        lux  Lowest measured lux on segment
  *   night_poi      int  Night-open POIs within 150m
  *   retail_poi     int  Retail-curated POIs within 150m
@@ -39,6 +39,7 @@
 
 const fs   = require('fs')
 const path = require('path')
+const { execFileSync } = require('child_process')
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -111,9 +112,15 @@ function round2 (v) { return Math.round(v * 100) / 100 }
 // ─── load data ────────────────────────────────────────────────────────────────
 
 const ROOT = path.join(__dirname, '..')
+const API_BASE_URL = process.env.API_BASE_URL || `http://localhost:${process.env.API_PORT || 3001}`
+
+function fetchJsonSync (url) {
+  const body = execFileSync('curl', ['-fsS', url], { encoding: 'utf8' })
+  return JSON.parse(body)
+}
 
 const segFC     = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/lighting/new_Lights/road_segments_lighting_kpis_all.geojson')))
-const tempFC    = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/surfaceTemp/annual_surface_temperature_timeseries_20260211_1332.geojson')))
+const tempFC    = fetchJsonSync(`${API_BASE_URL}/api/climate/heat-streets`)
 const poiFC     = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/processed/business/POI_simplified.geojson')))
 
 // Pre-computed from extract-slope-canopy.py
@@ -195,14 +202,16 @@ const features = segFC.features.map((f, idx) => {
   const raw_min_lux  = props.min_lux != null ? props.min_lux : 0
   const raw_mean_lux = props.mean_lux != null ? props.mean_lux : 0
 
-  // Surface temperature + authoritative street name from nearest surface-temp segment
-  // (surface temp dataset has user-verified correct street names; STR_NAME in lighting is unreliable)
+  // Heat streets + authoritative street name from nearest climate segment
+  // (climate.heat_streets has user-verified street names; STR_NAME in lighting is unreliable)
   const tMatch = nearestInGrid(tempIdx, lng, lat, 500)
   let surface_temp = 32
   let streetName = props.STR_NAME || `Segment-${idx}`  // fallback only
   if (tMatch) {
     const tProps = tempFC.features[tMatch.i].properties
     if (tProps.street_name) streetName = tProps.street_name  // authoritative name
+    const directTemp = Number(tProps.mean_heat_model_lst_c ?? tProps.surface_temp ?? tProps.overall_max_temp)
+    if (Number.isFinite(directTemp)) surface_temp = directTemp
     const arr = tProps.summer_temperatures
     if (Array.isArray(arr) && arr.length > 0) {
       const peak = arr.reduce((a, b) =>
@@ -426,7 +435,7 @@ const output = {
     kpi_night_range: [Math.min(...scored.map(f=>f.properties.kpi_night)), Math.max(...scored.map(f=>f.properties.kpi_night))],
     sources: {
       road_segments:   'data/lighting/new_Lights/road_segments_lighting_kpis_all.geojson',
-      surface_temp:    'data/surfaceTemp/annual_surface_temperature_timeseries_20260211_1332.geojson',
+      surface_temp:    `${API_BASE_URL}/api/climate/heat-streets`,
       night_poi:       'data/processed/business/POI_simplified.geojson',
       retail_poi:      'data/processed/business/POI_simplified.geojson (curated subset)',
       traffic:         'data/Traffic/traffic_analysis.geojson',

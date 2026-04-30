@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import './EcologyHeatAnalytics.css'
 
-const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026]
+const DEFAULT_YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026]
 const ECOLOGY_METRICS = [
   {
     id: 'urban_heat_score',
@@ -96,9 +96,11 @@ const EcologyHeatAnalytics = ({
   selectedFeature,
   selectedSeries = [],
   comparisonFeature,
-  comparisonSeries = []
+  comparisonSeries = [],
+  availableYears = DEFAULT_YEARS
 }) => {
   const features = currentData?.features || []
+  const years = availableYears.length ? availableYears : DEFAULT_YEARS
   const activeMetric = ECOLOGY_METRICS.find((metric) => metric.id === ecologyMetric) || ECOLOGY_METRICS[0]
 
   const summary = useMemo(() => {
@@ -181,13 +183,13 @@ const EcologyHeatAnalytics = ({
         <input
           type="range"
           min={0}
-          max={YEARS.length - 1}
+          max={years.length - 1}
           step={1}
-          value={Math.max(0, YEARS.indexOf(ecologyYear))}
-          onChange={(event) => onEcologyYearChange?.(YEARS[Number(event.target.value)])}
+          value={Math.max(0, years.indexOf(ecologyYear))}
+          onChange={(event) => onEcologyYearChange?.(years[Number(event.target.value)])}
         />
         <div className="eco-slider-labels">
-          {YEARS.map((year) => (
+          {years.map((year) => (
             <span key={year} className={year === ecologyYear ? 'active' : ''}>{year}</span>
           ))}
         </div>

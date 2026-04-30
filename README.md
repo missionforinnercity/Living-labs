@@ -204,9 +204,9 @@ That works for static assets, but API-backed explorer panels will fail or fall b
 - Lighting:
   - municipal fixtures, interventions, and road-segment KPI layers in `data/lighting/` and `data/processed/lighting/`
 - Environment:
-  - tree canopy, ecology time series, parks, and air-quality or greenery-access API outputs
-- Temperature:
-  - annual surface temperature time series in `data/surfaceTemp/`
+  - tree canopy, ecology time series, parks, and greenery-access API outputs
+- Climate:
+  - heat streets and air-quality API outputs from the database, including `climate.heat_streets`
 - Traffic:
   - traffic analysis layers in `data/Traffic/`
 

@@ -39,6 +39,7 @@ const BusinessAnalytics = lazy(() => import('./BusinessAnalytics'))
 const WalkabilityAnalytics = lazy(() => import('./WalkabilityAnalytics'))
 const LightingAnalytics = lazy(() => import('./LightingAnalytics'))
 const TemperatureAnalytics = lazy(() => import('./TemperatureAnalytics'))
+const ClimateDatasetAnalytics = lazy(() => import('./ClimateDatasetAnalytics'))
 const GreeneryAnalytics = lazy(() => import('./GreeneryAnalytics'))
 const EnvironmentAnalytics = lazy(() => import('./EnvironmentAnalytics'))
 const EcologyHeatAnalytics = lazy(() => import('./EcologyHeatAnalytics'))
@@ -130,7 +131,10 @@ const LAYER_CATEGORIES = [
   { id: 'municipalLights', label: 'Municipal Street Lights', dashboard: 'lighting', dataKey: 'streetLights' },
   { id: 'missionInterventions', label: 'Mission Interventions', dashboard: 'lighting', dataKey: 'missionInterventions' },
   // Climate layers
-  { id: 'surfaceTemperature', label: 'Surface Temperature', dashboard: 'climate', dataKey: 'temperatureSegments' },
+  { id: 'heatStreets', label: 'Heat Streets', dashboard: 'climate', dataKey: 'heatStreets' },
+  { id: 'heatGrid', label: 'Heat Grid', dashboard: 'climate', dataKey: 'heatGrid' },
+  { id: 'climateShade', label: 'Shade', dashboard: 'climate', dataKey: 'climateShade' },
+  { id: 'estimatedWind', label: 'Est. Wind', dashboard: 'climate', dataKey: 'estimatedWind' },
   { id: 'urbanHeatConcrete', label: 'Heat Islands & Cool Islands', dashboard: 'climate', dataKey: 'ecologyHeat' },
   { id: 'airQuality',   label: 'Air Quality',  dashboard: 'climate', dataKey: 'airQualityVoronoi' },
   // Environment layers
@@ -146,7 +150,10 @@ const getExplorerUrlState = () => {
   const params = new URLSearchParams(window.location.search)
   const dashboardModeParam = params.get('explorerMode')
   const requestedDashboardMode = dashboardModeParam === 'temperature' ? 'climate' : dashboardModeParam
-  const requestedActiveCategory = params.get('explorerCategory')
+  const requestedActiveCategoryParam = params.get('explorerCategory')
+  const requestedActiveCategory = requestedActiveCategoryParam === 'surfaceTemperature'
+    ? 'heatStreets'
+    : requestedActiveCategoryParam
   const activeCategoryConfig = LAYER_CATEGORIES.find((category) => category.id === requestedActiveCategory)
   const dashboardMode = activeCategoryConfig?.dashboard || requestedDashboardMode
 
@@ -203,7 +210,7 @@ const UnifiedDataExplorer = () => {
   // Lighting dashboard state
   const [lightIntensityRaster, setLightIntensityRaster] = useState(null)
   
-  // Temperature dashboard state - using surfaceTemp dataset
+  // Climate heat street state
   const [selectedSegment, setSelectedSegment] = useState(null)
   
   // Shade dashboard state - keeping for greenery
@@ -247,8 +254,11 @@ const UnifiedDataExplorer = () => {
     lightingSegments: false,
     streetLights: false,
     missionInterventions: false,
-    // Temperature layers
-    temperatureSegments: false,
+    // Climate layers
+    heatStreets: false,
+    heatGrid: false,
+    climateShade: false,
+    estimatedWind: false,
     // Environment / greenery layers
     airQualityVoronoi: false,
     ecologyHeat: false,
@@ -308,7 +318,9 @@ const UnifiedDataExplorer = () => {
 
   const {
     temperatureData,
+    heatGridData,
     shadeData,
+    estimatedWindData,
     greeneryAndSkyview,
     treeCanopyData,
     parksData,
@@ -549,6 +561,15 @@ const UnifiedDataExplorer = () => {
   }, [greeneryPanelMinimized, selectedGreeneryStreetKeys])
 
   const ecologyCurrentData = useMemo(() => ecologyHeatByYear[ecologyYear] || null, [ecologyHeatByYear, ecologyYear])
+  const ecologyAvailableYears = useMemo(
+    () => Object.keys(ecologyHeatByYear).map(Number).filter(Number.isFinite).sort((a, b) => a - b),
+    [ecologyHeatByYear]
+  )
+
+  useEffect(() => {
+    if (!ecologyAvailableYears.length || ecologyHeatByYear[ecologyYear]) return
+    setEcologyYear(ecologyAvailableYears[ecologyAvailableYears.length - 1])
+  }, [ecologyAvailableYears, ecologyHeatByYear, ecologyYear])
 
   const ecologyFeatureSeriesById = useMemo(() => {
     const series = {}
@@ -1416,6 +1437,7 @@ const UnifiedDataExplorer = () => {
                     selectedSeries={selectedEcologyFeatureSeries}
                     comparisonFeature={compareEcologyFeature}
                     comparisonSeries={compareEcologyFeatureSeries}
+                    availableYears={ecologyAvailableYears}
                   />
                 ) : activeCategory === 'airQuality' ? (
                   <EnvironmentAnalytics
@@ -1425,6 +1447,38 @@ const UnifiedDataExplorer = () => {
                     onEnvIndexChange={setEnvIndex}
                     envDate={envDate}
                     onEnvDateChange={setEnvDate}
+                  />
+                ) : activeCategory === 'heatGrid' ? (
+                  <ClimateDatasetAnalytics
+                    title="Heat Grid"
+                    source="climate.heat_grid"
+                    data={heatGridData}
+                    metrics={[
+                      { key: 'heat_model_lst_c', label: 'Avg Heat Model LST', suffix: '°C' },
+                      { key: 'thermal_percentile', label: 'Avg Thermal Rank', suffix: '%' },
+                      { key: 'pedestrian_heat_score', label: 'Avg Pedestrian Heat' }
+                    ]}
+                  />
+                ) : activeCategory === 'climateShade' ? (
+                  <ClimateDatasetAnalytics
+                    title="Shade"
+                    source="climate.shade"
+                    data={shadeData}
+                    subtitle={`DB shade polygons for ${timeOfDay}`}
+                    metrics={[
+                      { key: 'area_m2', label: 'Avg Patch Area', suffix: ' m²' }
+                    ]}
+                  />
+                ) : activeCategory === 'estimatedWind' ? (
+                  <ClimateDatasetAnalytics
+                    title="Estimated Wind"
+                    source="climate.est_wind"
+                    data={estimatedWindData}
+                    metrics={[
+                      { key: 'estimated_speed_kmh', label: 'Avg Speed', suffix: ' km/h' },
+                      { key: 'wind_speed_factor', label: 'Avg Wind Factor' },
+                      { key: 'frequency_weight', label: 'Avg Frequency Weight' }
+                    ]}
                   />
                 ) : (
                   <TemperatureAnalytics
@@ -1520,7 +1574,9 @@ const UnifiedDataExplorer = () => {
               missionInterventions={missionInterventions}
               lightingThresholds={lightingThresholds}
               temperatureData={temperatureData}
+              heatGridData={heatGridData}
               shadeData={shadeData}
+              estimatedWindData={estimatedWindData}
               season={season}
               greeneryAndSkyview={greeneryAndSkyview}
               treeCanopyData={treeCanopyData}
@@ -1936,96 +1992,38 @@ const UnifiedDataExplorer = () => {
           )}
 
           {/* Bottom panel for temperature seasonal charts */}
-          {dashboardMode === 'climate' && activeCategory === 'surfaceTemperature' && selectedSegment && (
+          {dashboardMode === 'climate' && activeCategory === 'heatStreets' && selectedSegment && (
             <div className="bottom-panel">
               <div className="panel-header">
-                <h3>{selectedSegment.street_name || 'Street Segment'} - Temperature Across Seasons</h3>
+                <h3>{selectedSegment.street_name || 'Street Segment'} - Heat Street Detail</h3>
                 <button onClick={() => setSelectedSegment(null)} className="close-btn">✕</button>
               </div>
               <div className="charts-container">
-                <div id="seasonal-charts-container">
-                  {(() => {
-                    return ['summer', 'autumn', 'winter', 'spring'].map(seasonKey => {
-                      let seasonData = selectedSegment[`${seasonKey}_temperatures`]
-                      
-                      // Parse JSON string if needed
-                      if (typeof seasonData === 'string') {
-                        try {
-                          seasonData = JSON.parse(seasonData)
-                        } catch (e) {
-                          console.error(`Failed to parse ${seasonKey} data:`, e)
-                          return null
-                        }
-                      }
-                      
-                      if (!seasonData || !Array.isArray(seasonData) || seasonData.length === 0) {
-                        return null
-                      }
-                      
-                      const chartData = seasonData
-                        .filter(r => r && r.temperature_mean !== null)
-                        .map(reading => ({
-                          date: reading.date,
-                          temperature: reading.temperature_mean,
-                          displayDate: new Date(reading.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                        }))
-                      
-                      const seasonColors = {
-                        summer: '#ef4444',
-                        autumn: '#f59e0b',
-                        winter: '#3b82f6',
-                        spring: '#10b981'
-                      }
-                      
-                      return (
-                        <div key={seasonKey} style={{ display: 'flex', flexDirection: 'column' }}>
-                          <h4 style={{ 
-                            color: seasonColors[seasonKey], 
-                            textTransform: 'capitalize', 
-                            margin: '0 0 0.5rem 0',
-                            fontSize: '0.875rem',
-                            fontWeight: 600
-                          }}>
-                            {seasonKey} ({chartData.length} readings)
-                          </h4>
-                          <ResponsiveContainer width="100%" height={200}>
-                            <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#2a3f2d" />
-                              <XAxis 
-                                dataKey="displayDate" 
-                                stroke="#a5d6a7" 
-                                tick={{ fontSize: 9 }}
-                                interval="preserveStartEnd"
-                              />
-                              <YAxis 
-                                stroke="#a5d6a7" 
-                                tick={{ fontSize: 10 }}
-                                domain={['dataMin - 2', 'dataMax + 2']}
-                              tickFormatter={(value) => `${value.toFixed(0)}°C`}
-                              />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: '#1a1f1d', 
-                                  border: '1px solid #2a3f2d',
-                                  borderRadius: '4px',
-                                  fontSize: '11px'
-                                }}
-                                labelStyle={{ color: '#e8f5e9' }}
-                              />
-                              <Line 
-                                type="monotone" 
-                                dataKey="temperature" 
-                                stroke={seasonColors[seasonKey]} 
-                                dot={{ r: 2 }}
-                                strokeWidth={2}
-                                connectNulls
-                              />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
-                      )
-                    })
-                  })()}
+                <div className="env-detail-summary-row ecology-summary-row">
+                  <div className="env-detail-stat">
+                    <span className="env-detail-stat-label">Hot street score</span>
+                    <strong>{Number(selectedSegment.hot_street_score || 0).toFixed(1)}</strong>
+                  </div>
+                  <div className="env-detail-stat">
+                    <span className="env-detail-stat-label">Heat model LST</span>
+                    <strong>{Number(selectedSegment.mean_heat_model_lst_c || 0).toFixed(1)}°C</strong>
+                  </div>
+                  <div className="env-detail-stat">
+                    <span className="env-detail-stat-label">Pedestrian heat</span>
+                    <strong>{Number(selectedSegment.mean_pedestrian_heat_score || 0).toFixed(1)}</strong>
+                  </div>
+                  <div className="env-detail-stat">
+                    <span className="env-detail-stat-label">Pedestrian rank</span>
+                    <strong>
+                      {selectedSegment.pedestrian_heat_percentile != null
+                        ? `Top ${Math.max(1, Math.round(100 - Number(selectedSegment.pedestrian_heat_percentile)))}%`
+                        : 'Unranked'}
+                    </strong>
+                  </div>
+                  <div className="env-detail-stat">
+                    <span className="env-detail-stat-label">Class</span>
+                    <strong>{selectedSegment.hot_street_class || 'Unclassified'}</strong>
+                  </div>
                 </div>
               </div>
             </div>

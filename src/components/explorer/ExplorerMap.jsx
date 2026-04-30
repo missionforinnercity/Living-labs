@@ -310,7 +310,9 @@ const ExplorerMap = ({
   missionInterventions,
   lightingThresholds,
   temperatureData,
+  heatGridData,
   shadeData,
+  estimatedWindData,
   season,
   greeneryAndSkyview,
   treeCanopyData,
@@ -852,8 +854,8 @@ const ExplorerMap = ({
     const feature = walkabilityFeature || event.features?.[0]
     console.log('Map clicked:', { feature, source: feature?.source, layerId: feature?.layer?.id })
     if (feature) {
-      // For climate dashboard, set selected segment for bottom panel
-      if (dashboardMode === 'climate' && feature.source === 'temperature-segments') {
+      // For climate dashboard, set selected heat street for bottom panel
+      if (dashboardMode === 'climate' && feature.source === 'heat-streets') {
         onSegmentSelect?.(feature.properties)
       }
       
@@ -1124,7 +1126,10 @@ const ExplorerMap = ({
           'lighting-segments-layer',
           'mission-interventions-layer',
           'municipal-lights-layer',
-          'temperature-segments-layer',
+          'heat-streets-layer',
+          'climate-heat-grid-fill',
+          'climate-shade-fill',
+          'climate-wind-fill',
           'greenery-access-layer',
           'greenery-destination-layer',
           'ecology-heat-volume',
@@ -2142,34 +2147,154 @@ const ExplorerMap = ({
               </Source>
             )}
         
-        {/* Temperature Layers */}
-        {/* Surface Temperature Layer */}
-        {shouldRenderCategory('surfaceTemperature') && temperatureData && (
+        {/* Heat Streets Layer */}
+        {shouldRenderCategory('heatStreets') && temperatureData && (
           <Source
-            id="temperature-segments"
+            id="heat-streets"
             type="geojson"
             data={temperatureData}
           >
             <Layer
-              id="temperature-segments-layer"
+              id="heat-streets-layer"
               type="line"
               paint={{
                 'line-color': [
                   'case',
-                  ['has', 'temp_percentile'],
+                  ['==', ['get', 'pedestrian_heat_band'], 'top_10'],
+                  '#991b1b',
+                  ['==', ['get', 'pedestrian_heat_band'], 'top_20'],
+                  '#ef4444',
+                  ['==', ['get', 'pedestrian_heat_band'], 'bottom_20'],
+                  '#2563eb',
+                  ['has', 'pedestrian_heat_percentile'],
                   [
                     'step',
-                    ['get', 'temp_percentile'],
-                    '#3b82f6',  // Coolest 20% (0-20%)
-                    20, '#10b981',  // Cool (20-40%)
-                    40, '#fbbf24',  // Average (40-60%)
-                    60, '#f59e0b',  // Warm (60-80%)
-                    80, '#ef4444'   // Hottest 20% (80-100%)
+                    ['get', 'pedestrian_heat_percentile'],
+                    '#2563eb',
+                    20, '#22c55e',
+                    40, '#facc15',
+                    60, '#f97316',
+                    80, '#ef4444',
+                    90, '#991b1b'
                   ],
                   '#4b5563'
                 ],
-                'line-width': 5,
+                'line-width': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'pedestrian_heat_percentile'], 0],
+                  0, 3,
+                  80, 5.5,
+                  90, 7.5
+                ],
                 'line-opacity': 0.9
+              }}
+            />
+          </Source>
+        )}
+
+        {shouldRenderCategory('heatGrid') && heatGridData && (
+          <Source
+            id="climate-heat-grid"
+            type="geojson"
+            data={heatGridData}
+            promoteId="feature_id"
+          >
+            <Layer
+              id="climate-heat-grid-fill"
+              type="fill"
+              paint={{
+                'fill-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'thermal_percentile'], ['get', 'urban_heat_score'], 0],
+                  0, '#e0f2fe',
+                  25, '#bae6fd',
+                  50, '#fde68a',
+                  75, '#fb923c',
+                  90, '#dc2626',
+                  100, '#7f1d1d'
+                ],
+                'fill-opacity': 0.62
+              }}
+            />
+            <Layer
+              id="climate-heat-grid-outline"
+              type="line"
+              paint={{
+                'line-color': '#7c2d12',
+                'line-width': 0.35,
+                'line-opacity': 0.35
+              }}
+            />
+          </Source>
+        )}
+
+        {shouldRenderCategory('climateShade') && shadeData && (
+          <Source
+            id="climate-shade"
+            type="geojson"
+            data={shadeData}
+            promoteId="ogc_fid"
+          >
+            <Layer
+              id="climate-shade-fill"
+              type="fill"
+              paint={{
+                'fill-color': '#0f766e',
+                'fill-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'area_m2'], 0],
+                  0, 0.2,
+                  80, 0.46,
+                  300, 0.72
+                ]
+              }}
+            />
+            <Layer
+              id="climate-shade-outline"
+              type="line"
+              paint={{
+                'line-color': '#99f6e4',
+                'line-width': 0.5,
+                'line-opacity': 0.35
+              }}
+            />
+          </Source>
+        )}
+
+        {shouldRenderCategory('estimatedWind') && estimatedWindData && (
+          <Source
+            id="climate-wind"
+            type="geojson"
+            data={estimatedWindData}
+            promoteId="ogc_fid"
+          >
+            <Layer
+              id="climate-wind-fill"
+              type="fill"
+              paint={{
+                'fill-color': [
+                  'case',
+                  ['==', ['get', 'ventilation_class'], 'Wind Tunnel'],
+                  '#38bdf8',
+                  ['==', ['get', 'ventilation_class'], 'Sheltered'],
+                  '#84cc16',
+                  ['==', ['get', 'ventilation_class'], 'Stagnant'],
+                  '#f97316',
+                  '#64748b'
+                ],
+                'fill-opacity': 0.52
+              }}
+            />
+            <Layer
+              id="climate-wind-outline"
+              type="line"
+              paint={{
+                'line-color': '#e0f2fe',
+                'line-width': 0.25,
+                'line-opacity': 0.25
               }}
             />
           </Source>
@@ -3200,102 +3325,59 @@ const ExplorerMap = ({
                 </>
               )}
               
-              {dashboardMode === 'climate' && popupInfo.feature.source === 'temperature-segments' && (() => {
+              {dashboardMode === 'climate' && popupInfo.feature.source === 'heat-streets' && (() => {
                 const props = popupInfo.feature.properties
                 const streetName = props.street_name || 'Street Segment'
-                
-                // Prepare chart data from all seasons
-                const chartData = []
-                const seasons = ['summer', 'autumn', 'winter', 'spring']
-                const seasonColors = {
-                  summer: '#ef4444',
-                  autumn: '#f59e0b',
-                  winter: '#3b82f6',
-                  spring: '#10b981'
-                }
-                
-                seasons.forEach(s => {
-                  const seasonData = props[`${s}_temperatures`]
-                  if (seasonData && Array.isArray(seasonData)) {
-                    seasonData.forEach(reading => {
-                      if (reading && reading.temperature_mean !== null) {
-                        chartData.push({
-                          date: reading.date,
-                          timestamp: reading.timestamp,
-                          season: s,
-                          temperature: reading.temperature_mean,
-                          displayDate: new Date(reading.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                        })
-                      }
-                    })
-                  }
-                })
-                
-                // Sort by timestamp
-                chartData.sort((a, b) => a.timestamp - b.timestamp)
-                
-                // Group by season for chart lines
-                const seasonGroups = {}
-                seasons.forEach(s => {
-                  seasonGroups[s] = chartData.filter(d => d.season === s)
-                })
-                
                 return (
                   <>
                     <h3>{streetName}</h3>
-                    {chartData.length > 0 && (
-                      <>
-                        <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginTop: '1rem' }}>
-                          {seasons.map(s => {
-                            const data = seasonGroups[s]
-                            if (data.length === 0) return null
-                            return (
-                              <div key={s} style={{ width: '100%', height: '200px' }}>
-                                <h4 style={{ margin: '0 0 0.5rem 0', color: seasonColors[s], fontSize: '0.875rem', textTransform: 'capitalize' }}>
-                                  {s}
-                                </h4>
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <LineChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#2a3f2d" />
-                                    <XAxis 
-                                      dataKey="displayDate" 
-                                      stroke="#a5d6a7" 
-                                      tick={{ fontSize: 9 }}
-                                      interval="preserveStartEnd"
-                                    />
-                                    <YAxis 
-                                      stroke="#a5d6a7" 
-                                      tick={{ fontSize: 9 }}
-                                      domain={['dataMin - 2', 'dataMax + 2']}
-                                    />
-                                    <Tooltip 
-                                      contentStyle={{ 
-                                        backgroundColor: '#1a1f1d', 
-                                        border: '1px solid #2a3f2d',
-                                        borderRadius: '4px',
-                                        fontSize: '11px'
-                                      }}
-                                      labelStyle={{ color: '#e8f5e9' }}
-                                    />
-                                    <Line 
-                                      type="monotone" 
-                                      dataKey="temperature" 
-                                      stroke={seasonColors[s]} 
-                                      dot={{ r: 2 }}
-                                      strokeWidth={2}
-                                      connectNulls
-                                    />
-                                  </LineChart>
-                                </ResponsiveContainer>
-                              </div>
-                            )
-                          })}
-                        </div>
-                        <p style={{ fontSize: '0.75rem', marginTop: '0.5rem', color: '#a5d6a7' }}>
-                          <strong>Data points:</strong> {chartData.length} readings from Landsat satellites
-                        </p>
-                      </>
+                    <p><strong>Hot Street Score:</strong> {Number(props.hot_street_score || 0).toFixed(1)}</p>
+                    <p><strong>Class:</strong> {props.hot_street_class || 'Unclassified'}</p>
+                    <p><strong>Heat Model LST:</strong> {Number(props.mean_heat_model_lst_c || 0).toFixed(1)}°C</p>
+                    <p><strong>Pedestrian Heat Score:</strong> {Number(props.mean_pedestrian_heat_score || 0).toFixed(1)}</p>
+                    {props.pedestrian_heat_percentile != null && (
+                      <p><strong>Pedestrian Rank:</strong> Top {Math.max(1, Math.round(100 - Number(props.pedestrian_heat_percentile)))}% hottest</p>
                     )}
+                    <p><strong>Canopy:</strong> {Number(props.mean_effective_canopy_pct || 0).toFixed(1)}%</p>
+                  </>
+                )
+              })()}
+
+              {dashboardMode === 'climate' && popupInfo.feature.source === 'climate-heat-grid' && (() => {
+                const props = popupInfo.feature.properties
+                return (
+                  <>
+                    <h3>Heat Grid #{props.feature_id || props.ogc_fid}</h3>
+                    <p><strong>Thermal Rank:</strong> {Number(props.thermal_percentile || 0).toFixed(1)}%</p>
+                    <p><strong>Heat Model LST:</strong> {Number(props.heat_model_lst_c || props.mean_lst_c || 0).toFixed(1)}°C</p>
+                    <p><strong>Pedestrian Heat:</strong> {Number(props.pedestrian_heat_score || 0).toFixed(1)}</p>
+                    <p><strong>Land Type:</strong> {props.land_type || props.spectral_land_type || 'Unknown'}</p>
+                    <p><strong>Shade Deficit:</strong> {Number(props.shade_deficit_score || 0).toFixed(1)}</p>
+                  </>
+                )
+              })()}
+
+              {dashboardMode === 'climate' && popupInfo.feature.source === 'climate-shade' && (() => {
+                const props = popupInfo.feature.properties
+                return (
+                  <>
+                    <h3>Shade Patch</h3>
+                    <p><strong>Hour:</strong> {props.hour || '—'}</p>
+                    <p><strong>Area:</strong> {Number(props.area_m2 || 0).toFixed(1)} m²</p>
+                    <p><strong>Source:</strong> climate.shade</p>
+                  </>
+                )
+              })()}
+
+              {dashboardMode === 'climate' && popupInfo.feature.source === 'climate-wind' && (() => {
+                const props = popupInfo.feature.properties
+                return (
+                  <>
+                    <h3>{props.ventilation_class || 'Estimated Wind'}</h3>
+                    <p><strong>Estimated Speed:</strong> {Number(props.estimated_speed_kmh || 0).toFixed(1)} km/h</p>
+                    <p><strong>Direction:</strong> {props.direction || '—'}</p>
+                    <p><strong>Wind Factor:</strong> {Number(props.wind_speed_factor || 0).toFixed(2)}</p>
+                    <p><strong>Reference Speed:</strong> {Number(props.reference_speed_kmh || 0).toFixed(1)} km/h</p>
                   </>
                 )
               })()}

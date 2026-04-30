@@ -1007,7 +1007,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
               lightingDataset.roadSegments,
               shadeDataset
             )
-            usedLayers = ['Shade Coverage', 'Surface Temperature', 'Vegetation Index', 'POI with Outdoor Seating']
+            usedLayers = ['Shade Coverage', 'Heat Streets', 'Vegetation Index', 'POI with Outdoor Seating']
             break
 
           case 'cool-summer-route':
@@ -1015,7 +1015,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
               lightingDataset.roadSegments,
               shadeDataset
             )
-            usedLayers = ['Shade Coverage', 'Surface Temperature', 'Vegetation Index', 'Walkability Network']
+            usedLayers = ['Shade Coverage', 'Heat Streets', 'Vegetation Index', 'Walkability Network']
             break
 
           case 'retail-vibrancy':
@@ -1546,7 +1546,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
               onChange={(e) => setCurrentShadeMetric(e.target.value)}
             >
               <option value="shade_coverage_pct">Shade Coverage %</option>
-              <option value="surface_temp_celsius">Surface Temperature</option>
+              <option value="surface_temp_celsius">Street Heat</option>
               <option value="vegetation_index">Vegetation Index</option>
               <option value="comfort_level">Comfort Level</option>
             </select>
@@ -1618,7 +1618,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
             {selectedTour === 'outdoor-dining' && (
               <>
                 <li>Shade Coverage (619 polygons)</li>
-                <li>Surface Temperature</li>
+                <li>Heat Streets</li>
                 <li>Vegetation Index</li>
                 <li>POI with Outdoor Seating (4,139 points)</li>
               </>
@@ -1626,7 +1626,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
             {selectedTour === 'cool-summer-route' && (
               <>
                 <li>Shade Coverage (summer 2PM)</li>
-                <li>Surface Temperature</li>
+                <li>Heat Streets</li>
                 <li>Vegetation Index for greenery access</li>
                 <li>Walkability Network (691 segments)</li>
               </>

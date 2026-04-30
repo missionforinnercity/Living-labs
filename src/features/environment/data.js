@@ -9,63 +9,6 @@ const SEASON_DATES = {
   spring: '2025-09-22'
 }
 
-function enrichTemperatureData(data) {
-  if (!data?.features?.length) return data
-
-  const allMaxTemps = []
-
-  const featuresWithSummary = data.features.map((feature) => {
-    const props = feature.properties || {}
-    const processedProps = { ...props }
-    const allReadings = []
-
-    ;['summer', 'autumn', 'winter', 'spring'].forEach((season) => {
-      const seasonData = props[`${season}_temperatures`]
-      if (!Array.isArray(seasonData)) return
-
-      seasonData.forEach((reading) => {
-        if (reading && reading.temperature_mean !== null) {
-          allReadings.push(reading.temperature_mean)
-        }
-      })
-    })
-
-    if (allReadings.length > 0) {
-      processedProps.overall_max_temp = Math.max(...allReadings)
-      processedProps.overall_min_temp = Math.min(...allReadings)
-      processedProps.overall_avg_temp = allReadings.reduce((sum, value) => sum + value, 0) / allReadings.length
-      allMaxTemps.push(processedProps.overall_max_temp)
-    }
-
-    return {
-      ...feature,
-      properties: processedProps
-    }
-  })
-
-  if (!allMaxTemps.length) {
-    return { ...data, features: featuresWithSummary }
-  }
-
-  const minTemp = Math.min(...allMaxTemps)
-  const maxTemp = Math.max(...allMaxTemps)
-
-  return {
-    ...data,
-    features: featuresWithSummary.map((feature) => ({
-      ...feature,
-      properties: feature.properties.overall_max_temp === undefined
-        ? feature.properties
-        : {
-            ...feature.properties,
-            temp_percentile: maxTemp === minTemp
-              ? 50
-              : ((feature.properties.overall_max_temp - minTemp) / (maxTemp - minTemp)) * 100
-          }
-    }))
-  }
-}
-
 function enrichGreenDestinationsData(destinationsData) {
   if (!destinationsData?.features?.length) return destinationsData
 
@@ -131,44 +74,113 @@ function enrichGreeneryAccessData(greeneryData) {
   }
 }
 
+function percentileRank(value, sortedValues) {
+  if (!Number.isFinite(value) || !sortedValues.length) return null
+  if (sortedValues.length === 1) return 100
+
+  let index = sortedValues.findIndex((entry) => entry >= value)
+  if (index < 0) index = sortedValues.length - 1
+  return (index / (sortedValues.length - 1)) * 100
+}
+
+function heatStreetPercentileBand(percentile) {
+  if (!Number.isFinite(percentile)) return null
+  if (percentile >= 90) return 'top_10'
+  if (percentile >= 80) return 'top_20'
+  if (percentile <= 20) return 'bottom_20'
+  return 'middle'
+}
+
+function enrichHeatStreetData(heatStreetData) {
+  if (!heatStreetData?.features?.length) return heatStreetData
+
+  const pedestrianScores = heatStreetData.features
+    .map((feature) => Number(feature?.properties?.mean_pedestrian_heat_score))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b)
+
+  if (!pedestrianScores.length) return heatStreetData
+
+  return {
+    ...heatStreetData,
+    features: heatStreetData.features.map((feature) => {
+      const pedestrianHeatScore = Number(feature?.properties?.mean_pedestrian_heat_score)
+      const percentile = percentileRank(pedestrianHeatScore, pedestrianScores)
+      const band = heatStreetPercentileBand(percentile)
+
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          pedestrian_heat_percentile: percentile != null ? Number(percentile.toFixed(2)) : null,
+          pedestrian_heat_band: band
+        }
+      }
+    }),
+    metadata: {
+      ...(heatStreetData.metadata || {}),
+      heatStreetRankMetric: 'mean_pedestrian_heat_score',
+      heatStreetRankBands: {
+        top_10: 'Hottest 10% by pedestrian heat score',
+        top_20: 'Hottest 20% by pedestrian heat score',
+        middle: 'Middle 60% by pedestrian heat score',
+        bottom_20: 'Coolest 20% by pedestrian heat score'
+      }
+    }
+  }
+}
+
+function groupHeatZonesByYear(heatZonesData) {
+  if (!heatZonesData?.features?.length) return {}
+
+  return heatZonesData.features.reduce((byYear, feature) => {
+    const year = Number(feature?.properties?.analysis_year) || new Date().getFullYear()
+    if (!byYear[year]) {
+      byYear[year] = {
+        type: 'FeatureCollection',
+        features: [],
+        metadata: {
+          ...(heatZonesData.metadata || {}),
+          source: heatZonesData.metadata?.source || 'climate.heat_zones',
+          analysis_year: year
+        }
+      }
+    }
+    byYear[year].features.push(feature)
+    return byYear
+  }, {})
+}
+
 export async function loadExplorerShadeData(season, timeOfDay) {
-  const date = SEASON_DATES[season] || SEASON_DATES.summer
-  return fetchJson(`/data/processed/shade/${season}/${date}_${timeOfDay}.geojson`, 'Shade data load failed')
+  return fetchJson(`/api/climate/shade?hour=${encodeURIComponent(timeOfDay || '1400')}`, 'Climate shade data load failed')
 }
 
 export async function loadExplorerGreeneryData() {
-  const [greeneryAndSkyview, treeCanopyData, parksData, ...ecologyYears] = await Promise.all([
+  const [greeneryAndSkyview, treeCanopyData, parksData, heatZonesData] = await Promise.all([
     fetchJson('/api/environment/greenery-access', 'Greenery access load failed'),
     fetchJson('/data/greenery/tree_canopy.geojson', 'Tree canopy load failed'),
     fetchJson('/api/environment/green-destinations', 'Green destinations load failed'),
-    fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2020.geojson', 'Ecology 2020 load failed'),
-    fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2021.geojson', 'Ecology 2021 load failed'),
-    fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2022.geojson', 'Ecology 2022 load failed'),
-    fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2023.geojson', 'Ecology 2023 load failed'),
-    fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2024.geojson', 'Ecology 2024 load failed'),
-    fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2025.geojson', 'Ecology 2025 load failed'),
-    fetchJson('/data/greenery/ecology_analysis/cpt_cbd_ecology_2026.geojson', 'Ecology 2026 load failed')
+    fetchJson('/api/climate/heat-zones', 'Heat zones load failed')
   ])
 
   return {
     greeneryAndSkyview: enrichGreeneryAccessData(greeneryAndSkyview),
     treeCanopyData: transformGeoJSON(treeCanopyData, 'EPSG:3857', 'EPSG:4326'),
     parksData: enrichGreenDestinationsData(parksData),
-    ecologyHeatByYear: {
-      2020: ecologyYears[0],
-      2021: ecologyYears[1],
-      2022: ecologyYears[2],
-      2023: ecologyYears[3],
-      2024: ecologyYears[4],
-      2025: ecologyYears[5],
-      2026: ecologyYears[6]
-    }
+    ecologyHeatByYear: groupHeatZonesByYear(heatZonesData)
   }
 }
 
 export async function loadExplorerTemperatureData() {
-  const data = await fetchJson('/data/surfaceTemp/annual_surface_temperature_timeseries_20260211_1332.geojson', 'Temperature data load failed')
-  return enrichTemperatureData(data)
+  return enrichHeatStreetData(await fetchJson('/api/climate/heat-streets', 'Heat streets data load failed'))
+}
+
+export async function loadExplorerHeatGridData() {
+  return fetchJson('/api/climate/heat-grid', 'Climate heat grid load failed')
+}
+
+export async function loadExplorerEstimatedWindData() {
+  return fetchJson('/api/climate/est-wind', 'Estimated wind data load failed')
 }
 
 export async function loadExplorerAirQualityData() {
