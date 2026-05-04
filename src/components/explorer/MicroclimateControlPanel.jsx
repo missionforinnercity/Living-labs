@@ -9,24 +9,13 @@ const CLIMATE_LAYERS = [
   { id: 'airQuality', label: 'Air Quality', detail: 'Current AQ layer' }
 ]
 
-const MONTHS = [
-  ['1', 'January'],
-  ['2', 'February'],
-  ['3', 'March'],
-  ['4', 'April'],
-  ['5', 'May'],
-  ['6', 'June'],
-  ['7', 'July'],
-  ['8', 'August'],
-  ['9', 'September'],
-  ['10', 'October'],
-  ['11', 'November'],
-  ['12', 'December']
-]
+const SHADE_TIME_MIN = 800
+const SHADE_TIME_MAX = 1800
+const SHADE_TIME_DEFAULT = 1400
+const SHADE_TIME_MARKS = ['08:00', '11:00', '14:00', '18:00']
 
 const WIND_DIRECTIONS = [
   ['se', 'South easterly'],
-  ['cape_doctor', 'Cape Doctor'],
   ['n', 'Northerly'],
   ['ne', 'North easterly'],
   ['e', 'Easterly'],
@@ -41,7 +30,6 @@ const WIND_BEARINGS = {
   ne: 45,
   e: 90,
   se: 135,
-  cape_doctor: 150,
   s: 180,
   sw: 225,
   w: 270,
@@ -67,6 +55,12 @@ const avg = (values) => values.length ? values.reduce((sum, value) => sum + valu
 const formatValue = (value, suffix = '', digits = 1) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? `${parsed.toFixed(digits)}${suffix}` : '—'
+}
+
+const clampShadeTime = (value) => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return SHADE_TIME_DEFAULT
+  return Math.max(SHADE_TIME_MIN, Math.min(SHADE_TIME_MAX, parsed))
 }
 
 const metricValue = (feature, keys) => {
@@ -101,8 +95,6 @@ const MicroclimateControlPanel = ({
   temperatureData,
   ecologyMetric,
   onEcologyMetricChange,
-  shadeMonth,
-  onShadeMonthChange,
   timeOfDay,
   onTimeOfDayChange,
   windDirection,
@@ -149,16 +141,15 @@ const MicroclimateControlPanel = ({
     }
   }, [shadeData])
 
+  const shadeTimeValue = clampShadeTime(timeOfDay)
+  const shadeTimeLabel = String(shadeTimeValue).padStart(4, '0').replace(/(\d{2})(\d{2})/, '$1:$2')
+
   const windSummary = useMemo(() => {
     const features = estimatedWindData?.features || []
-    const speedValues = features.map((feature) => numberOrNull(feature.properties?.estimated_speed_kmh)).filter(Number.isFinite)
     return {
-      count: features.length,
-      avgSpeed: avg(speedValues)
+      count: features.length
     }
   }, [estimatedWindData])
-
-  const activeMonthName = MONTHS.find(([value]) => value === String(shadeMonth))?.[1] || 'All months'
 
   return (
     <aside className="microclimate-panel">
@@ -241,20 +232,19 @@ const MicroclimateControlPanel = ({
       <div className="microclimate-section">
         <div className="microclimate-section-head">
           <span>Shade</span>
-          <strong>{activeMonthName} · {String(timeOfDay).padStart(4, '0').replace(/(\d{2})(\d{2})/, '$1:$2')}</strong>
+          <strong>{shadeTimeLabel}</strong>
         </div>
-        <select value={shadeMonth || ''} onChange={(event) => onShadeMonthChange?.(event.target.value)}>
-          <option value="">All months</option>
-          {MONTHS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
         <input
           type="range"
-          min={600}
-          max={1900}
+          min={SHADE_TIME_MIN}
+          max={SHADE_TIME_MAX}
           step={100}
-          value={Number(timeOfDay) || 1400}
+          value={shadeTimeValue}
           onChange={(event) => onTimeOfDayChange?.(String(event.target.value).padStart(4, '0'))}
         />
+        <div className="microclimate-time-marks" aria-hidden="true">
+          {SHADE_TIME_MARKS.map((label) => <span key={label}>{label}</span>)}
+        </div>
         <div className="microclimate-control-meta">
           <span>{shadeSummary.count.toLocaleString()} shade polygons</span>
           <span>{formatValue(shadeSummary.avgArea, ' m²')} avg patch</span>
@@ -298,12 +288,12 @@ const MicroclimateControlPanel = ({
           <i />
         </div>
         <div className="microclimate-legend-labels">
-          <span>Low speed</span>
-          <span>High speed</span>
+          <span>Sheltered</span>
+          <span>Wind tunnel</span>
         </div>
         <div className="microclimate-control-meta">
           <span>{windSummary.count.toLocaleString()} wind polygons</span>
-          <span>{formatValue(windSummary.avgSpeed, ' km/h')} avg speed</span>
+          <span>{windSpeedKmh} km/h scenario</span>
         </div>
       </div>
 

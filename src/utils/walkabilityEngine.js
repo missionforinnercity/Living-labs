@@ -14,7 +14,7 @@ export const STORY_TOURS = [
     tagline: 'Where is the city cooking its residents?',
     description:
       'High surface temps with no tree cover compound into a heat tax on every journey. ' +
-      'Segments with trees OR tall buildings providing urban enclosure are excluded — ' +
+      'Segments with trees OR tall buildings providing urban enclosure are excluded ' +
       'architectural shade counts. Streets shown here have neither canopy nor building shade. ' +
       'They are a direct call to plant trees or retrofit urban shade structures.',
     filterLabel: 'Hot + unshaded segments',

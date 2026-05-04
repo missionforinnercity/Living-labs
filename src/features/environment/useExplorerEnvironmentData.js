@@ -8,7 +8,17 @@ import {
   loadExplorerTemperatureData
 } from './data'
 
-export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, season, timeOfDay, shadeMonth, windDirection, windSpeedKmh }) {
+const SHADE_TIME_MIN = 800
+const SHADE_TIME_MAX = 1800
+const SHADE_TIME_DEFAULT = 1400
+
+const clampShadeTime = (value) => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return String(SHADE_TIME_DEFAULT)
+  return String(Math.max(SHADE_TIME_MIN, Math.min(SHADE_TIME_MAX, parsed))).padStart(4, '0')
+}
+
+export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, season, timeOfDay, windDirection, windSpeedKmh }) {
   const [temperatureData, setTemperatureData] = useState(null)
   const [heatGridData, setHeatGridData] = useState(null)
   const [shadeData, setShadeData] = useState(null)
@@ -48,11 +58,10 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
   useEffect(() => {
     const loadWindExplorerState = async () => {
       try {
-        const data = await loadExplorerEstimatedWindData(windDirection, windSpeedKmh)
+        const data = await loadExplorerEstimatedWindData(windDirection)
         setEstimatedWindData(data)
-        console.log('Loaded wind scenario:', {
+        console.log('Loaded wind direction:', {
           direction: windDirection,
-          speedKmh: windSpeedKmh,
           features: data.features?.length
         })
       } catch (error) {
@@ -65,14 +74,15 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
     if (shouldLoadWind || hasLockedWindLayer) {
       loadWindExplorerState()
     }
-  }, [activeCategory, dashboardMode, lockedLayers, windDirection, windSpeedKmh])
+  }, [activeCategory, dashboardMode, lockedLayers, windDirection])
 
   useEffect(() => {
     const loadShadeExplorerState = async () => {
       try {
-        const data = await loadExplorerShadeData(season, timeOfDay, shadeMonth)
+        const shadeTime = clampShadeTime(timeOfDay)
+        const data = await loadExplorerShadeData(season, shadeTime)
         setShadeData(data)
-        console.log(`Loaded shade data: ${season} ${shadeMonth || 'all-months'} ${timeOfDay}`)
+        console.log(`Loaded shade data: ${season} all-months ${shadeTime}`)
       } catch (error) {
         console.error('Error loading shade data:', error)
       }
@@ -117,7 +127,7 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
       loadGreeneryExplorerState()
       loadAirQualityExplorerState()
     }
-  }, [dashboardMode, envCurrentData, lockedLayers, season, timeOfDay, shadeMonth])
+  }, [dashboardMode, envCurrentData, lockedLayers, season, timeOfDay])
 
   return {
     temperatureData,

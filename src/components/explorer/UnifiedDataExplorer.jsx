@@ -214,7 +214,6 @@ const UnifiedDataExplorer = () => {
   // Shade dashboard state - keeping for greenery
   const [season, setSeason] = useState('summer')
   const [timeOfDay, setTimeOfDay] = useState('1400')
-  const [shadeMonth, setShadeMonth] = useState('6')
   const [windDirection, setWindDirection] = useState('se')
   const [windSpeedKmh, setWindSpeedKmh] = useState(18)
   
@@ -328,7 +327,7 @@ const UnifiedDataExplorer = () => {
     ecologyHeatByYear,
     envCurrentData,
     envHistoryData
-  } = useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, season, timeOfDay, shadeMonth, windDirection, windSpeedKmh })
+  } = useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, season, timeOfDay, windDirection, windSpeedKmh })
 
   const { trafficData } = useExplorerTrafficData({ dashboardMode, lockedLayers })
 
@@ -1437,8 +1436,6 @@ const UnifiedDataExplorer = () => {
                   temperatureData={temperatureData}
                   ecologyMetric={ecologyMetric}
                   onEcologyMetricChange={setEcologyMetric}
-                  shadeMonth={shadeMonth}
-                  onShadeMonthChange={setShadeMonth}
                   timeOfDay={timeOfDay}
                   onTimeOfDayChange={setTimeOfDay}
                   windDirection={windDirection}
@@ -1553,6 +1550,7 @@ const UnifiedDataExplorer = () => {
               heatGridData={heatGridData}
               shadeData={shadeData}
               estimatedWindData={estimatedWindData}
+              windSpeedKmh={windSpeedKmh}
               season={season}
               greeneryAndSkyview={greeneryAndSkyview}
               treeCanopyData={treeCanopyData}

@@ -438,6 +438,47 @@
   width: 100%;
 }
 
+.microclimate-time-marks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 0.35rem;
+  color: rgba(226, 232, 240, 0.62);
+  font-size: 0.68rem;
+}
+
+.microclimate-time-marks span {
+  position: relative;
+  padding-top: 0.45rem;
+  text-align: center;
+}
+
+.microclimate-time-marks span::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 5px;
+  background: rgba(226, 232, 240, 0.42);
+}
+
+.microclimate-time-marks span:first-child {
+  text-align: left;
+}
+
+.microclimate-time-marks span:first-child::before {
+  left: 0;
+}
+
+.microclimate-time-marks span:last-child {
+  text-align: right;
+}
+
+.microclimate-time-marks span:last-child::before {
+  left: auto;
+  right: 0;
+}
+
 .microclimate-section select {
   height: 34px;
   margin-bottom: 0.65rem;
@@ -501,7 +542,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, #dbeafe 0%, #38bdf8 18%, #22c55e 38%, #facc15 58%, #f97316 76%, #dc2626 90%, #7f1d1d 100%);
+  background: linear-gradient(90deg, #67e8f9 0%, #67e8f9 32%, #facc15 34%, #facc15 66%, #fb7185 68%, #fb7185 100%);
 }
 
 .microclimate-selection strong {

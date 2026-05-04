@@ -257,12 +257,9 @@ export async function loadExplorerHeatGridData() {
   return enrichRelativeHeatData(await fetchJson('/api/climate/heat-grid', 'Climate heat grid load failed'), 'predicted_lst_c_fusion')
 }
 
-export async function loadExplorerEstimatedWindData(windDirection, windSpeedKmh) {
+export async function loadExplorerEstimatedWindData(windDirection) {
   const params = new URLSearchParams()
   if (windDirection) params.set('direction', windDirection)
-  if (windSpeedKmh !== null && windSpeedKmh !== undefined && windSpeedKmh !== '') {
-    params.set('speedKmh', String(windSpeedKmh))
-  }
   const query = params.toString()
   return fetchJson(`/api/climate/est-wind${query ? `?${query}` : ''}`, 'Estimated wind data load failed')
 }

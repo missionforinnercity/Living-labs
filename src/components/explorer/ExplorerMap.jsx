@@ -18,6 +18,19 @@ const ECOLOGY_SELECTION_MAX_SEGMENTS = 25
 const ECOLOGY_EXTREME_HEAT_SCORE = 75
 const ECOLOGY_EXTREME_COOL_ISLAND_SCORE = 50
 const EVENT_COORD_PRECISION = 6
+const WIND_FILL_COLOR = [
+  'case',
+  ['>=', ['coalesce', ['get', 'class_value'], 1], 3], '#fb7185',
+  ['>=', ['coalesce', ['get', 'class_value'], 1], 2], '#facc15',
+  '#67e8f9'
+]
+const WIND_FILL_OPACITY = [
+  'case',
+  ['>=', ['coalesce', ['get', 'class_value'], 1], 3], 0.52,
+  ['>=', ['coalesce', ['get', 'class_value'], 1], 2], 0.32,
+  0.14
+]
+const WIND_TUNNEL_FILTER = ['>=', ['coalesce', ['get', 'class_value'], 1], 3]
 
 const toEcologyFeatureKey = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -372,6 +385,7 @@ const ExplorerMap = ({
   heatGridData,
   shadeData,
   estimatedWindData,
+  windSpeedKmh = 18,
   season,
   greeneryAndSkyview,
   treeCanopyData,
@@ -2344,36 +2358,26 @@ const ExplorerMap = ({
               id="climate-wind-fill"
               type="fill"
               paint={{
-                'fill-color': [
-                  'interpolate',
-                  ['linear'],
-                  ['coalesce', ['get', 'estimated_speed_kmh'], 0],
-                  0, '#e6f7ff',
-                  3, '#7dd3fc',
-                  7, '#5eead4',
-                  11, '#bef264',
-                  16, '#fde047',
-                  22, '#fb923c',
-                  30, '#f43f5e'
-                ],
-                'fill-opacity': [
-                  'interpolate',
-                  ['linear'],
-                  ['coalesce', ['get', 'estimated_speed_kmh'], 0],
-                  0, 0.12,
-                  8, 0.2,
-                  18, 0.28
-                ],
-                'fill-outline-color': 'rgba(255,255,255,0)'
+                'fill-color': WIND_FILL_COLOR,
+                'fill-opacity': WIND_FILL_OPACITY,
+                'fill-outline-color': 'rgba(255,255,255,0)',
+                'fill-antialias': false
               }}
             />
             <Layer
               id="climate-wind-outline"
               type="line"
+              filter={WIND_TUNNEL_FILTER}
               paint={{
-                'line-color': 'rgba(255,255,255,0.18)',
-                'line-width': 0.12,
-                'line-opacity': 0.08
+                'line-color': '#fecdd3',
+                'line-width': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  13, 0.15,
+                  16, 0.45
+                ],
+                'line-opacity': 0.2
               }}
             />
           </Source>
@@ -3464,13 +3468,17 @@ const ExplorerMap = ({
 
               {dashboardMode === 'climate' && popupInfo.feature.source === 'climate-wind' && (() => {
                 const props = popupInfo.feature.properties
+                const windFactor = Number(props.wind_speed_factor)
+                const simulatedWindSpeed = Number(windSpeedKmh)
+                const estimatedSpeed = Number.isFinite(windFactor) && Number.isFinite(simulatedWindSpeed)
+                  ? windFactor * simulatedWindSpeed
+                  : null
                 return (
                   <>
                     <h3>{props.ventilation_class || 'Estimated Wind'}</h3>
-                    <p><strong>Estimated Speed:</strong> {Number(props.estimated_speed_kmh || 0).toFixed(1)} km/h</p>
+                    <p><strong>Simulated Wind:</strong> {Number.isFinite(simulatedWindSpeed) ? simulatedWindSpeed.toFixed(0) : '—'} km/h</p>
+                    <p><strong>Estimated Speed:</strong> {estimatedSpeed !== null ? estimatedSpeed.toFixed(1) : '—'} km/h</p>
                     <p><strong>Direction:</strong> {props.direction || '—'}</p>
-                    <p><strong>Wind Factor:</strong> {Number(props.wind_speed_factor || 0).toFixed(2)}</p>
-                    <p><strong>Reference Speed:</strong> {Number(props.reference_speed_kmh || 0).toFixed(1)} km/h</p>
                   </>
                 )
               })()}
