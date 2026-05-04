@@ -31,6 +31,19 @@ const formatSigned = (value, suffix = '', digits = 1) => {
   return `${sign}${value.toFixed(digits)}${suffix}`
 }
 
+const valueFrom = (feature, keys) => {
+  const keyList = Array.isArray(keys) ? keys : [keys]
+  for (const key of keyList) {
+    const value = feature?.[key]
+    if (value !== null && value !== undefined && value !== '') return value
+  }
+  return null
+}
+
+const formatText = (value) => (
+  value !== null && value !== undefined && value !== '' ? String(value) : '—'
+)
+
 const sectionLabel = (feature) => {
   if (!feature) return 'Section'
   return feature.segment_label
@@ -155,10 +168,11 @@ const EcologyHeatDetailPanel = ({
   }, [currentYearData, currentPrimary, currentCompare])
 
   const currentSnapshot = useMemo(() => ([
-    { metric: 'Heat Islands', primary: currentPrimary?.urban_heat_score ?? 0, compare: currentCompare?.urban_heat_score ?? 0 },
-    { metric: 'Thermal %', primary: currentPrimary?.thermal_percentile ?? 0, compare: currentCompare?.thermal_percentile ?? 0 },
-    { metric: 'Cool Islands', primary: currentPrimary?.cool_island_score ?? 0, compare: currentCompare?.cool_island_score ?? 0 },
-    { metric: 'Health', primary: currentPrimary?.health_score ?? 0, compare: currentCompare?.health_score ?? 0 }
+    { metric: 'Urban Heat', primary: currentPrimary?.urban_heat_score ?? 0, compare: currentCompare?.urban_heat_score ?? 0 },
+    { metric: 'Pedestrian', primary: currentPrimary?.pedestrian_heat_score ?? 0, compare: currentCompare?.pedestrian_heat_score ?? 0 },
+    { metric: 'Priority', primary: currentPrimary?.priority_score ?? 0, compare: currentCompare?.priority_score ?? 0 },
+    { metric: 'Retained', primary: currentPrimary?.retained_heat_score ?? 0, compare: currentCompare?.retained_heat_score ?? 0 },
+    { metric: 'Canopy', primary: currentPrimary?.effective_canopy_pct ?? 0, compare: currentCompare?.effective_canopy_pct ?? 0 }
   ]), [currentPrimary, currentCompare])
 
   const changeSummary = useMemo(() => {
@@ -178,11 +192,11 @@ const EcologyHeatDetailPanel = ({
       const heatGap = (currentPrimary.urban_heat_score ?? 0) - (currentCompare.urban_heat_score ?? 0)
       const coolGap = (currentPrimary.cool_island_score ?? 0) - (currentCompare.cool_island_score ?? 0)
       if (heatGap >= 0) {
-        return `${sectionLabel(currentFeature)} is running ${formatValue(Math.abs(heatGap))} points hotter than ${sectionLabel(compareFeature)} in ${selectedYear}, while the cool-island gap sits at ${formatSigned(coolGap)}.`
+        return `${sectionLabel(currentFeature)} is running ${formatValue(Math.abs(heatGap))} points hotter than ${sectionLabel(compareFeature)}, while the cool-island gap sits at ${formatSigned(coolGap)}.`
       }
       return `${sectionLabel(compareFeature)} currently carries stronger heat pressure by ${formatValue(Math.abs(heatGap))} points, so the comparison below shows what is keeping ${sectionLabel(currentFeature)} relatively cooler.`
     }
-    return `${sectionLabel(currentFeature)} sits at ${formatValue(currentPrimary.thermal_percentile, '%')} thermal percentile in ${selectedYear}. Use a second click on the map to overlay another section and compare both profiles.`
+    return `${sectionLabel(currentFeature)} sits at ${formatValue(currentPrimary.thermal_percentile, '%')} thermal percentile. Use a second click on the map to overlay another section and compare both profiles.`
   }, [compareFeature, currentCompare, currentFeature, currentPrimary, selectedYear])
 
   if (!currentPrimary || !currentFeature) return null
@@ -199,7 +213,7 @@ const EcologyHeatDetailPanel = ({
           <div>
             <h3>{sectionLabel(currentFeature)}{currentCompare ? ` vs ${sectionLabel(compareFeature)}` : ''}</h3>
             <span className="ecology-panel-subtitle">
-              Focus year {selectedYear} · thermal percentile {formatValue(currentPrimary.thermal_percentile, '%')} · cool island {formatValue(currentPrimary.cool_island_score)}
+              Overall heat analysis · thermal percentile {formatValue(currentPrimary.thermal_percentile, '%')} · confidence {formatText(currentPrimary.thermal_confidence_class)}
             </span>
           </div>
         </div>
@@ -226,20 +240,20 @@ const EcologyHeatDetailPanel = ({
 
           <div className="env-detail-summary-row ecology-summary-row">
             <div className="env-detail-stat">
-              <span className="env-detail-stat-label">Heat Island Rank</span>
-              <strong>{rankSummary?.primary?.urbanHeat ? `${rankSummary.primary.urbanHeat.rank} / ${rankSummary.primary.urbanHeat.total}` : '—'}</strong>
+              <span className="env-detail-stat-label">Modelled LST</span>
+              <strong>{formatValue(numberOrNull(valueFrom(currentPrimary, ['predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c'])), '°C')}</strong>
             </div>
             <div className="env-detail-stat">
-              <span className="env-detail-stat-label">Thermal Standing</span>
-              <strong>{rankSummary?.primary?.thermal ? `Hotter than ${formatValue(rankSummary.primary.thermal.percentile, '%', 0)}` : '—'}</strong>
+              <span className="env-detail-stat-label">Pedestrian Heat</span>
+              <strong>{formatValue(numberOrNull(currentPrimary.pedestrian_heat_score))}</strong>
             </div>
             <div className="env-detail-stat">
-              <span className="env-detail-stat-label">Cool Islands Rank</span>
-              <strong>{rankSummary?.primary?.coolIsland ? `${rankSummary.primary.coolIsland.rank} / ${rankSummary.primary.coolIsland.total}` : '—'}</strong>
+              <span className="env-detail-stat-label">Intervention Priority</span>
+              <strong>{formatText(currentPrimary.priority_class)}{currentPrimary.priority_score != null ? ` · ${formatValue(numberOrNull(currentPrimary.priority_score))}` : ''}</strong>
             </div>
             <div className="env-detail-stat">
-              <span className="env-detail-stat-label">Trend Since {primaryTimeline[0]?.year}</span>
-              <strong>{changeSummary ? formatSigned(changeSummary.urbanHeat) : '—'}</strong>
+              <span className="env-detail-stat-label">Thermal Confidence</span>
+              <strong>{formatText(currentPrimary.thermal_confidence_class)}</strong>
             </div>
           </div>
 
@@ -251,20 +265,32 @@ const EcologyHeatDetailPanel = ({
             <div className="ecology-detail-column">
               <div className="ecology-driver-grid ecology-primary-grid">
                 <div className="ecology-driver-card">
-                  <span>Heat Island Score</span>
+                  <span>Modelled LST</span>
+                  <strong>{formatValue(numberOrNull(valueFrom(currentPrimary, ['predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c'])), '°C')}</strong>
+                </div>
+                <div className="ecology-driver-card">
+                  <span>Urban Heat Score</span>
                   <strong>{formatValue(currentPrimary.urban_heat_score)}</strong>
                 </div>
                 <div className="ecology-driver-card">
-                  <span>Thermal Percentile</span>
-                  <strong>{formatValue(currentPrimary.thermal_percentile, '%')}</strong>
+                  <span>Pedestrian Heat Score</span>
+                  <strong>{formatValue(numberOrNull(currentPrimary.pedestrian_heat_score))}</strong>
                 </div>
                 <div className="ecology-driver-card">
-                  <span>Cool Islands Score</span>
-                  <strong>{formatValue(currentPrimary.cool_island_score)}</strong>
+                  <span>Priority Class & Score</span>
+                  <strong>{formatText(currentPrimary.priority_class)}{currentPrimary.priority_score != null ? ` · ${formatValue(numberOrNull(currentPrimary.priority_score))}` : ''}</strong>
                 </div>
                 <div className="ecology-driver-card">
-                  <span>Health Score</span>
-                  <strong>{formatValue(currentPrimary.health_score)}</strong>
+                  <span>Retained Heat Score</span>
+                  <strong>{formatValue(numberOrNull(currentPrimary.retained_heat_score))}</strong>
+                </div>
+                <div className="ecology-driver-card">
+                  <span>Effective Canopy</span>
+                  <strong>{formatValue(numberOrNull(currentPrimary.effective_canopy_pct), '%')}</strong>
+                </div>
+                <div className="ecology-driver-card">
+                  <span>Thermal Confidence</span>
+                  <strong>{formatText(currentPrimary.thermal_confidence_class)}</strong>
                 </div>
               </div>
 
@@ -276,20 +302,20 @@ const EcologyHeatDetailPanel = ({
                   </div>
                   <div className="ecology-compare-grid">
                     <div className="ecology-compare-chip">
-                      <span>Heat Islands</span>
+                      <span>Modelled LST</span>
+                      <strong>{formatValue(numberOrNull(valueFrom(currentCompare, ['predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c'])), '°C')}</strong>
+                    </div>
+                    <div className="ecology-compare-chip">
+                      <span>Urban Heat</span>
                       <strong>{formatValue(currentCompare.urban_heat_score)}</strong>
                     </div>
                     <div className="ecology-compare-chip">
-                      <span>Thermal %</span>
-                      <strong>{formatValue(currentCompare.thermal_percentile, '%')}</strong>
+                      <span>Pedestrian Heat</span>
+                      <strong>{formatValue(numberOrNull(currentCompare.pedestrian_heat_score))}</strong>
                     </div>
                     <div className="ecology-compare-chip">
-                      <span>Cool Islands</span>
-                      <strong>{formatValue(currentCompare.cool_island_score)}</strong>
-                    </div>
-                    <div className="ecology-compare-chip">
-                      <span>Health</span>
-                      <strong>{formatValue(currentCompare.health_score)}</strong>
+                      <span>Priority</span>
+                      <strong>{formatText(currentCompare.priority_class)}{currentCompare.priority_score != null ? ` · ${formatValue(numberOrNull(currentCompare.priority_score))}` : ''}</strong>
                     </div>
                   </div>
                 </div>

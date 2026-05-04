@@ -15,18 +15,37 @@ const formatValue = (value, suffix = '') => {
   return `${value.toFixed(1)}${suffix}`
 }
 
+const displayValue = (feature, keys) => {
+  const properties = feature?.properties || {}
+  const keyList = Array.isArray(keys) ? keys : [keys]
+  for (const key of keyList) {
+    const value = properties[key]
+    if (value !== null && value !== undefined && value !== '') return value
+  }
+  return null
+}
+
+const formatFeatureValue = (value, metric) => {
+  if (value === null || value === undefined || value === '') return '—'
+  if (metric.type === 'text') return String(value)
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return String(value)
+  return `${parsed.toFixed(metric.digits ?? 1)}${metric.suffix || ''}`
+}
+
 const ClimateDatasetAnalytics = ({
   title,
   source,
   subtitle,
   data,
-  metrics = []
+  metrics = [],
+  headlineFields = []
 }) => {
   const summary = useMemo(() => {
     const features = data?.features || []
     const metricSummaries = metrics.map((metric) => {
       const values = features
-        .map((feature) => numberOrNull(feature.properties?.[metric.key]))
+        .map((feature) => numberOrNull(displayValue(feature, metric.keys || metric.key)))
         .filter(Number.isFinite)
 
       return {
@@ -50,6 +69,17 @@ const ClimateDatasetAnalytics = ({
         .slice(0, 5)
     }
   }, [data, metrics])
+
+  const headlineFeature = useMemo(() => {
+    const features = data?.features || []
+    if (!features.length || !headlineFields.length) return null
+
+    return [...features].sort((a, b) => {
+      const bPriority = Number(displayValue(b, ['priority_score', 'urban_heat_score', 'pedestrian_heat_score']))
+      const aPriority = Number(displayValue(a, ['priority_score', 'urban_heat_score', 'pedestrian_heat_score']))
+      return (Number.isFinite(bPriority) ? bPriority : -Infinity) - (Number.isFinite(aPriority) ? aPriority : -Infinity)
+    })[0]
+  }, [data, headlineFields])
 
   return (
     <aside className="temperature-analytics">
@@ -99,6 +129,20 @@ const ClimateDatasetAnalytics = ({
           <h4>Source</h4>
           <p>{source}</p>
         </div>
+
+        {!!headlineFields.length && headlineFeature && (
+          <div className="info-box">
+            <h4>Headline Fields</h4>
+            <div className="metrics-list">
+              {headlineFields.map((field) => (
+                <div className="metric-item" key={field.label}>
+                  <span className="metric-label">{field.label}:</span>
+                  <span className="metric-value">{formatFeatureValue(displayValue(headlineFeature, field.keys || field.key), field)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   )

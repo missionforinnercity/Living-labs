@@ -160,7 +160,20 @@ const CLIMATE_TABLES = {
   heat_grid: {
     source: 'climate.heat_grid',
     orderColumns: ['analysis_year', 'analysis_month', 'thermal_percentile', 'urban_heat_score', 'feature_id', 'ogc_fid'],
-    summaryColumns: ['heat_model_lst_c', 'mean_lst_c', 'thermal_percentile', 'urban_heat_score', 'pedestrian_heat_score', 'cool_island_score', 'shade_deficit_score']
+    summaryColumns: [
+      'predicted_lst_c_fusion',
+      'heat_model_lst_c',
+      'mean_lst_c',
+      'thermal_percentile',
+      'urban_heat_score',
+      'pedestrian_heat_score',
+      'priority_score',
+      'retained_heat_score',
+      'effective_canopy_pct',
+      'thermal_confidence_score',
+      'cool_island_score',
+      'shade_deficit_score'
+    ]
   },
   shade: {
     source: 'climate.shade',
@@ -185,8 +198,27 @@ async function buildClimateTableFeatureCollection(tableName, filters = {}) {
   }
 
   const propertyColumns = await getTableColumns(schemaName, tableName, [geometryColumn])
-  const selectedProperties = propertyColumns.length
-    ? `${propertyColumns.map(quoteIdentifier).join(',')},`
+  const scenarioSpeedKmh = Number(filters.scenarioSpeedKmh)
+  const selectedPropertyExpressions = propertyColumns.map((column) => {
+    if (
+      tableName === 'est_wind'
+      && column === 'estimated_speed_kmh'
+      && Number.isFinite(scenarioSpeedKmh)
+      && propertyColumns.includes('wind_speed_factor')
+    ) {
+      return `round((${quoteIdentifier('wind_speed_factor')} * ${scenarioSpeedKmh})::numeric, 2) AS ${quoteIdentifier('estimated_speed_kmh')}`
+    }
+    if (
+      tableName === 'est_wind'
+      && column === 'reference_speed_kmh'
+      && Number.isFinite(scenarioSpeedKmh)
+    ) {
+      return `${scenarioSpeedKmh}::double precision AS ${quoteIdentifier('reference_speed_kmh')}`
+    }
+    return quoteIdentifier(column)
+  })
+  const selectedProperties = selectedPropertyExpressions.length
+    ? `${selectedPropertyExpressions.join(',')},`
     : ''
 
   const where = [`${quoteIdentifier(geometryColumn)} IS NOT NULL`]
@@ -196,15 +228,42 @@ async function buildClimateTableFeatureCollection(tableName, filters = {}) {
     where.push(`${quoteIdentifier('hour')} = $${params.length}`)
   }
 
+  if (filters.month && tableName === 'shade') {
+    const monthColumn = ['analysis_month', 'month', 'month_num'].find((column) => propertyColumns.includes(column))
+    const monthValue = Number(filters.month)
+    if (monthColumn && Number.isFinite(monthValue)) {
+      params.push(monthValue)
+      where.push(`${quoteIdentifier(monthColumn)} = $${params.length}`)
+    }
+  }
+
+  if (filters.direction && tableName === 'est_wind') {
+    const directionColumn = [
+      'wind_direction',
+      'wind_direction_deg',
+      'direction',
+      'direction_deg',
+      'prevailing_wind_direction'
+    ].find((column) => propertyColumns.includes(column))
+
+    if (directionColumn) {
+      params.push(String(filters.direction).toLowerCase())
+      where.push(`lower(${quoteIdentifier(directionColumn)}::text) = $${params.length}`)
+    }
+  }
+
   const orderCandidates = config.orderColumns.filter((column) => propertyColumns.includes(column))
   const orderClause = orderCandidates.length
     ? `ORDER BY ${orderCandidates.map((column) => `${quoteIdentifier(column)} DESC NULLS LAST`).join(', ')}`
     : ''
+  const geometryExpression = tableName === 'est_wind'
+    ? `ST_AsGeoJSON(ST_SimplifyPreserveTopology(${quoteIdentifier(geometryColumn)}, 0.00001))::json AS geometry`
+    : `ST_AsGeoJSON(${quoteIdentifier(geometryColumn)})::json AS geometry`
 
   const { rows } = await pool.query(`
     SELECT
       ${selectedProperties}
-      ST_AsGeoJSON(${quoteIdentifier(geometryColumn)})::json AS geometry
+      ${geometryExpression}
     FROM ${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}
     WHERE ${where.join(' AND ')}
     ${orderClause}
@@ -602,13 +661,20 @@ app.get('/api/climate/heat-zones', async (_req, res) => {
 
     const numericColumnSummary = propertyColumns
       .filter((column) => [
+        'predicted_lst_c_fusion',
+        'heat_model_lst_c',
         'urban_heat_score',
+        'pedestrian_heat_score',
         'thermal_percentile',
         'cool_island_score',
         'health_score',
         'surface_air_delta_c',
         'mean_lst_c',
-        'heat_impact'
+        'heat_impact',
+        'priority_score',
+        'retained_heat_score',
+        'effective_canopy_pct',
+        'thermal_confidence_score'
       ].includes(column))
       .map((column) => `round(avg(${quoteIdentifier(column)})::numeric, 2) AS ${quoteIdentifier(`avg_${column}`)}`)
 
@@ -647,7 +713,8 @@ app.get('/api/climate/heat-grid', async (_req, res) => {
 app.get('/api/climate/shade', async (req, res) => {
   try {
     res.json(await buildClimateTableFeatureCollection('shade', {
-      hour: typeof req.query.hour === 'string' ? req.query.hour : null
+      hour: typeof req.query.hour === 'string' ? req.query.hour : null,
+      month: typeof req.query.month === 'string' ? req.query.month : null
     }))
   } catch (err) {
     console.error('[API] /climate/shade error:', err.message)
@@ -655,9 +722,12 @@ app.get('/api/climate/shade', async (req, res) => {
   }
 })
 
-app.get('/api/climate/est-wind', async (_req, res) => {
+app.get('/api/climate/est-wind', async (req, res) => {
   try {
-    res.json(await buildClimateTableFeatureCollection('est_wind'))
+    res.json(await buildClimateTableFeatureCollection('est_wind', {
+      direction: typeof req.query.direction === 'string' ? req.query.direction : 'se',
+      scenarioSpeedKmh: typeof req.query.speedKmh === 'string' ? req.query.speedKmh : null
+    }))
   } catch (err) {
     console.error('[API] /climate/est-wind error:', err.message)
     res.status(500).json({ error: err.message })

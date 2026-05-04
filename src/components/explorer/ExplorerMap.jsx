@@ -194,15 +194,82 @@ const buildEcologySelectionFeature = (feature, selectionKey) => {
 }
 
 const ECOLOGY_METRIC_CONFIG = {
+  predicted_lst_c_fusion: {
+    label: 'Modelled LST',
+    description: 'Base thermal heat map',
+    property: 'predicted_lst_c_fusion_relative_percentile',
+    colorStops: [
+      [0, '#dbeafe'],
+      [20, '#22c55e'],
+      [60, '#facc15'],
+      [80, '#f97316'],
+      [90, '#dc2626'],
+      [100, '#7f1d1d']
+    ]
+  },
   urban_heat_score: {
     label: 'Heat Islands',
     description: 'Only the hottest island hotspots',
-    property: 'urban_heat_score',
+    property: 'urban_heat_score_relative_percentile',
     colorStops: [
-      [75, '#fdba74'],
-      [82, '#f97316'],
+      [0, '#dbeafe'],
+      [20, '#22c55e'],
+      [60, '#facc15'],
+      [80, '#f97316'],
       [90, '#dc2626'],
       [100, '#7f1d1d']
+    ]
+  },
+  pedestrian_heat_score: {
+    label: 'Pedestrian Heat',
+    description: 'Street exposure and thermal stress',
+    property: 'pedestrian_heat_score_relative_percentile',
+    colorStops: [
+      [0, '#dbeafe'],
+      [20, '#22c55e'],
+      [60, '#facc15'],
+      [80, '#f97316'],
+      [90, '#dc2626'],
+      [100, '#991b1b']
+    ]
+  },
+  priority_score: {
+    label: 'Priority Score',
+    description: 'Intervention targeting priority',
+    property: 'priority_score_relative_percentile',
+    colorStops: [
+      [0, '#ecfeff'],
+      [20, '#22c55e'],
+      [60, '#fef08a'],
+      [80, '#f97316'],
+      [90, '#dc2626'],
+      [100, '#7f1d1d']
+    ]
+  },
+  retained_heat_score: {
+    label: 'Retained Heat',
+    description: 'Nighttime heat persistence',
+    property: 'retained_heat_score_relative_percentile',
+    colorStops: [
+      [0, '#dbeafe'],
+      [20, '#22c55e'],
+      [60, '#c084fc'],
+      [80, '#ef4444'],
+      [90, '#991b1b'],
+      [100, '#450a0a']
+    ]
+  },
+  effective_canopy_pct: {
+    label: 'Effective Canopy',
+    description: 'Shade coverage adjusted for canopy health',
+    property: 'effective_canopy_pct_relative_percentile',
+    colorStops: [
+      [0, '#7f1d1d'],
+      [20, '#f97316'],
+      [60, '#facc15'],
+      [80, '#86efac'],
+      [90, '#22c55e'],
+      [100, '#14532d']
     ]
   },
   thermal_percentile: {
@@ -268,18 +335,10 @@ const buildEcologyInterpolatedExpression = (property, stops) => {
 }
 
 const buildEcologyMetricFilter = (metricId) => {
-  if (metricId === 'urban_heat_score') {
-    return ['>=', ['coalesce', ['get', 'urban_heat_score'], -999], ECOLOGY_EXTREME_HEAT_SCORE]
-  }
-
-  if (metricId === 'cool_island_score') {
-    return ['>=', ['coalesce', ['get', 'cool_island_score'], -999], ECOLOGY_EXTREME_COOL_ISLAND_SCORE]
-  }
-
   return [
     'all',
     ['!=', ['coalesce', ['get', ECOLOGY_METRIC_CONFIG[metricId]?.property || metricId], null], null],
-    ['>', ['coalesce', ['get', ECOLOGY_METRIC_CONFIG[metricId]?.property || metricId], 0], 0]
+    ['>=', ['coalesce', ['get', ECOLOGY_METRIC_CONFIG[metricId]?.property || metricId], -1], 0]
   ]
 }
 
@@ -321,7 +380,7 @@ const ExplorerMap = ({
   greeneryMapMode = 'percentile',
   showUnderservedGreenery = true,
   ecologyHeatData,
-  ecologyMetric = 'urban_heat_score',
+  ecologyMetric = 'predicted_lst_c_fusion',
   selectedEcologyFeatureKeys = [],
   envCurrentData,
   envHistoryData,
@@ -466,6 +525,12 @@ const ExplorerMap = ({
         const coolIslandScore = Number(feature.properties?.cool_island_score)
         const healthScore = Number(feature.properties?.health_score)
         const surfaceAirDelta = Number(feature.properties?.surface_air_delta_c)
+        const predictedLstFusion = Number(feature.properties?.predicted_lst_c_fusion ?? feature.properties?.heat_model_lst_c ?? feature.properties?.mean_lst_c)
+        const pedestrianHeatScore = Number(feature.properties?.pedestrian_heat_score)
+        const priorityScore = Number(feature.properties?.priority_score)
+        const retainedHeatScore = Number(feature.properties?.retained_heat_score)
+        const effectiveCanopyPct = Number(feature.properties?.effective_canopy_pct)
+        const thermalConfidenceScore = Number(feature.properties?.thermal_confidence_score)
         const featureKey = toEcologyFeatureKey(feature.properties?.feature_id)
         const heatBalanceScore = (
           (Number.isFinite(urbanHeatScore) ? urbanHeatScore : 0)
@@ -482,6 +547,12 @@ const ExplorerMap = ({
             thermal_percentile: Number.isFinite(thermalPercentile) ? thermalPercentile : null,
             cool_island_score: Number.isFinite(coolIslandScore) ? coolIslandScore : null,
             health_score: Number.isFinite(healthScore) ? healthScore : null,
+            predicted_lst_c_fusion: Number.isFinite(predictedLstFusion) ? predictedLstFusion : null,
+            pedestrian_heat_score: Number.isFinite(pedestrianHeatScore) ? pedestrianHeatScore : null,
+            priority_score: Number.isFinite(priorityScore) ? priorityScore : null,
+            retained_heat_score: Number.isFinite(retainedHeatScore) ? retainedHeatScore : null,
+            effective_canopy_pct: Number.isFinite(effectiveCanopyPct) ? effectiveCanopyPct : null,
+            thermal_confidence_score: Number.isFinite(thermalConfidenceScore) ? thermalConfidenceScore : null,
             mean_lst_c: Number.isFinite(Number(feature.properties?.mean_lst_c)) ? Number(feature.properties.mean_lst_c) : null,
             surface_air_delta_c: Number.isFinite(surfaceAirDelta) ? surfaceAirDelta : null,
             heat_balance_score: heatBalanceScore
@@ -494,7 +565,7 @@ const ExplorerMap = ({
 
   const selectedEcologyPrimaryKey = selectedEcologyFeatureKeys[0] || null
   const selectedEcologyCompareKey = selectedEcologyFeatureKeys[1] || null
-  const ecologyMetricConfig = ECOLOGY_METRIC_CONFIG[ecologyMetric] || ECOLOGY_METRIC_CONFIG.urban_heat_score
+  const ecologyMetricConfig = ECOLOGY_METRIC_CONFIG[ecologyMetric] || ECOLOGY_METRIC_CONFIG.predicted_lst_c_fusion
   const ecologyMetricPaint = useMemo(() => {
     return buildEcologyInterpolatedExpression(ecologyMetricConfig.property, ecologyMetricConfig.colorStops)
   }, [ecologyMetricConfig])
@@ -2205,15 +2276,13 @@ const ExplorerMap = ({
               type="fill"
               paint={{
                 'fill-color': [
-                  'interpolate',
-                  ['linear'],
-                  ['coalesce', ['get', 'thermal_percentile'], ['get', 'urban_heat_score'], 0],
-                  0, '#e0f2fe',
-                  25, '#bae6fd',
-                  50, '#fde68a',
-                  75, '#fb923c',
-                  90, '#dc2626',
-                  100, '#7f1d1d'
+                  'step',
+                  ['coalesce', ['get', 'heat_relative_percentile'], 0],
+                  '#dbeafe',
+                  20, '#22c55e',
+                  60, '#facc15',
+                  80, '#f97316',
+                  90, '#dc2626'
                 ],
                 'fill-opacity': 0.62
               }}
@@ -2276,25 +2345,35 @@ const ExplorerMap = ({
               type="fill"
               paint={{
                 'fill-color': [
-                  'case',
-                  ['==', ['get', 'ventilation_class'], 'Wind Tunnel'],
-                  '#38bdf8',
-                  ['==', ['get', 'ventilation_class'], 'Sheltered'],
-                  '#84cc16',
-                  ['==', ['get', 'ventilation_class'], 'Stagnant'],
-                  '#f97316',
-                  '#64748b'
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'estimated_speed_kmh'], 0],
+                  0, '#e6f7ff',
+                  3, '#7dd3fc',
+                  7, '#5eead4',
+                  11, '#bef264',
+                  16, '#fde047',
+                  22, '#fb923c',
+                  30, '#f43f5e'
                 ],
-                'fill-opacity': 0.52
+                'fill-opacity': [
+                  'interpolate',
+                  ['linear'],
+                  ['coalesce', ['get', 'estimated_speed_kmh'], 0],
+                  0, 0.12,
+                  8, 0.2,
+                  18, 0.28
+                ],
+                'fill-outline-color': 'rgba(255,255,255,0)'
               }}
             />
             <Layer
               id="climate-wind-outline"
               type="line"
               paint={{
-                'line-color': '#e0f2fe',
-                'line-width': 0.25,
-                'line-opacity': 0.25
+                'line-color': 'rgba(255,255,255,0.18)',
+                'line-width': 0.12,
+                'line-opacity': 0.08
               }}
             />
           </Source>
@@ -3345,14 +3424,28 @@ const ExplorerMap = ({
 
               {dashboardMode === 'climate' && popupInfo.feature.source === 'climate-heat-grid' && (() => {
                 const props = popupInfo.feature.properties
+                const valueFrom = (...keys) => {
+                  for (const key of keys) {
+                    const value = props[key]
+                    if (value !== null && value !== undefined && value !== '') return value
+                  }
+                  return null
+                }
+                const numberLabel = (value, suffix = '') => {
+                  const parsed = Number(value)
+                  return Number.isFinite(parsed) ? `${parsed.toFixed(1)}${suffix}` : '—'
+                }
                 return (
                   <>
                     <h3>Heat Grid #{props.feature_id || props.ogc_fid}</h3>
-                    <p><strong>Thermal Rank:</strong> {Number(props.thermal_percentile || 0).toFixed(1)}%</p>
-                    <p><strong>Heat Model LST:</strong> {Number(props.heat_model_lst_c || props.mean_lst_c || 0).toFixed(1)}°C</p>
-                    <p><strong>Pedestrian Heat:</strong> {Number(props.pedestrian_heat_score || 0).toFixed(1)}</p>
-                    <p><strong>Land Type:</strong> {props.land_type || props.spectral_land_type || 'Unknown'}</p>
-                    <p><strong>Shade Deficit:</strong> {Number(props.shade_deficit_score || 0).toFixed(1)}</p>
+                    <p><strong>Modelled LST:</strong> {numberLabel(valueFrom('predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c'), '°C')}</p>
+                    <p><strong>Relative Heat Band:</strong> {props.heat_relative_band ? String(props.heat_relative_band).replace(/_/g, ' ') : '—'}</p>
+                    <p><strong>Urban Heat Score:</strong> {numberLabel(props.urban_heat_score)}</p>
+                    <p><strong>Pedestrian Heat Score:</strong> {numberLabel(props.pedestrian_heat_score)}</p>
+                    <p><strong>Priority:</strong> {props.priority_class || '—'}{valueFrom('priority_score') != null ? ` (${numberLabel(props.priority_score)})` : ''}</p>
+                    <p><strong>Retained Heat Score:</strong> {numberLabel(props.retained_heat_score)}</p>
+                    <p><strong>Effective Canopy:</strong> {numberLabel(props.effective_canopy_pct, '%')}</p>
+                    <p><strong>Thermal Confidence:</strong> {props.thermal_confidence_class || '—'}</p>
                   </>
                 )
               })()}

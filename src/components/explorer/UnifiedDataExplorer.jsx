@@ -38,10 +38,8 @@ const ExplorerMap = lazy(() => import('./ExplorerMap'))
 const BusinessAnalytics = lazy(() => import('./BusinessAnalytics'))
 const WalkabilityAnalytics = lazy(() => import('./WalkabilityAnalytics'))
 const LightingAnalytics = lazy(() => import('./LightingAnalytics'))
-const TemperatureAnalytics = lazy(() => import('./TemperatureAnalytics'))
-const ClimateDatasetAnalytics = lazy(() => import('./ClimateDatasetAnalytics'))
+const MicroclimateControlPanel = lazy(() => import('./MicroclimateControlPanel'))
 const GreeneryAnalytics = lazy(() => import('./GreeneryAnalytics'))
-const EnvironmentAnalytics = lazy(() => import('./EnvironmentAnalytics'))
 const EcologyHeatAnalytics = lazy(() => import('./EcologyHeatAnalytics'))
 const EcologyHeatDetailPanel = lazy(() => import('./EcologyHeatDetailPanel'))
 const DateAvailabilityCalendar = lazy(() => import('./DateAvailabilityCalendar'))
@@ -216,10 +214,13 @@ const UnifiedDataExplorer = () => {
   // Shade dashboard state - keeping for greenery
   const [season, setSeason] = useState('summer')
   const [timeOfDay, setTimeOfDay] = useState('1400')
+  const [shadeMonth, setShadeMonth] = useState('6')
+  const [windDirection, setWindDirection] = useState('se')
+  const [windSpeedKmh, setWindSpeedKmh] = useState(18)
   
   // New greenery data layers
   const [ecologyYear, setEcologyYear] = useState(2026)
-  const [ecologyMetric, setEcologyMetric] = useState('urban_heat_score')
+  const [ecologyMetric, setEcologyMetric] = useState('predicted_lst_c_fusion')
   const [selectedEcologyFeatureKeys, setSelectedEcologyFeatureKeys] = useState([])
   const [ecologyPanelMinimized, setEcologyPanelMinimized] = useState(false)
   const ecologyDetailPanelRef = useRef(null)
@@ -327,7 +328,7 @@ const UnifiedDataExplorer = () => {
     ecologyHeatByYear,
     envCurrentData,
     envHistoryData
-  } = useExplorerEnvironmentData({ dashboardMode, lockedLayers, season, timeOfDay })
+  } = useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, season, timeOfDay, shadeMonth, windDirection, windSpeedKmh })
 
   const { trafficData } = useExplorerTrafficData({ dashboardMode, lockedLayers })
 
@@ -1426,7 +1427,28 @@ const UnifiedDataExplorer = () => {
           
             {dashboardMode === 'climate' && (
               <>
-                {activeCategory === 'urbanHeatConcrete' ? (
+                <MicroclimateControlPanel
+                  activeCategory={activeCategory}
+                  onCategorySelect={selectCategory}
+                  heatGridData={heatGridData}
+                  ecologyCurrentData={ecologyCurrentData}
+                  shadeData={shadeData}
+                  estimatedWindData={estimatedWindData}
+                  temperatureData={temperatureData}
+                  ecologyMetric={ecologyMetric}
+                  onEcologyMetricChange={setEcologyMetric}
+                  shadeMonth={shadeMonth}
+                  onShadeMonthChange={setShadeMonth}
+                  timeOfDay={timeOfDay}
+                  onTimeOfDayChange={setTimeOfDay}
+                  windDirection={windDirection}
+                  onWindDirectionChange={setWindDirection}
+                  windSpeedKmh={windSpeedKmh}
+                  onWindSpeedKmhChange={setWindSpeedKmh}
+                  selectedFeature={selectedEcologyFeature}
+                  comparisonFeature={compareEcologyFeature}
+                />
+                {activeCategory === 'urbanHeatConcrete' && selectedEcologyFeature && (
                   <EcologyHeatAnalytics
                     currentData={ecologyCurrentData}
                     ecologyYear={ecologyYear}
@@ -1438,52 +1460,6 @@ const UnifiedDataExplorer = () => {
                     comparisonFeature={compareEcologyFeature}
                     comparisonSeries={compareEcologyFeatureSeries}
                     availableYears={ecologyAvailableYears}
-                  />
-                ) : activeCategory === 'airQuality' ? (
-                  <EnvironmentAnalytics
-                    currentData={envDisplayData}
-                    historyData={envHistoryData}
-                    envIndex={envIndex}
-                    onEnvIndexChange={setEnvIndex}
-                    envDate={envDate}
-                    onEnvDateChange={setEnvDate}
-                  />
-                ) : activeCategory === 'heatGrid' ? (
-                  <ClimateDatasetAnalytics
-                    title="Heat Grid"
-                    source="climate.heat_grid"
-                    data={heatGridData}
-                    metrics={[
-                      { key: 'heat_model_lst_c', label: 'Avg Heat Model LST', suffix: '°C' },
-                      { key: 'thermal_percentile', label: 'Avg Thermal Rank', suffix: '%' },
-                      { key: 'pedestrian_heat_score', label: 'Avg Pedestrian Heat' }
-                    ]}
-                  />
-                ) : activeCategory === 'climateShade' ? (
-                  <ClimateDatasetAnalytics
-                    title="Shade"
-                    source="climate.shade"
-                    data={shadeData}
-                    subtitle={`DB shade polygons for ${timeOfDay}`}
-                    metrics={[
-                      { key: 'area_m2', label: 'Avg Patch Area', suffix: ' m²' }
-                    ]}
-                  />
-                ) : activeCategory === 'estimatedWind' ? (
-                  <ClimateDatasetAnalytics
-                    title="Estimated Wind"
-                    source="climate.est_wind"
-                    data={estimatedWindData}
-                    metrics={[
-                      { key: 'estimated_speed_kmh', label: 'Avg Speed', suffix: ' km/h' },
-                      { key: 'wind_speed_factor', label: 'Avg Wind Factor' },
-                      { key: 'frequency_weight', label: 'Avg Frequency Weight' }
-                    ]}
-                  />
-                ) : (
-                  <TemperatureAnalytics
-                    temperatureData={temperatureData}
-                    hideLayerControls={true}
                   />
                 )}
               </>

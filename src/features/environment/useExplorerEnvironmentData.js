@@ -8,7 +8,7 @@ import {
   loadExplorerTemperatureData
 } from './data'
 
-export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season, timeOfDay }) {
+export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, season, timeOfDay, shadeMonth, windDirection, windSpeedKmh }) {
   const [temperatureData, setTemperatureData] = useState(null)
   const [heatGridData, setHeatGridData] = useState(null)
   const [shadeData, setShadeData] = useState(null)
@@ -24,18 +24,15 @@ export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season
   useEffect(() => {
     const loadClimateExplorerState = async () => {
       try {
-        const [heatStreets, heatGrid, estimatedWind] = await Promise.all([
+        const [heatStreets, heatGrid] = await Promise.all([
           loadExplorerTemperatureData(),
-          loadExplorerHeatGridData(),
-          loadExplorerEstimatedWindData()
+          loadExplorerHeatGridData()
         ])
         setTemperatureData(heatStreets)
         setHeatGridData(heatGrid)
-        setEstimatedWindData(estimatedWind)
         console.log('Loaded climate DB layers:', {
           heatStreets: heatStreets.features?.length,
-          heatGrid: heatGrid.features?.length,
-          estimatedWind: estimatedWind.features?.length
+          heatGrid: heatGrid.features?.length
         })
       } catch (error) {
         console.error('Error loading climate data:', error)
@@ -49,11 +46,33 @@ export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season
   }, [dashboardMode, lockedLayers])
 
   useEffect(() => {
+    const loadWindExplorerState = async () => {
+      try {
+        const data = await loadExplorerEstimatedWindData(windDirection, windSpeedKmh)
+        setEstimatedWindData(data)
+        console.log('Loaded wind scenario:', {
+          direction: windDirection,
+          speedKmh: windSpeedKmh,
+          features: data.features?.length
+        })
+      } catch (error) {
+        console.error('Error loading estimated wind data:', error)
+      }
+    }
+
+    const shouldLoadWind = dashboardMode === 'climate' && activeCategory === 'estimatedWind'
+    const hasLockedWindLayer = lockedLayers.has('estimatedWind')
+    if (shouldLoadWind || hasLockedWindLayer) {
+      loadWindExplorerState()
+    }
+  }, [activeCategory, dashboardMode, lockedLayers, windDirection, windSpeedKmh])
+
+  useEffect(() => {
     const loadShadeExplorerState = async () => {
       try {
-        const data = await loadExplorerShadeData(season, timeOfDay)
+        const data = await loadExplorerShadeData(season, timeOfDay, shadeMonth)
         setShadeData(data)
-        console.log(`Loaded shade data: ${season} ${timeOfDay}`)
+        console.log(`Loaded shade data: ${season} ${shadeMonth || 'all-months'} ${timeOfDay}`)
       } catch (error) {
         console.error('Error loading shade data:', error)
       }
@@ -98,7 +117,7 @@ export function useExplorerEnvironmentData({ dashboardMode, lockedLayers, season
       loadGreeneryExplorerState()
       loadAirQualityExplorerState()
     }
-  }, [dashboardMode, envCurrentData, lockedLayers, season, timeOfDay])
+  }, [dashboardMode, envCurrentData, lockedLayers, season, timeOfDay, shadeMonth])
 
   return {
     temperatureData,

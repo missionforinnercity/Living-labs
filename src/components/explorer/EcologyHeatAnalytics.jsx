@@ -4,10 +4,40 @@ import './EcologyHeatAnalytics.css'
 const DEFAULT_YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026]
 const ECOLOGY_METRICS = [
   {
+    id: 'predicted_lst_c_fusion',
+    label: 'Modelled LST',
+    description: 'Base thermal heat map',
+    gradient: 'linear-gradient(90deg, #e0f2fe 0%, #fde68a 36%, #fb923c 65%, #7f1d1d 100%)'
+  },
+  {
     id: 'urban_heat_score',
     label: 'Heat Islands',
     description: 'Extreme heat hotspots only',
     gradient: 'linear-gradient(90deg, #fff7ed 0%, #fdba74 38%, #f97316 68%, #7f1d1d 100%)'
+  },
+  {
+    id: 'pedestrian_heat_score',
+    label: 'Pedestrian Heat',
+    description: 'Street exposure and thermal stress',
+    gradient: 'linear-gradient(90deg, #dbeafe 0%, #fef3c7 34%, #fb923c 68%, #991b1b 100%)'
+  },
+  {
+    id: 'priority_score',
+    label: 'Priority',
+    description: 'Intervention targeting score',
+    gradient: 'linear-gradient(90deg, #ecfeff 0%, #fef08a 34%, #f97316 68%, #7f1d1d 100%)'
+  },
+  {
+    id: 'retained_heat_score',
+    label: 'Retained Heat',
+    description: 'Nighttime heat persistence',
+    gradient: 'linear-gradient(90deg, #dbeafe 0%, #c084fc 36%, #ef4444 72%, #450a0a 100%)'
+  },
+  {
+    id: 'effective_canopy_pct',
+    label: 'Effective Canopy',
+    description: 'Shade coverage adjusted for health',
+    gradient: 'linear-gradient(90deg, #7f1d1d 0%, #facc15 34%, #86efac 68%, #14532d 100%)'
   },
   {
     id: 'thermal_percentile',
@@ -51,6 +81,19 @@ const formatValue = (value, suffix = '', digits = 1) => {
   return `${value.toFixed(digits)}${suffix}`
 }
 
+const valueFrom = (feature, keys) => {
+  const keyList = Array.isArray(keys) ? keys : [keys]
+  for (const key of keyList) {
+    const value = feature?.[key]
+    if (value !== null && value !== undefined && value !== '') return value
+  }
+  return null
+}
+
+const formatText = (value) => (
+  value !== null && value !== undefined && value !== '' ? String(value) : '—'
+)
+
 const rankMetric = (features, targetFeature, key, direction = 'desc') => {
   const value = numberOrNull(targetFeature?.[key])
   if (!Number.isFinite(value)) return null
@@ -81,10 +124,13 @@ const selectionLabel = (feature) => {
 }
 
 const metricCards = (feature) => [
-  { label: 'Heat Islands', value: formatValue(numberOrNull(feature?.urban_heat_score)) },
-  { label: 'Thermal %', value: formatValue(numberOrNull(feature?.thermal_percentile), '%') },
-  { label: 'Cool Islands', value: formatValue(numberOrNull(feature?.cool_island_score)) },
-  { label: 'Health', value: formatValue(numberOrNull(feature?.health_score)) }
+  { label: 'Modelled LST', value: formatValue(numberOrNull(valueFrom(feature, ['predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c'])), '°C') },
+  { label: 'Urban Heat', value: formatValue(numberOrNull(feature?.urban_heat_score)) },
+  { label: 'Pedestrian Heat', value: formatValue(numberOrNull(feature?.pedestrian_heat_score)) },
+  { label: 'Priority', value: `${formatText(feature?.priority_class)}${feature?.priority_score != null ? ` · ${formatValue(numberOrNull(feature.priority_score))}` : ''}` },
+  { label: 'Retained Heat', value: formatValue(numberOrNull(feature?.retained_heat_score)) },
+  { label: 'Effective Canopy', value: formatValue(numberOrNull(feature?.effective_canopy_pct), '%') },
+  { label: 'Confidence', value: formatText(feature?.thermal_confidence_class) }
 ]
 
 const EcologyHeatAnalytics = ({
@@ -110,6 +156,9 @@ const EcologyHeatAnalytics = ({
     const avgThermalPercentile = avg(validNumbers(features, 'thermal_percentile'))
     const avgCoolIsland = avg(validNumbers(features, 'cool_island_score'))
     const avgHealthScore = avg(validNumbers(features, 'health_score'))
+    const avgPedestrianHeat = avg(validNumbers(features, 'pedestrian_heat_score'))
+    const avgRetainedHeat = avg(validNumbers(features, 'retained_heat_score'))
+    const avgEffectiveCanopy = avg(validNumbers(features, 'effective_canopy_pct'))
     const hotspotCount = features.filter((feature) => {
       const urbanHeat = numberOrNull(feature.properties?.urban_heat_score)
       const thermalPercentile = numberOrNull(feature.properties?.thermal_percentile)
@@ -125,6 +174,9 @@ const EcologyHeatAnalytics = ({
       avgThermalPercentile,
       avgCoolIsland,
       avgHealthScore,
+      avgPedestrianHeat,
+      avgRetainedHeat,
+      avgEffectiveCanopy,
       hotspotCount,
       refugeCount,
       hottestFeature: hottestFeature?.properties || null,
@@ -169,30 +221,10 @@ const EcologyHeatAnalytics = ({
       <div className="eco-hero">
         <div>
           <div className="eco-kicker">Heat Atlas</div>
-          <h3>CBD Heat Islands</h3>
-          <p>Heat Islands and Cool Islands now isolate only the most extreme sections on the map, so the view reads like hotspot and refuge islands instead of a continuous blanket.</p>
+          <h3>Overall Heat Analysis</h3>
+          <p>Heat zones are ranked against the CBD so the hottest streets, persistent concrete heat, canopy gaps, and intervention priorities read as one microclimate picture.</p>
         </div>
-        <div className="eco-year-badge">{ecologyYear}</div>
-      </div>
-
-      <div className="eco-slider-card">
-        <div className="eco-section-head">
-          <span>Analysis Year</span>
-          <strong>{ecologyYear}</strong>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={years.length - 1}
-          step={1}
-          value={Math.max(0, years.indexOf(ecologyYear))}
-          onChange={(event) => onEcologyYearChange?.(years[Number(event.target.value)])}
-        />
-        <div className="eco-slider-labels">
-          {years.map((year) => (
-            <span key={year} className={year === ecologyYear ? 'active' : ''}>{year}</span>
-          ))}
-        </div>
+        <div className="eco-year-badge">Live view</div>
       </div>
 
       {summary && (
@@ -203,19 +235,19 @@ const EcologyHeatAnalytics = ({
             <p>Combined heat priority across all mapped sections.</p>
           </article>
           <article className="warm">
-            <span>Average Thermal Rank</span>
-            <strong>{formatValue(summary.avgThermalPercentile, '%')}</strong>
-            <p>Relative heat standing across the CBD.</p>
+            <span>Average Pedestrian Heat</span>
+            <strong>{formatValue(summary.avgPedestrianHeat)}</strong>
+            <p>Street exposure and thermal stress pressure.</p>
           </article>
           <article className="cool">
-            <span>Average Cool Islands</span>
-            <strong>{formatValue(summary.avgCoolIsland)}</strong>
-            <p>Cooling refuge strength from canopy, vegetation, and water.</p>
+            <span>Average Effective Canopy</span>
+            <strong>{formatValue(summary.avgEffectiveCanopy, '%')}</strong>
+            <p>Cooling capacity adjusted for canopy health.</p>
           </article>
           <article>
-            <span>High Heat Sections</span>
-            <strong>{summary.hotspotCount}</strong>
-            <p>{summary.refugeCount} sections currently behave like strong cool refuges.</p>
+            <span>Average Retained Heat</span>
+            <strong>{formatValue(summary.avgRetainedHeat)}</strong>
+            <p>{summary.hotspotCount} sections currently rank as high heat areas.</p>
           </article>
         </div>
       )}
@@ -279,7 +311,7 @@ const EcologyHeatAnalytics = ({
                 </div>
                 <h4>{selectionLabel(selectedFeature)}</h4>
                 <p>
-                  Hotter than {formatValue(selectedRanking?.thermalPercentile?.percentile, '%', 0)} of mapped sections in {ecologyYear}.
+                  Hotter than {formatValue(selectedRanking?.thermalPercentile?.percentile, '%', 0)} of mapped sections.
                 </p>
                 <div className="eco-pill-grid">
                   {metricCards(selectedFeature).map((metric) => (

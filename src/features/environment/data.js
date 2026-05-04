@@ -83,6 +83,80 @@ function percentileRank(value, sortedValues) {
   return (index / (sortedValues.length - 1)) * 100
 }
 
+function relativeHeatBand(percentile) {
+  if (!Number.isFinite(percentile)) return null
+  if (percentile >= 90) return 'top_10'
+  if (percentile >= 80) return 'top_20'
+  if (percentile >= 60) return 'warm'
+  if (percentile <= 20) return 'coolest_20'
+  return 'middle'
+}
+
+const HEAT_RELATIVE_METRICS = [
+  ['predicted_lst_c_fusion', ['predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c']],
+  ['urban_heat_score', ['urban_heat_score']],
+  ['pedestrian_heat_score', ['pedestrian_heat_score']],
+  ['priority_score', ['priority_score']],
+  ['retained_heat_score', ['retained_heat_score']],
+  ['effective_canopy_pct', ['effective_canopy_pct']]
+]
+
+function valueFromProperties(properties, keys) {
+  for (const key of keys) {
+    const value = Number(properties?.[key])
+    if (Number.isFinite(value)) return value
+  }
+  return null
+}
+
+function enrichRelativeHeatData(featureCollection, defaultMetric = 'predicted_lst_c_fusion') {
+  if (!featureCollection?.features?.length) return featureCollection
+
+  const metricValues = {}
+  HEAT_RELATIVE_METRICS.forEach(([metricId, keys]) => {
+    metricValues[metricId] = featureCollection.features
+      .map((feature) => valueFromProperties(feature?.properties, keys))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)
+  })
+
+  return {
+    ...featureCollection,
+    features: featureCollection.features.map((feature) => {
+      const relativeProperties = {}
+
+      HEAT_RELATIVE_METRICS.forEach(([metricId, keys]) => {
+        const value = valueFromProperties(feature?.properties, keys)
+        const percentile = percentileRank(value, metricValues[metricId])
+        relativeProperties[`${metricId}_relative_percentile`] = percentile != null ? Number(percentile.toFixed(2)) : null
+        relativeProperties[`${metricId}_relative_band`] = relativeHeatBand(percentile)
+      })
+
+      const defaultPercentile = relativeProperties[`${defaultMetric}_relative_percentile`]
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          ...relativeProperties,
+          heat_relative_percentile: defaultPercentile,
+          heat_relative_band: relativeHeatBand(defaultPercentile)
+        }
+      }
+    }),
+    metadata: {
+      ...(featureCollection.metadata || {}),
+      relativeHeatMetric: defaultMetric,
+      relativeHeatBands: {
+        top_10: 'Top 10% hottest or highest priority',
+        top_20: 'Top 20% hottest or highest priority',
+        warm: 'Above-middle heat pressure',
+        middle: 'Middle relative range',
+        coolest_20: 'Lowest 20% relative heat pressure'
+      }
+    }
+  }
+}
+
 function heatStreetPercentileBand(percentile) {
   if (!Number.isFinite(percentile)) return null
   if (percentile >= 90) return 'top_10'
@@ -131,17 +205,18 @@ function enrichHeatStreetData(heatStreetData) {
 }
 
 function groupHeatZonesByYear(heatZonesData) {
-  if (!heatZonesData?.features?.length) return {}
+  const enrichedHeatZones = enrichRelativeHeatData(heatZonesData, 'predicted_lst_c_fusion')
+  if (!enrichedHeatZones?.features?.length) return {}
 
-  return heatZonesData.features.reduce((byYear, feature) => {
+  return enrichedHeatZones.features.reduce((byYear, feature) => {
     const year = Number(feature?.properties?.analysis_year) || new Date().getFullYear()
     if (!byYear[year]) {
       byYear[year] = {
         type: 'FeatureCollection',
         features: [],
         metadata: {
-          ...(heatZonesData.metadata || {}),
-          source: heatZonesData.metadata?.source || 'climate.heat_zones',
+          ...(enrichedHeatZones.metadata || {}),
+          source: enrichedHeatZones.metadata?.source || 'climate.heat_zones',
           analysis_year: year
         }
       }
@@ -151,8 +226,11 @@ function groupHeatZonesByYear(heatZonesData) {
   }, {})
 }
 
-export async function loadExplorerShadeData(season, timeOfDay) {
-  return fetchJson(`/api/climate/shade?hour=${encodeURIComponent(timeOfDay || '1400')}`, 'Climate shade data load failed')
+export async function loadExplorerShadeData(season, timeOfDay, shadeMonth) {
+  const params = new URLSearchParams()
+  params.set('hour', timeOfDay || '1400')
+  if (shadeMonth) params.set('month', shadeMonth)
+  return fetchJson(`/api/climate/shade?${params.toString()}`, 'Climate shade data load failed')
 }
 
 export async function loadExplorerGreeneryData() {
@@ -176,11 +254,17 @@ export async function loadExplorerTemperatureData() {
 }
 
 export async function loadExplorerHeatGridData() {
-  return fetchJson('/api/climate/heat-grid', 'Climate heat grid load failed')
+  return enrichRelativeHeatData(await fetchJson('/api/climate/heat-grid', 'Climate heat grid load failed'), 'predicted_lst_c_fusion')
 }
 
-export async function loadExplorerEstimatedWindData() {
-  return fetchJson('/api/climate/est-wind', 'Estimated wind data load failed')
+export async function loadExplorerEstimatedWindData(windDirection, windSpeedKmh) {
+  const params = new URLSearchParams()
+  if (windDirection) params.set('direction', windDirection)
+  if (windSpeedKmh !== null && windSpeedKmh !== undefined && windSpeedKmh !== '') {
+    params.set('speedKmh', String(windSpeedKmh))
+  }
+  const query = params.toString()
+  return fetchJson(`/api/climate/est-wind${query ? `?${query}` : ''}`, 'Estimated wind data load failed')
 }
 
 export async function loadExplorerAirQualityData() {
