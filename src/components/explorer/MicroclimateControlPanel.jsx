@@ -45,6 +45,87 @@ const HEAT_METRIC_OPTIONS = [
   ['effective_canopy_pct', 'Canopy']
 ]
 
+const HEAT_METRIC_LEGENDS = {
+  predicted_lst_c_fusion: {
+    field: 'predicted_lst_c_fusion_relative_percentile',
+    title: 'Modelled LST ranking',
+    lowLabel: 'Cooler blocks',
+    highLabel: 'Hottest blocks',
+    rows: [
+      ['Hottest 10%', 90, 101, '#7f1d1d'],
+      ['Hot 20%', 80, 90, '#dc2626'],
+      ['Warm', 60, 80, '#f97316'],
+      ['Middle', 20, 60, '#facc15'],
+      ['Coolest 20%', 0, 20, '#22c55e']
+    ]
+  },
+  urban_heat_score: {
+    field: 'urban_heat_score_relative_percentile',
+    title: 'Urban heat ranking',
+    lowLabel: 'Lower heat island pressure',
+    highLabel: 'Highest heat islands',
+    rows: [
+      ['Highest 10%', 90, 101, '#7f1d1d'],
+      ['High 20%', 80, 90, '#dc2626'],
+      ['Elevated', 60, 80, '#f97316'],
+      ['Middle', 20, 60, '#facc15'],
+      ['Lowest 20%', 0, 20, '#22c55e']
+    ]
+  },
+  pedestrian_heat_score: {
+    field: 'pedestrian_heat_score_relative_percentile',
+    title: 'Pedestrian heat ranking',
+    lowLabel: 'Lower exposure',
+    highLabel: 'Highest exposure',
+    rows: [
+      ['Highest 10%', 90, 101, '#991b1b'],
+      ['High 20%', 80, 90, '#dc2626'],
+      ['Exposed', 60, 80, '#f97316'],
+      ['Middle', 20, 60, '#facc15'],
+      ['Lowest 20%', 0, 20, '#22c55e']
+    ]
+  },
+  priority_score: {
+    field: 'priority_score_relative_percentile',
+    title: 'Priority ranking',
+    lowLabel: 'Lower priority',
+    highLabel: 'Highest priority',
+    rows: [
+      ['Highest 10%', 90, 101, '#7f1d1d'],
+      ['High 20%', 80, 90, '#dc2626'],
+      ['Priority', 60, 80, '#f97316'],
+      ['Middle', 20, 60, '#fef08a'],
+      ['Lowest 20%', 0, 20, '#22c55e']
+    ]
+  },
+  retained_heat_score: {
+    field: 'retained_heat_score_relative_percentile',
+    title: 'Night retention ranking',
+    lowLabel: 'Lower night retention',
+    highLabel: 'Highest night retention',
+    rows: [
+      ['Highest 10%', 90, 101, '#450a0a'],
+      ['High 20%', 80, 90, '#991b1b'],
+      ['Retaining heat', 60, 80, '#ef4444'],
+      ['Middle', 20, 60, '#c084fc'],
+      ['Lowest 20%', 0, 20, '#dbeafe']
+    ]
+  },
+  effective_canopy_pct: {
+    field: 'effective_canopy_pct_relative_percentile',
+    title: 'Effective canopy ranking',
+    lowLabel: 'Lowest canopy',
+    highLabel: 'Highest canopy',
+    rows: [
+      ['Highest 10%', 90, 101, '#14532d'],
+      ['High 20%', 80, 90, '#22c55e'],
+      ['Good canopy', 60, 80, '#86efac'],
+      ['Middle', 20, 60, '#facc15'],
+      ['Lowest 20%', 0, 20, '#7f1d1d']
+    ]
+  }
+}
+
 const numberOrNull = (value) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
@@ -79,6 +160,18 @@ const bandCounts = (features, bandKey = 'heat_relative_band') => {
     if (counts[band] !== undefined) counts[band] += 1
   })
   return counts
+}
+
+const metricBandCounts = (features, legend) => {
+  const total = features.length
+  const rows = legend.rows.map(([label, min, max, color]) => {
+    const count = features.filter((feature) => {
+      const value = numberOrNull(feature.properties?.[legend.field])
+      return Number.isFinite(value) && value >= min && value < max
+    }).length
+    return { label, count, color }
+  })
+  return { total, rows }
 }
 
 const windDirectionLabel = (direction) => (
@@ -120,6 +213,8 @@ const MicroclimateControlPanel = ({
       .map((feature) => metricValue(feature, ['effective_canopy_pct', 'mean_effective_canopy_pct']))
       .filter(Number.isFinite)
     const counts = bandCounts(gridFeatures.length ? gridFeatures : heatFeatures)
+    const activeLegend = HEAT_METRIC_LEGENDS[ecologyMetric] || HEAT_METRIC_LEGENDS.predicted_lst_c_fusion
+    const legendCounts = metricBandCounts(gridFeatures.length ? gridFeatures : heatFeatures, activeLegend)
 
     return {
       zones: zoneFeatures.length,
@@ -128,9 +223,11 @@ const MicroclimateControlPanel = ({
       avgLst: avg(lstValues),
       avgPedestrian: avg(pedestrianValues),
       avgCanopy: avg(canopyValues),
-      counts
+      counts,
+      legend: activeLegend,
+      legendCounts
     }
-  }, [ecologyCurrentData, heatGridData, temperatureData])
+  }, [ecologyCurrentData, ecologyMetric, heatGridData, temperatureData])
 
   const shadeSummary = useMemo(() => {
     const features = shadeData?.features || []
@@ -184,7 +281,7 @@ const MicroclimateControlPanel = ({
       <div className="microclimate-section">
         <div className="microclimate-section-head">
           <span>Heat Analysis</span>
-          <strong>Relative ranking</strong>
+          <strong>{heatSummary.legend.title}</strong>
         </div>
         <div className="microclimate-segmented">
           {HEAT_METRIC_OPTIONS.map(([id, label]) => (
@@ -202,27 +299,19 @@ const MicroclimateControlPanel = ({
           ))}
         </div>
         <div className="microclimate-legend-scale">
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
+          {[...heatSummary.legend.rows].reverse().map(([label, , , color]) => (
+            <span key={label} style={{ background: color }} />
+          ))}
         </div>
         <div className="microclimate-legend-labels">
-          <span>Cooler 20%</span>
-          <span>Top 10% hottest</span>
+          <span>{heatSummary.legend.lowLabel}</span>
+          <span>{heatSummary.legend.highLabel}</span>
         </div>
         <div className="microclimate-band-bars">
-          {[
-            ['Top 10%', heatSummary.counts.top_10, '#7f1d1d'],
-            ['Top 20%', heatSummary.counts.top_20, '#dc2626'],
-            ['Warm', heatSummary.counts.warm, '#f97316'],
-            ['Middle', heatSummary.counts.middle, '#facc15'],
-            ['Coolest 20%', heatSummary.counts.coolest_20, '#22c55e']
-          ].map(([label, count, color]) => (
+          {heatSummary.legendCounts.rows.map(({ label, count, color }) => (
             <div className="microclimate-band-row" key={label}>
               <span>{label}</span>
-              <div><i style={{ width: `${Math.min(100, (count / Math.max(1, heatSummary.gridCells || heatSummary.zones)) * 100)}%`, background: color }} /></div>
+              <div><i style={{ width: `${Math.min(100, (count / Math.max(1, heatSummary.legendCounts.total)) * 100)}%`, background: color }} /></div>
               <strong>{count}</strong>
             </div>
           ))}

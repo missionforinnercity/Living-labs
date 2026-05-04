@@ -396,12 +396,14 @@ const ExplorerMap = ({
   ecologyHeatData,
   ecologyMetric = 'predicted_lst_c_fusion',
   selectedEcologyFeatureKeys = [],
+  selectedHeatGridFeatureKeys = [],
   envCurrentData,
   envHistoryData,
   envIndex = 'uaqi',
   onEnvGridDetail,
   onGreeneryStreetSelect,
   onEcologyFeatureSelect,
+  onHeatGridFeatureSelect,
   visibleLayers,
   layerStack = [],
   activeCategory,
@@ -542,7 +544,7 @@ const ExplorerMap = ({
         const predictedLstFusion = Number(feature.properties?.predicted_lst_c_fusion ?? feature.properties?.heat_model_lst_c ?? feature.properties?.mean_lst_c)
         const pedestrianHeatScore = Number(feature.properties?.pedestrian_heat_score)
         const priorityScore = Number(feature.properties?.priority_score)
-        const retainedHeatScore = Number(feature.properties?.retained_heat_score)
+        const retainedHeatScore = Number(feature.properties?.night_heat_retention_c ?? feature.properties?.retained_heat_score)
         const effectiveCanopyPct = Number(feature.properties?.effective_canopy_pct)
         const thermalConfidenceScore = Number(feature.properties?.thermal_confidence_score)
         const featureKey = toEcologyFeatureKey(feature.properties?.feature_id)
@@ -564,6 +566,7 @@ const ExplorerMap = ({
             predicted_lst_c_fusion: Number.isFinite(predictedLstFusion) ? predictedLstFusion : null,
             pedestrian_heat_score: Number.isFinite(pedestrianHeatScore) ? pedestrianHeatScore : null,
             priority_score: Number.isFinite(priorityScore) ? priorityScore : null,
+            night_heat_retention_c: Number.isFinite(retainedHeatScore) ? retainedHeatScore : null,
             retained_heat_score: Number.isFinite(retainedHeatScore) ? retainedHeatScore : null,
             effective_canopy_pct: Number.isFinite(effectiveCanopyPct) ? effectiveCanopyPct : null,
             thermal_confidence_score: Number.isFinite(thermalConfidenceScore) ? thermalConfidenceScore : null,
@@ -1011,6 +1014,15 @@ const ExplorerMap = ({
           buildEcologySelectionKeyFromClick(feature, event.lngLat)
           || feature.properties?.feature_id_key
           || feature.properties?.feature_id
+        )
+        return
+      }
+
+      if (feature.source === 'climate-heat-grid') {
+        onHeatGridFeatureSelect?.(
+          feature.properties?.feature_id_key
+          || feature.properties?.feature_id
+          || feature.properties?.ogc_fid
         )
         return
       }
@@ -2283,22 +2295,25 @@ const ExplorerMap = ({
             id="climate-heat-grid"
             type="geojson"
             data={heatGridData}
-            promoteId="feature_id"
+            promoteId="feature_id_key"
           >
             <Layer
               id="climate-heat-grid-fill"
               type="fill"
               paint={{
                 'fill-color': [
-                  'step',
-                  ['coalesce', ['get', 'heat_relative_percentile'], 0],
-                  '#dbeafe',
-                  20, '#22c55e',
-                  60, '#facc15',
-                  80, '#f97316',
-                  90, '#dc2626'
+                  'interpolate',
+                  ['linear'],
+                  ['to-number', ['coalesce', ['get', 'heat_grid_color_value'], ['get', 'heat_relative_percentile'], ['get', 'thermal_percentile'], 50]],
+                  0, '#dbeafe',
+                  15, '#67e8f9',
+                  35, '#22c55e',
+                  55, '#facc15',
+                  72, '#fb923c',
+                  86, '#ef4444',
+                  100, '#7f1d1d'
                 ],
-                'fill-opacity': 0.62
+                'fill-opacity': 0.72
               }}
             />
             <Layer
@@ -2310,6 +2325,30 @@ const ExplorerMap = ({
                 'line-opacity': 0.35
               }}
             />
+            {selectedHeatGridFeatureKeys[0] && (
+              <Layer
+                id="climate-heat-grid-primary-outline"
+                type="line"
+                filter={['==', ['get', 'feature_id_key'], String(selectedHeatGridFeatureKeys[0])]}
+                paint={{
+                  'line-color': '#f97316',
+                  'line-width': 3,
+                  'line-opacity': 0.95
+                }}
+              />
+            )}
+            {selectedHeatGridFeatureKeys[1] && (
+              <Layer
+                id="climate-heat-grid-compare-outline"
+                type="line"
+                filter={['==', ['get', 'feature_id_key'], String(selectedHeatGridFeatureKeys[1])]}
+                paint={{
+                  'line-color': '#38bdf8',
+                  'line-width': 3,
+                  'line-opacity': 0.95
+                }}
+              />
+            )}
           </Source>
         )}
 
@@ -3447,7 +3486,7 @@ const ExplorerMap = ({
                     <p><strong>Urban Heat Score:</strong> {numberLabel(props.urban_heat_score)}</p>
                     <p><strong>Pedestrian Heat Score:</strong> {numberLabel(props.pedestrian_heat_score)}</p>
                     <p><strong>Priority:</strong> {props.priority_class || '—'}{valueFrom('priority_score') != null ? ` (${numberLabel(props.priority_score)})` : ''}</p>
-                    <p><strong>Retained Heat Score:</strong> {numberLabel(props.retained_heat_score)}</p>
+                    <p><strong>Night Heat Retention:</strong> {numberLabel(valueFrom('night_heat_retention_c', 'retained_heat_score'), '°C')}</p>
                     <p><strong>Effective Canopy:</strong> {numberLabel(props.effective_canopy_pct, '%')}</p>
                     <p><strong>Thermal Confidence:</strong> {props.thermal_confidence_class || '—'}</p>
                   </>

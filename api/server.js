@@ -168,6 +168,7 @@ const CLIMATE_TABLES = {
       'urban_heat_score',
       'pedestrian_heat_score',
       'priority_score',
+      'night_heat_retention_c',
       'retained_heat_score',
       'effective_canopy_pct',
       'thermal_confidence_score',
@@ -672,6 +673,7 @@ app.get('/api/climate/heat-zones', async (_req, res) => {
         'mean_lst_c',
         'heat_impact',
         'priority_score',
+        'night_heat_retention_c',
         'retained_heat_score',
         'effective_canopy_pct',
         'thermal_confidence_score'

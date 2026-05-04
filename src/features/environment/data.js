@@ -77,6 +77,7 @@ function enrichGreeneryAccessData(greeneryData) {
 function percentileRank(value, sortedValues) {
   if (!Number.isFinite(value) || !sortedValues.length) return null
   if (sortedValues.length === 1) return 100
+  if (sortedValues[0] === sortedValues[sortedValues.length - 1]) return 50
 
   let index = sortedValues.findIndex((entry) => entry >= value)
   if (index < 0) index = sortedValues.length - 1
@@ -97,7 +98,7 @@ const HEAT_RELATIVE_METRICS = [
   ['urban_heat_score', ['urban_heat_score']],
   ['pedestrian_heat_score', ['pedestrian_heat_score']],
   ['priority_score', ['priority_score']],
-  ['retained_heat_score', ['retained_heat_score']],
+  ['retained_heat_score', ['night_heat_retention_c', 'retained_heat_score']],
   ['effective_canopy_pct', ['effective_canopy_pct']]
 ]
 
@@ -133,11 +134,22 @@ function enrichRelativeHeatData(featureCollection, defaultMetric = 'predicted_ls
       })
 
       const defaultPercentile = relativeProperties[`${defaultMetric}_relative_percentile`]
+      const fallbackPercentile = [
+        defaultPercentile,
+        Number(feature?.properties?.thermal_percentile),
+        relativeProperties.urban_heat_score_relative_percentile,
+        relativeProperties.pedestrian_heat_score_relative_percentile,
+        relativeProperties.priority_score_relative_percentile,
+        relativeProperties.retained_heat_score_relative_percentile
+      ].find(Number.isFinite)
+      const featureId = feature?.properties?.feature_id ?? feature?.properties?.ogc_fid ?? feature?.id
       return {
         ...feature,
         properties: {
           ...feature.properties,
           ...relativeProperties,
+          feature_id_key: featureId != null ? String(featureId) : null,
+          heat_grid_color_value: fallbackPercentile != null ? Number(fallbackPercentile.toFixed(2)) : 50,
           heat_relative_percentile: defaultPercentile,
           heat_relative_band: relativeHeatBand(defaultPercentile)
         }

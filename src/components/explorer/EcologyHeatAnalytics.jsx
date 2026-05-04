@@ -68,7 +68,7 @@ const ECOLOGY_METRICS = [
 const avg = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
 
 const validNumbers = (features, key) => features
-  .map((feature) => Number(feature.properties?.[key]))
+  .map((feature) => Number(valueFrom(feature.properties, Array.isArray(key) ? key : [key])))
   .filter(Number.isFinite)
 
 const numberOrNull = (value) => {
@@ -128,7 +128,7 @@ const metricCards = (feature) => [
   { label: 'Urban Heat', value: formatValue(numberOrNull(feature?.urban_heat_score)) },
   { label: 'Pedestrian Heat', value: formatValue(numberOrNull(feature?.pedestrian_heat_score)) },
   { label: 'Priority', value: `${formatText(feature?.priority_class)}${feature?.priority_score != null ? ` · ${formatValue(numberOrNull(feature.priority_score))}` : ''}` },
-  { label: 'Retained Heat', value: formatValue(numberOrNull(feature?.retained_heat_score)) },
+  { label: 'Night Retention', value: formatValue(numberOrNull(valueFrom(feature, ['night_heat_retention_c', 'retained_heat_score'])), '°C') },
   { label: 'Effective Canopy', value: formatValue(numberOrNull(feature?.effective_canopy_pct), '%') },
   { label: 'Confidence', value: formatText(feature?.thermal_confidence_class) }
 ]
@@ -157,7 +157,7 @@ const EcologyHeatAnalytics = ({
     const avgCoolIsland = avg(validNumbers(features, 'cool_island_score'))
     const avgHealthScore = avg(validNumbers(features, 'health_score'))
     const avgPedestrianHeat = avg(validNumbers(features, 'pedestrian_heat_score'))
-    const avgRetainedHeat = avg(validNumbers(features, 'retained_heat_score'))
+    const avgRetainedHeat = avg(validNumbers(features, ['night_heat_retention_c', 'retained_heat_score']))
     const avgEffectiveCanopy = avg(validNumbers(features, 'effective_canopy_pct'))
     const hotspotCount = features.filter((feature) => {
       const urbanHeat = numberOrNull(feature.properties?.urban_heat_score)
@@ -245,8 +245,8 @@ const EcologyHeatAnalytics = ({
             <p>Cooling capacity adjusted for canopy health.</p>
           </article>
           <article>
-            <span>Average Retained Heat</span>
-            <strong>{formatValue(summary.avgRetainedHeat)}</strong>
+            <span>Average Night Retention</span>
+            <strong>{formatValue(summary.avgRetainedHeat, '°C')}</strong>
             <p>{summary.hotspotCount} sections currently rank as high heat areas.</p>
           </article>
         </div>

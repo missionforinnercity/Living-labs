@@ -38,16 +38,6 @@ const WATER_LABELS = {
   'Piped water from community stand': 'Community stand'
 }
 
-const REFUSE_LABELS = {
-  'Removed by local authority/private company/community members at least once a week': 'Collected weekly',
-  'Removed by local authority/private company/community members less often than once a week': 'Collected less often',
-  'Communal refuse dump': 'Communal dump',
-  'Communal container/central collection point': 'Collection point',
-  'Own refuse dump': 'Own dump',
-  'Dump or leave rubbish anywhere (no rubbish disposal)': 'No safe disposal',
-  Other: 'Other'
-}
-
 const ELECTRICITY_LABELS = {
   'In-house prepaid meter': 'Prepaid meter',
   'In-house conventional meter (municipal electricity that is paid with rates or a bill)': 'Conventional meter',
@@ -67,13 +57,17 @@ const COOKING_LABELS = {
 }
 
 const HUNGER_ORDER = ['Never', 'Seldom', 'Sometimes', 'Often', 'Always']
+const LOWEST_RANKING_METRIC_KEYS = new Set([
+  'pct_households_piped_water_inside_dwelling',
+  'pct_households_refuse_removed_weekly'
+])
 
 const LENS_CONFIG = {
   neighbourhoods: {
     id: 'neighbourhoods',
     badge: 'Neighbourhood Lens',
     label: 'Neighbourhoods',
-    title: 'Neighbourhood fabric',
+    title: 'Neighbourhood lens',
     subtitle: 'Population, liveability, lighting and green-blue access across Cape Town.',
     datasetPath: '/data/CPT/master_neighbourhoods_enriched.geojson',
     nameKey: 'display_name',
@@ -167,7 +161,7 @@ const LENS_CONFIG = {
 
 const DEFAULT_METRIC_BY_LENS = {
   neighbourhoods: 'GreenBlue_Score',
-  suburbs: 'pct_households_piped_water_inside_dwelling',
+  suburbs: 'pct_commuters_under_30_minutes',
   economy: 'tax_employment_latest'
 }
 
@@ -330,10 +324,6 @@ function getMeaningfulFeatureValues(features, key, format = 'integer') {
   return features
     .map((feature) => Number(feature.properties?.[key]))
     .filter((value) => isMeaningfulMetricValue(value, format))
-}
-
-function sumMeaningfulFeatureValues(features, key, format = 'integer') {
-  return getMeaningfulFeatureValues(features, key, format).reduce((sum, value) => sum + value, 0)
 }
 
 function averageMeaningfulFeatureValue(features, key, format = 'integer') {
@@ -537,16 +527,6 @@ function RankingChart({ data, metric }) {
   )
 }
 
-function OverviewStat({ label, value, hint }) {
-  return (
-    <div className="we-overview-stat">
-      <span className="we-overview-stat-label">{label}</span>
-      <strong className="we-overview-stat-value">{value}</strong>
-      {hint ? <span className="we-overview-stat-hint">{hint}</span> : null}
-    </div>
-  )
-}
-
 function DetailRow({ label, value, delta }) {
   if (value === 'No data') return null
   return (
@@ -578,7 +558,6 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
   const [collections, setCollections] = useState({})
   const [csvData, setCsvData] = useState({
     water: [],
-    refuse: [],
     hunger: [],
     materials: [],
     cooking: [],
@@ -596,7 +575,6 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
   const [suburbStory, setSuburbStory] = useState('cooking')
   const [economyStory, setEconomyStory] = useState('trend')
   const [materialType, setMaterialType] = useState('Wall')
-  const [isHeroCollapsed, setIsHeroCollapsed] = useState(false)
   const [isThemePanelCollapsed, setIsThemePanelCollapsed] = useState(false)
   const [isDetailMinimized, setIsDetailMinimized] = useState(false)
   const [isAnalyticsCollapsed, setIsAnalyticsCollapsed] = useState(true)
@@ -685,7 +663,6 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
 
         const csvEntries = await Promise.all([
           fetch('/data/CPT/access_to_water_data_2026-03-18.csv').then((response) => response.text()).then(parseCsvText),
-          fetch('/data/CPT/2024_CCT_Survey_refuse_data_2026-03-18%20(1).csv').then((response) => response.text()).then(parseCsvText),
           fetch('/data/CPT/CCT_Survey_2024_adult_hunger2026-03-18.csv').then((response) => response.text()).then(parseCsvText),
           fetch('/data/CPT/2024_CCT_Survey_Building_Materials2026-03-18.csv').then((response) => response.text()).then(parseCsvText),
           fetch('/data/CPT/2024_CCT_Survey_cooking_data_2026-03-18.csv').then((response) => response.text()).then(parseCsvText),
@@ -695,11 +672,10 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
         setCollections(Object.fromEntries(geojsonEntries))
         setCsvData({
           water: csvEntries[0],
-          refuse: csvEntries[1],
-          hunger: csvEntries[2],
-          materials: csvEntries[3],
-          cooking: csvEntries[4],
-          electricity: csvEntries[5]
+          hunger: csvEntries[1],
+          materials: csvEntries[2],
+          cooking: csvEntries[3],
+          electricity: csvEntries[4]
         })
       } catch (error) {
         console.error('Failed to load CPT atlas data:', error)
@@ -713,6 +689,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
   const activeCollection = collections[activeLensId] || null
   const activeMetricKey = metricByLens[activeLensId]
   const activeMetric = activeLens.metrics.find((metric) => metric.key === activeMetricKey) || activeLens.metrics[0]
+  const rankLowestFirst = LOWEST_RANKING_METRIC_KEYS.has(activeMetric.key)
 
   const metricRanges = useMemo(() => {
     const ranges = {}
@@ -741,7 +718,6 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
 
   useEffect(() => {
     if (selectedFeatureId) {
-      setIsHeroCollapsed(true)
       setIsThemePanelCollapsed(true)
       setIsDetailMinimized(false)
       setIsAnalyticsCollapsed(true)
@@ -764,6 +740,16 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
       .sort((a, b) => Number(b.properties?.[activeMetric.key]) - Number(a.properties?.[activeMetric.key]))
   }, [activeFeatures, activeMetric.format, activeMetric.key])
 
+  const chartRankedFeatures = useMemo(() => {
+    return [...activeFeatures]
+      .filter((feature) => isMeaningfulMetricValue(Number(feature.properties?.[activeMetric.key]), activeMetric.format))
+      .sort((a, b) => {
+        const aValue = Number(a.properties?.[activeMetric.key])
+        const bValue = Number(b.properties?.[activeMetric.key])
+        return rankLowestFirst ? aValue - bValue : bValue - aValue
+      })
+  }, [activeFeatures, activeMetric.format, activeMetric.key, rankLowestFirst])
+
   const focusFeature = selectedFeature || rankedFeatures[0] || null
 
   const searchResults = useMemo(() => {
@@ -775,54 +761,11 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
   }, [activeFeatures, searchQuery])
 
   const rankingChartData = useMemo(() => {
-    return rankedFeatures.slice(0, 8).map((feature) => ({
+    return chartRankedFeatures.slice(0, 8).map((feature) => ({
       name: truncateLabel(feature.properties?.display_name, activeLensId === 'economy' ? 16 : 20),
       value: Number(feature.properties?.[activeMetric.key] || 0)
     }))
-  }, [rankedFeatures, activeMetric.key, activeLensId])
-
-  const cityOverviewStats = useMemo(() => {
-    if (!activeFeatures.length) return []
-
-    if (activeLensId === 'neighbourhoods') {
-      const totalPopulation = sumMeaningfulFeatureValues(activeFeatures, 'pop_total', 'integer')
-      const avgIncome = averageMeaningfulFeatureValue(activeFeatures, 'avg_income', 'currency')
-      const totalLights = sumMeaningfulFeatureValues(activeFeatures, 'total_lights', 'integer')
-      const natureLeader = rankedFeatures[0]
-      return [
-        { label: 'Neighbourhoods', value: INTEGER_FORMATTER.format(activeFeatures.length) },
-        { label: 'Population', value: COMPACT_FORMATTER.format(totalPopulation) },
-        { label: 'Average Income', value: avgIncome ? CURRENCY_FORMATTER.format(avgIncome) : 'No data' },
-        { label: 'Top Area', value: natureLeader?.properties?.display_name || 'No data', hint: activeMetric.label }
-      ]
-    }
-
-    if (activeLensId === 'suburbs') {
-      const avgWater = averageMeaningfulFeatureValue(activeFeatures, 'pct_households_piped_water_inside_dwelling', 'percent')
-      const avgRefuse = averageMeaningfulFeatureValue(activeFeatures, 'pct_households_refuse_removed_weekly', 'percent')
-      const avgCommute = averageMeaningfulFeatureValue(activeFeatures, 'pct_commuters_under_30_minutes', 'percent')
-      const topSuburb = rankedFeatures[0]
-      return [
-        { label: 'Planning Suburbs', value: INTEGER_FORMATTER.format(activeFeatures.length) },
-        { label: 'Avg Water Access', value: avgWater !== null ? formatMetricValue('percent', avgWater) : 'No data' },
-        { label: 'Avg Weekly Refuse', value: avgRefuse !== null ? formatMetricValue('percent', avgRefuse) : 'No data' },
-        { label: 'Fast Commutes', value: avgCommute !== null ? formatMetricValue('percent', avgCommute) : 'No data', hint: '< 30 minutes' },
-        { label: 'Leading Suburb', value: topSuburb?.properties?.display_name || 'No data', hint: activeMetric.label }
-      ]
-    }
-
-    const totalJobs = sumMeaningfulFeatureValues(activeFeatures, 'tax_employment_latest', 'integer')
-    const totalBusinesses = sumMeaningfulFeatureValues(activeFeatures, 'tax_establishments_latest', 'integer')
-    const avgIncome = averageMeaningfulFeatureValue(activeFeatures, 'tax_median_income_latest', 'currency')
-    const topHex = rankedFeatures[0]
-    return [
-      { label: 'Economic Hexagons', value: INTEGER_FORMATTER.format(activeFeatures.length) },
-      { label: 'Formal Jobs', value: COMPACT_FORMATTER.format(totalJobs) },
-      { label: 'Establishments', value: COMPACT_FORMATTER.format(totalBusinesses) },
-      { label: 'Median Income', value: avgIncome ? CURRENCY_FORMATTER.format(avgIncome) : 'No data' },
-      { label: 'Leading Hexagon', value: topHex?.properties?.display_name || 'No data', hint: activeMetric.label }
-    ]
-  }, [activeFeatures, activeLensId, activeMetric.label, rankedFeatures])
+  }, [chartRankedFeatures, activeMetric.key, activeLensId])
 
   const averageLookup = useMemo(() => {
     const lookup = {}
@@ -902,18 +845,6 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
       .sort((a, b) => Math.max(b.cct, b.eskom) - Math.max(a.cct, a.eskom))
   }, [csvData.electricity])
 
-  const refuseChartData = useMemo(() => {
-    return csvData.refuse.map((row) => ({
-      name: REFUSE_LABELS[row['Refuse Removal']] || row['Refuse Removal'],
-      formal: smartPercentValue(Number(row.Formal_dwelling || 0)),
-      informal: smartPercentValue(Number(row.Informal_dwelling || 0)),
-      adi: smartPercentValue(Number(row.ADI || 0)),
-      total: smartPercentValue(Number(row.Total || 0))
-    }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 6)
-  }, [csvData.refuse])
-
   const economyTrendData = useMemo(() => {
     if (!focusFeature) return []
     const properties = focusFeature.properties || {}
@@ -972,10 +903,10 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
 
     if (activeLensId === 'suburbs') {
       return [
-        { label: 'Water Inside Home', value: formatMetricValue('percent', Number(properties.pct_households_piped_water_inside_dwelling || 0)) },
-        { label: 'Weekly Refuse', value: formatMetricValue('percent', Number(properties.pct_households_refuse_removed_weekly || 0)) },
         { label: 'Short Commutes', value: formatMetricValue('percent', Number(properties.pct_commuters_under_30_minutes || 0)) },
-        { label: 'Park Use', value: formatMetricValue('percent', Number(properties.pct_public_facility_use_park_monthly_within_suburb || 0)) }
+        { label: 'Walking Trips', value: formatMetricValue('percent', Number(properties.pct_commuters_mode_walking || 0)) },
+        { label: 'Park Use', value: formatMetricValue('percent', Number(properties.pct_public_facility_use_park_monthly_within_suburb || 0)) },
+        { label: 'Library Use', value: formatMetricValue('percent', Number(properties.pct_public_facility_use_library_monthly_within_suburb || 0)) }
       ]
     }
 
@@ -1529,8 +1460,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               onChange={setSuburbStory}
               options={[
                 { value: 'cooking', label: 'Cooking' },
-                { value: 'electricity', label: 'Electricity' },
-                { value: 'refuse', label: 'Refuse' }
+                { value: 'electricity', label: 'Electricity' }
               ]}
             />
           </div>
@@ -1560,8 +1490,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               onChange={setSuburbStory}
               options={[
                 { value: 'cooking', label: 'Cooking' },
-                { value: 'electricity', label: 'Electricity' },
-                { value: 'refuse', label: 'Refuse' }
+                { value: 'electricity', label: 'Electricity' }
               ]}
             />
           </div>
@@ -1580,38 +1509,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
       )
     }
 
-    return (
-      <>
-        <div className="we-chart-card-head">
-          <div>
-            <div className="we-chart-card-kicker">Service Snapshot</div>
-            <h3>Refuse removal pathways</h3>
-          </div>
-          <StoryToggle
-            value={suburbStory}
-            onChange={setSuburbStory}
-            options={[
-              { value: 'cooking', label: 'Cooking' },
-              { value: 'electricity', label: 'Electricity' },
-              { value: 'refuse', label: 'Refuse' }
-            ]}
-          />
-        </div>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={refuseChartData} margin={{ top: 8, right: 6, left: 0, bottom: 18 }}>
-            <CartesianGrid stroke="rgba(255,255,255,0.07)" vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: 'rgba(236,243,255,0.58)', fontSize: 11 }} axisLine={false} tickLine={false} interval={0} angle={-10} textAnchor="end" height={62} />
-            <YAxis tick={{ fill: 'rgba(236,243,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}%`} />
-            <Tooltip content={<CustomChartTooltip formatters={{ formal: (value) => `${DECIMAL_FORMATTER.format(value)}%`, informal: (value) => `${DECIMAL_FORMATTER.format(value)}%`, adi: (value) => `${DECIMAL_FORMATTER.format(value)}%`, total: (value) => `${DECIMAL_FORMATTER.format(value)}%` }} />} />
-            <Legend wrapperStyle={{ color: 'rgba(236,243,255,0.65)', fontSize: 11 }} />
-            <Bar dataKey="formal" name="Formal" fill="#63d8ff" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="informal" name="Informal" fill="#ff8d63" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="adi" name="ADI" fill="#47e4a6" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="total" name="Total" fill="#d6dcff" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </>
-    )
+    return null
   }
 
   const renderEconomyStory = () => {
@@ -1715,6 +1613,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
     if (activeLensId === 'suburbs') return renderSuburbStory()
     return renderEconomyStory()
   }
+  const showAnalyticsRail = activeLensId !== 'economy'
 
   if (!activeCollection) {
     return (
@@ -1729,7 +1628,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
   }
 
   return (
-    <div className={`we-root ${isAnalyticsCollapsed ? 'we-root--analytics-collapsed' : 'we-root--analytics-open'}`}>
+    <div className={`we-root we-root--${activeLensId} ${!showAnalyticsRail || isAnalyticsCollapsed ? 'we-root--analytics-collapsed' : 'we-root--analytics-open'}`}>
       <div className="we-atmosphere we-atmosphere--one" />
       <div className="we-atmosphere we-atmosphere--two" />
       <div className="we-atmosphere we-atmosphere--three" />
@@ -1783,28 +1682,6 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
           </button>
         </div>
       </header>
-
-      <div className={`we-hero-card ${isHeroCollapsed ? 'we-hero-card--collapsed' : ''}`}>
-        <div className="we-panel-utility">
-          <div className="we-hero-kicker">{activeLens.badge}</div>
-          <button className="we-panel-toggle" onClick={() => setIsHeroCollapsed((current) => !current)}>
-            {isHeroCollapsed ? 'Show overview' : 'Hide overview'}
-          </button>
-        </div>
-        {!isHeroCollapsed ? (
-          <>
-            <h2 className="we-hero-title">{activeLens.title}</h2>
-            <p className="we-hero-desc">{activeLens.subtitle}</p>
-            <div className="we-overview-grid">
-              {cityOverviewStats.map((stat) => (
-                <OverviewStat key={stat.label} label={stat.label} value={stat.value} hint={stat.hint} />
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="we-collapsed-note">Overview hidden so the map has more space.</p>
-        )}
-      </div>
 
       <div className="we-lens-switcher">
         {Object.values(LENS_CONFIG).map((lens) => (
@@ -1940,6 +1817,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
         )}
       </aside>
 
+      {showAnalyticsRail ? (
       <section className={`we-analytics-rail ${isAnalyticsCollapsed ? 'we-analytics-rail--collapsed' : ''}`}>
         <div className="we-analytics-rail-head">
           <div>
@@ -1957,9 +1835,9 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               <div className="we-chart-card-head">
                 <div>
                   <div className="we-chart-card-kicker">Map Ranking</div>
-                  <h3>Top places for {activeMetric.label.toLowerCase()}</h3>
+                  <h3>{rankLowestFirst ? 'Lowest places for' : 'Top places for'} {activeMetric.label.toLowerCase()}</h3>
                 </div>
-                <div className="we-chart-card-note">Based on the active map layer</div>
+                <div className="we-chart-card-note">{rankLowestFirst ? 'Showing areas with the lowest service access' : 'Based on the active map layer'}</div>
               </div>
               <RankingChart data={rankingChartData} metric={activeMetric} />
             </article>
@@ -1995,6 +1873,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
           </div>
         ) : null}
       </section>
+      ) : null}
     </div>
   )
 }

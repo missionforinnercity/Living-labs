@@ -171,7 +171,7 @@ const EcologyHeatDetailPanel = ({
     { metric: 'Urban Heat', primary: currentPrimary?.urban_heat_score ?? 0, compare: currentCompare?.urban_heat_score ?? 0 },
     { metric: 'Pedestrian', primary: currentPrimary?.pedestrian_heat_score ?? 0, compare: currentCompare?.pedestrian_heat_score ?? 0 },
     { metric: 'Priority', primary: currentPrimary?.priority_score ?? 0, compare: currentCompare?.priority_score ?? 0 },
-    { metric: 'Retained', primary: currentPrimary?.retained_heat_score ?? 0, compare: currentCompare?.retained_heat_score ?? 0 },
+    { metric: 'Retention', primary: numberOrNull(valueFrom(currentPrimary, ['night_heat_retention_c', 'retained_heat_score'])) ?? 0, compare: numberOrNull(valueFrom(currentCompare, ['night_heat_retention_c', 'retained_heat_score'])) ?? 0 },
     { metric: 'Canopy', primary: currentPrimary?.effective_canopy_pct ?? 0, compare: currentCompare?.effective_canopy_pct ?? 0 }
   ]), [currentPrimary, currentCompare])
 
@@ -281,8 +281,8 @@ const EcologyHeatDetailPanel = ({
                   <strong>{formatText(currentPrimary.priority_class)}{currentPrimary.priority_score != null ? ` · ${formatValue(numberOrNull(currentPrimary.priority_score))}` : ''}</strong>
                 </div>
                 <div className="ecology-driver-card">
-                  <span>Retained Heat Score</span>
-                  <strong>{formatValue(numberOrNull(currentPrimary.retained_heat_score))}</strong>
+                  <span>Night Heat Retention</span>
+                  <strong>{formatValue(numberOrNull(valueFrom(currentPrimary, ['night_heat_retention_c', 'retained_heat_score'])), '°C')}</strong>
                 </div>
                 <div className="ecology-driver-card">
                   <span>Effective Canopy</span>

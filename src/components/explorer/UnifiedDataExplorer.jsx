@@ -97,7 +97,20 @@ const formatMinutes = (value) => {
   return Number.isFinite(numeric) ? `${numeric.toFixed(1)} min` : '—'
 }
 
+const formatHeatValue = (value, suffix = '') => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${numeric.toFixed(1)}${suffix}` : '—'
+}
+
 const clampRatio = (value) => Math.max(0, Math.min(100, value))
+
+const heatMetricValue = (feature, ...keys) => {
+  for (const key of keys) {
+    const value = Number(feature?.[key])
+    if (Number.isFinite(value)) return value
+  }
+  return null
+}
 
 const DASHBOARD_MODES = [
   { id: 'business', label: 'Business Analytics' },
@@ -223,6 +236,9 @@ const UnifiedDataExplorer = () => {
   const [selectedEcologyFeatureKeys, setSelectedEcologyFeatureKeys] = useState([])
   const [ecologyPanelMinimized, setEcologyPanelMinimized] = useState(false)
   const ecologyDetailPanelRef = useRef(null)
+  const [selectedHeatGridFeatureKeys, setSelectedHeatGridFeatureKeys] = useState([])
+  const [heatGridPanelMinimized, setHeatGridPanelMinimized] = useState(false)
+  const heatGridDetailPanelRef = useRef(null)
 
   // Environment / air quality state (fetched from API)
   const [envIndex, setEnvIndex] = useState('uaqi') // which metric to display on the map
@@ -649,6 +665,59 @@ const UnifiedDataExplorer = () => {
     }
   }, [compareEcologyFeatureSeries, ecologyCurrentFeatureLookup, selectedEcologyFeatureKeys])
 
+  const heatGridFeatureLookup = useMemo(() => {
+    const lookup = {}
+    ;(heatGridData?.features || []).forEach((feature) => {
+      const featureKey = toEcologyFeatureKey(feature.properties?.feature_id_key || feature.properties?.feature_id || feature.properties?.ogc_fid)
+      if (!featureKey) return
+      lookup[featureKey] = {
+        ...feature.properties,
+        feature_id_key: featureKey
+      }
+    })
+    return lookup
+  }, [heatGridData])
+
+  const selectedHeatGridFeatures = useMemo(() => {
+    return selectedHeatGridFeatureKeys
+      .map((key) => heatGridFeatureLookup[key])
+      .filter(Boolean)
+  }, [heatGridFeatureLookup, selectedHeatGridFeatureKeys])
+
+  const heatGridComparisonData = useMemo(() => {
+    const [primary, compare] = selectedHeatGridFeatures
+    if (!primary) return []
+
+    return [
+      { metric: 'LST °C', primary: heatMetricValue(primary, 'predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c'), compare: heatMetricValue(compare, 'predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c') },
+      { metric: 'Urban heat', primary: heatMetricValue(primary, 'urban_heat_score'), compare: heatMetricValue(compare, 'urban_heat_score') },
+      { metric: 'Pedestrian', primary: heatMetricValue(primary, 'pedestrian_heat_score'), compare: heatMetricValue(compare, 'pedestrian_heat_score') },
+      { metric: 'Priority', primary: heatMetricValue(primary, 'priority_score'), compare: heatMetricValue(compare, 'priority_score') },
+      { metric: 'Night retention', primary: heatMetricValue(primary, 'night_heat_retention_c', 'retained_heat_score'), compare: heatMetricValue(compare, 'night_heat_retention_c', 'retained_heat_score') },
+      { metric: 'Canopy %', primary: heatMetricValue(primary, 'effective_canopy_pct'), compare: heatMetricValue(compare, 'effective_canopy_pct') }
+    ]
+  }, [selectedHeatGridFeatures])
+
+  const heatGridRadarData = useMemo(() => {
+    const [primary, compare] = selectedHeatGridFeatures
+    if (!primary) return []
+
+    const score = (feature, label, getter) => ({
+      metric: label,
+      primary: clampRatio(getter(primary)),
+      compare: compare ? clampRatio(getter(compare)) : null
+    })
+
+    return [
+      score(primary, 'Heat rank', (feature) => heatMetricValue(feature, 'heat_grid_color_value', 'heat_relative_percentile', 'thermal_percentile') ?? 50),
+      score(primary, 'Urban heat', (feature) => heatMetricValue(feature, 'urban_heat_score') ?? heatMetricValue(feature, 'urban_heat_score_relative_percentile') ?? 0),
+      score(primary, 'Pedestrian', (feature) => heatMetricValue(feature, 'pedestrian_heat_score') ?? heatMetricValue(feature, 'pedestrian_heat_score_relative_percentile') ?? 0),
+      score(primary, 'Priority', (feature) => heatMetricValue(feature, 'priority_score') ?? heatMetricValue(feature, 'priority_score_relative_percentile') ?? 0),
+      score(primary, 'Retention', (feature) => heatMetricValue(feature, 'retained_heat_score_relative_percentile') ?? heatMetricValue(feature, 'night_heat_retention_c', 'retained_heat_score') ?? 0),
+      score(primary, 'Canopy gap', (feature) => 100 - (heatMetricValue(feature, 'effective_canopy_pct') ?? 0))
+    ]
+  }, [selectedHeatGridFeatures])
+
   const openEcologyFeatureDetail = useCallback((featureId) => {
     const featureKey = toEcologyFeatureKey(featureId)
     if (!featureKey) return
@@ -663,6 +732,20 @@ const UnifiedDataExplorer = () => {
     setEcologyPanelMinimized(false)
   }, [])
 
+  const openHeatGridFeatureDetail = useCallback((featureId) => {
+    const featureKey = toEcologyFeatureKey(featureId)
+    if (!featureKey) return
+    setSelectedHeatGridFeatureKeys((current) => {
+      const [primaryKey, compareKey] = current
+      if (!primaryKey) return [featureKey]
+      if (featureKey === primaryKey) return compareKey ? [primaryKey] : [primaryKey]
+      if (featureKey === compareKey) return [primaryKey]
+      if (!compareKey) return [primaryKey, featureKey]
+      return [primaryKey, featureKey]
+    })
+    setHeatGridPanelMinimized(false)
+  }, [])
+
   useEffect(() => {
     if (!selectedEcologyFeatureKeys.length || ecologyPanelMinimized) return
     const timer = setTimeout(() => {
@@ -670,6 +753,14 @@ const UnifiedDataExplorer = () => {
     }, 120)
     return () => clearTimeout(timer)
   }, [selectedEcologyFeatureKeys, ecologyPanelMinimized])
+
+  useEffect(() => {
+    if (!selectedHeatGridFeatureKeys.length || heatGridPanelMinimized) return
+    const timer = setTimeout(() => {
+      heatGridDetailPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }, 120)
+    return () => clearTimeout(timer)
+  }, [heatGridPanelMinimized, selectedHeatGridFeatureKeys])
 
   const [trafficScenario, setTrafficScenario] = useState('WORK_MORNING')
 
@@ -1561,12 +1652,14 @@ const UnifiedDataExplorer = () => {
               ecologyHeatData={ecologyCurrentData}
               ecologyMetric={ecologyMetric}
               selectedEcologyFeatureKeys={selectedEcologyFeatureKeys}
+              selectedHeatGridFeatureKeys={selectedHeatGridFeatureKeys}
               envCurrentData={envDisplayData}
               envHistoryData={envHistoryData}
               envIndex={envIndex}
               onEnvGridDetail={openEnvGridDetail}
               onGreeneryStreetSelect={openGreeneryStreetDetail}
               onEcologyFeatureSelect={openEcologyFeatureDetail}
+              onHeatGridFeatureSelect={openHeatGridFeatureDetail}
               visibleLayers={visibleLayers}
               layerStack={layerStack}
               activeCategory={activeCategory}
@@ -2002,6 +2095,123 @@ const UnifiedDataExplorer = () => {
               </div>
             </div>
           )}
+
+          {dashboardMode === 'climate' && activeCategory === 'heatGrid' && selectedHeatGridFeatures.length > 0 && (() => {
+            const [primaryBlock, compareBlock] = selectedHeatGridFeatures
+            const primaryName = `Block ${primaryBlock.feature_id || primaryBlock.ogc_fid || primaryBlock.feature_id_key}`
+            const compareName = compareBlock ? `Block ${compareBlock.feature_id || compareBlock.ogc_fid || compareBlock.feature_id_key}` : 'Click another block'
+            const primaryLst = heatMetricValue(primaryBlock, 'predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c')
+            const compareLst = heatMetricValue(compareBlock, 'predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c')
+
+            return (
+              <div
+                ref={heatGridDetailPanelRef}
+                className={`bottom-panel heat-grid-bottom-panel ${heatGridPanelMinimized ? 'heat-grid-minimized' : ''}`}
+                style={{ marginRight: effectiveSidebarWidth + 32 }}
+              >
+                <div className="panel-header greenery-panel-header">
+                  <div className="greenery-panel-headline">
+                    <div className="heat-grid-panel-score">
+                      {formatHeatValue(primaryBlock.heat_grid_color_value ?? primaryBlock.heat_relative_percentile ?? primaryBlock.thermal_percentile)}
+                    </div>
+                    <div>
+                      <h3>{primaryName} — Heat Grid Compare</h3>
+                      <div className="greenery-panel-subtitle">
+                        Modelled LST {formatHeatValue(primaryLst, '°C')} · {primaryBlock.heat_relative_band ? String(primaryBlock.heat_relative_band).replace(/_/g, ' ') : 'relative heat grid'}
+                      </div>
+                      <div className="ecology-comparison-key">
+                        <div className="ecology-comparison-key-item">
+                          <span className="ecology-role-badge warm">A</span>
+                          <span>{primaryName}</span>
+                        </div>
+                        <div className="ecology-comparison-key-item">
+                          <span className="ecology-role-badge cool">B</span>
+                          <span>{compareName}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="panel-header-actions">
+                    <button
+                      onClick={() => setHeatGridPanelMinimized((current) => !current)}
+                      className="close-btn"
+                      title={heatGridPanelMinimized ? 'Expand' : 'Minimize'}
+                    >{heatGridPanelMinimized ? '▲' : '▼'}</button>
+                    <button
+                      onClick={() => { setSelectedHeatGridFeatureKeys([]); setHeatGridPanelMinimized(false) }}
+                      className="close-btn"
+                    >✕</button>
+                  </div>
+                </div>
+
+                {!heatGridPanelMinimized && (
+                  <div className="charts-container greenery-charts-container">
+                    <div className="env-detail-summary-row ecology-summary-row">
+                      <div className="env-detail-stat">
+                        <span className="env-detail-stat-label">A LST</span>
+                        <strong>{formatHeatValue(primaryLst, '°C')}</strong>
+                      </div>
+                      <div className="env-detail-stat">
+                        <span className="env-detail-stat-label">A priority</span>
+                        <strong>{formatHeatValue(primaryBlock.priority_score)}</strong>
+                      </div>
+                      <div className="env-detail-stat">
+                        <span className="env-detail-stat-label">B LST</span>
+                        <strong>{compareBlock ? formatHeatValue(compareLst, '°C') : 'Select B'}</strong>
+                      </div>
+                      <div className="env-detail-stat">
+                        <span className="env-detail-stat-label">LST delta</span>
+                        <strong>{compareBlock && Number.isFinite(primaryLst) && Number.isFinite(compareLst) ? formatHeatValue(primaryLst - compareLst, '°C') : '—'}</strong>
+                      </div>
+                    </div>
+
+                    <div className="heat-grid-detail-layout">
+                      <div className="ecology-chart-card">
+                        <div className="ecology-chart-head">
+                          <span>Block Comparison</span>
+                          <strong>Raw thermal indicators</strong>
+                        </div>
+                        <ResponsiveContainer width="100%" height={240}>
+                          <BarChart data={heatGridComparisonData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                            <XAxis dataKey="metric" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                            <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
+                              formatter={(value, name) => [formatHeatValue(value), name === 'primary' ? primaryName : compareName]}
+                            />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="primary" fill="#f97316" radius={[8, 8, 0, 0]} name={primaryName} />
+                            {compareBlock && <Bar dataKey="compare" fill="#38bdf8" radius={[8, 8, 0, 0]} name={compareName} />}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="ecology-chart-card">
+                        <div className="ecology-chart-head">
+                          <span>Heat Spidergram</span>
+                          <strong>Normalised pressure profile</strong>
+                        </div>
+                        <ResponsiveContainer width="100%" height={240}>
+                          <RadarChart data={heatGridRadarData}>
+                            <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                            <PolarAngleAxis dataKey="metric" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                            <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} />
+                            <Radar dataKey="primary" stroke="#f97316" fill="#f97316" fillOpacity={0.3} name={primaryName} />
+                            {compareBlock && <Radar dataKey="compare" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.18} name={compareName} />}
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
+                              formatter={(value, name) => [formatHeatValue(value), name === 'primary' ? primaryName : compareName]}
+                            />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* ── Greenery detail bottom panel ── */}
           {dashboardMode === 'environment' && selectedGreenerySummaries.length > 0 && activeCategory !== 'urbanHeatConcrete' && (() => {
