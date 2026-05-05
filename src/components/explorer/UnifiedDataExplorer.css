@@ -660,6 +660,97 @@
   text-transform: uppercase;
 }
 
+.parcel-insights-panel {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  height: min(430px, 44vh);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(0, 229, 160, 0.12), transparent 32%),
+    linear-gradient(160deg, rgba(148, 163, 184, 0.16), rgba(51, 65, 85, 0.27));
+  backdrop-filter: blur(32px) saturate(1.06);
+  -webkit-backdrop-filter: blur(32px) saturate(1.06);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  z-index: 110;
+}
+
+.parcel-insights-panel.parcel-insights-panel--minimized {
+  height: 68px;
+}
+
+.parcel-insights-panel .panel-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.parcel-panel-meta {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.78rem;
+}
+
+.parcel-kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem 0;
+}
+
+.parcel-charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(260px, 1fr)) minmax(240px, 0.85fr);
+  gap: 1rem;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.parcel-charts .chart-panel {
+  min-height: 260px;
+  padding: 0.9rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.parcel-charts .chart-panel h4 {
+  margin: 0 0 0.8rem;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.parcel-opportunity-list {
+  display: grid;
+  gap: 0.55rem;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.parcel-opportunity-row {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.parcel-opportunity-row span {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.78rem;
+}
+
+.parcel-opportunity-row strong,
+.parcel-empty-state {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
 .route-facts-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

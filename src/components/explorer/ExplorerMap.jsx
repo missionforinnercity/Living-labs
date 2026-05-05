@@ -31,6 +31,43 @@ const WIND_FILL_OPACITY = [
   0.14
 ]
 const WIND_TUNNEL_FILTER = ['>=', ['coalesce', ['get', 'class_value'], 1], 3]
+const PARCEL_ZONING_COLOR_EXPRESSION = [
+  'match',
+  ['coalesce', ['get', 'zoning_group'], 'Unknown'],
+  'Residential', '#60a5fa',
+  'Business', '#f97316',
+  'Mixed Use', '#a78bfa',
+  'Community', '#22c55e',
+  'Open Space', '#84cc16',
+  'Transport', '#94a3b8',
+  'Utility', '#facc15',
+  'Limited Use', '#fb7185',
+  'Other', '#38bdf8',
+  'Unknown', '#64748b',
+  '#38bdf8'
+]
+const PARCEL_VALUE_CHANGE_COLOR_EXPRESSION = [
+  'match',
+  ['coalesce', ['get', 'value_change_group'], 'No comparison'],
+  'Rising fast', '#16a34a',
+  'Rising', '#86efac',
+  'Stable', '#facc15',
+  'Dropping', '#fb923c',
+  'Dropping fast', '#dc2626',
+  'No comparison', '#64748b',
+  '#64748b'
+]
+
+const formatRandCompact = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '—'
+  const sign = numeric < 0 ? '-' : ''
+  const absolute = Math.abs(numeric)
+  if (absolute >= 1000000000) return `${sign}R${(absolute / 1000000000).toFixed(1)}B`
+  if (absolute >= 1000000) return `${sign}R${(absolute / 1000000).toFixed(1)}M`
+  if (absolute >= 1000) return `${sign}R${Math.round(absolute / 1000)}k`
+  return `${sign}R${Math.round(absolute)}`
+}
 
 const toEcologyFeatureKey = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -369,6 +406,8 @@ const ExplorerMap = ({
   streetStallsData,
   surveyData,
   propertiesData,
+  landParcelsData,
+  parcelColorMode = 'zoning',
   networkData,
   pedestrianData,
   cyclingData,
@@ -1210,6 +1249,7 @@ const ExplorerMap = ({
           'survey-opinions-layer',
           'stalls-opinions-layer',
           'properties-sales-layer',
+          'land-parcels-fill',
           'network-layer',
           'pedestrian-layer',
           'cycling-layer',
@@ -1711,6 +1751,45 @@ const ExplorerMap = ({
                     'circle-opacity': 0.75,
                     'circle-stroke-width': 2,
                     'circle-stroke-color': '#ffffff'
+                  }}
+                />
+              </Source>
+            )}
+
+            {shouldRenderCategory('landParcels') && landParcelsData && (
+              <Source id="land-parcels" type="geojson" data={landParcelsData}>
+                <Layer
+                  id="land-parcels-fill"
+                  type="fill"
+                  paint={{
+                    'fill-color': parcelColorMode === 'valueChange'
+                      ? PARCEL_VALUE_CHANGE_COLOR_EXPRESSION
+                      : PARCEL_ZONING_COLOR_EXPRESSION,
+                    'fill-opacity': [
+                      'case',
+                      ['boolean', ['get', 'is_city_owned'], false],
+                      0.72,
+                      0.46
+                    ]
+                  }}
+                />
+                <Layer
+                  id="land-parcels-outline"
+                  type="line"
+                  paint={{
+                    'line-color': [
+                      'case',
+                      ['boolean', ['get', 'is_city_owned'], false],
+                      '#f8fafc',
+                      '#0f172a'
+                    ],
+                    'line-width': [
+                      'case',
+                      ['boolean', ['get', 'is_city_owned'], false],
+                      1.5,
+                      0.45
+                    ],
+                    'line-opacity': 0.78
                   }}
                 />
               </Source>
@@ -3199,6 +3278,31 @@ const ExplorerMap = ({
                       )}
                       {popupInfo.feature.properties.property_type && (
                         <p><strong>Type:</strong> {popupInfo.feature.properties.property_type}</p>
+                      )}
+                    </>
+                  )}
+
+                  {businessMode === 'parcels' && (
+                    <>
+                      <h3>{popupInfo.feature.properties.address || popupInfo.feature.properties.prty_nmbr || 'Land Parcel'}</h3>
+                      <p><strong>Zoning:</strong> {popupInfo.feature.properties.zoning}</p>
+                      <p><strong>Group:</strong> {popupInfo.feature.properties.zoning_group}</p>
+                      <p><strong>Market Value:</strong> {formatRandCompact(popupInfo.feature.properties.market_value)}</p>
+                      <p><strong>Previous GV:</strong> {formatRandCompact(popupInfo.feature.properties.market_value_previous)}</p>
+                      <p><strong>GV 2025:</strong> {formatRandCompact(popupInfo.feature.properties.market_value_2025)}</p>
+                      <p>
+                        <strong>Change:</strong> {formatRandCompact(popupInfo.feature.properties.market_value_change)}
+                        {Number.isFinite(Number(popupInfo.feature.properties.market_value_change_pct))
+                          ? ` (${Number(popupInfo.feature.properties.market_value_change_pct).toFixed(1)}%)`
+                          : ''}
+                      </p>
+                      <p><strong>Movement:</strong> {popupInfo.feature.properties.value_change_group || 'No comparison'}</p>
+                      {popupInfo.feature.properties.area_m2 && (
+                        <p><strong>Area:</strong> {Number(popupInfo.feature.properties.area_m2).toLocaleString(undefined, { maximumFractionDigits: 0 })} m2</p>
+                      )}
+                      <p><strong>Ownership:</strong> {popupInfo.feature.properties.is_city_owned ? 'City owned' : (popupInfo.feature.properties.owner_type || 'Unknown')}</p>
+                      {popupInfo.feature.properties.prty_nmbr && (
+                        <p><strong>Property No:</strong> {popupInfo.feature.properties.prty_nmbr}</p>
                       )}
                     </>
                   )}

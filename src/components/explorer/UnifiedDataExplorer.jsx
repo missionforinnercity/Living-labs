@@ -112,6 +112,39 @@ const heatMetricValue = (feature, ...keys) => {
   return null
 }
 
+const PARCEL_ZONING_COLORS = {
+  Residential: '#60a5fa',
+  Business: '#f97316',
+  'Mixed Use': '#a78bfa',
+  Community: '#22c55e',
+  'Open Space': '#84cc16',
+  Transport: '#94a3b8',
+  Utility: '#facc15',
+  'Limited Use': '#fb7185',
+  Other: '#38bdf8',
+  Unknown: '#64748b'
+}
+
+const PARCEL_VALUE_CHANGE_COLORS = {
+  'Rising fast': '#16a34a',
+  Rising: '#86efac',
+  Stable: '#facc15',
+  Dropping: '#fb923c',
+  'Dropping fast': '#dc2626',
+  'No comparison': '#64748b'
+}
+
+const formatRandCompact = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '—'
+  const sign = numeric < 0 ? '-' : ''
+  const absolute = Math.abs(numeric)
+  if (absolute >= 1000000000) return `${sign}R${(absolute / 1000000000).toFixed(1)}B`
+  if (absolute >= 1000000) return `${sign}R${(absolute / 1000000).toFixed(1)}M`
+  if (absolute >= 1000) return `${sign}R${Math.round(absolute / 1000)}k`
+  return `${sign}R${Math.round(absolute)}`
+}
+
 const DASHBOARD_MODES = [
   { id: 'business', label: 'Business Analytics' },
   { id: 'walkability', label: 'Active Mobility' },
@@ -130,6 +163,7 @@ const LAYER_CATEGORIES = [
   { id: 'amenities', label: 'Amenities', dashboard: 'business', dataKey: 'businesses' },
   { id: 'businessCategories', label: 'Business Categories', dashboard: 'business', dataKey: 'businesses' },
   { id: 'propertySales', label: 'Property Sales', dashboard: 'business', dataKey: 'properties' },
+  { id: 'landParcels', label: 'Land Parcels', dashboard: 'business', dataKey: 'landParcels' },
   { id: 'cityEvents', label: 'City Events', dashboard: 'business', dataKey: 'eventsData' },
   // Walkability layers
   { id: 'activeMobility', label: 'Walking, Running & Cycling', dashboard: 'walkability', dataKey: 'activeMobility' },
@@ -188,6 +222,17 @@ const UnifiedDataExplorer = () => {
   const [eventsPanelMinimized, setEventsPanelMinimized] = useState(false)
   const [eventsPanelHeight, setEventsPanelHeight] = useState(520)
   const eventsPanelDrag = useRef({ active: false, startY: 0, startHeight: 520 })
+  const [parcelPanelMinimized, setParcelPanelMinimized] = useState(false)
+  const [parcelColorMode, setParcelColorMode] = useState('zoning')
+  const [parcelFilters, setParcelFilters] = useState({
+    cityOwnedOnly: false,
+    zoningGroups: [],
+    minMarketValue: '',
+    maxMarketValue: '',
+    minArea: '',
+    maxArea: '',
+    search: ''
+  })
 
   // Opinion mode state
   const [opinionSource, setOpinionSource] = useState('both') // 'formal', 'informal', 'both'
@@ -260,6 +305,7 @@ const UnifiedDataExplorer = () => {
     businesses: false,
     streetStalls: false,
     properties: false,
+    landParcels: false,
     eventsData: false,
     // Walkability layers
     network: false,
@@ -298,6 +344,7 @@ const UnifiedDataExplorer = () => {
     businessesData,
     streetStallsData,
     propertiesData,
+    landParcelsData,
     surveyData,
     eventsData,
     ccidBoundary
@@ -376,6 +423,132 @@ const UnifiedDataExplorer = () => {
       }
     }
   }, [ccidBoundary, eventsData, eventsScope])
+
+  const filteredLandParcelsData = useMemo(() => {
+    if (!landParcelsData?.features) return landParcelsData
+
+    const toOptionalNumber = (value) => {
+      if (value === '' || value === null || value === undefined) return null
+      const numeric = Number(value)
+      return Number.isFinite(numeric) ? numeric : null
+    }
+    const minMarketValue = toOptionalNumber(parcelFilters.minMarketValue)
+    const maxMarketValue = toOptionalNumber(parcelFilters.maxMarketValue)
+    const minArea = toOptionalNumber(parcelFilters.minArea)
+    const maxArea = toOptionalNumber(parcelFilters.maxArea)
+    const selectedGroups = new Set(parcelFilters.zoningGroups || [])
+    const search = String(parcelFilters.search || '').trim().toLowerCase()
+
+    const features = landParcelsData.features.filter((feature) => {
+      const props = feature.properties || {}
+      const marketValue = Number(props.market_value)
+      const areaM2 = Number(props.area_m2)
+
+      if (parcelFilters.cityOwnedOnly && !props.is_city_owned) return false
+      if (selectedGroups.size && !selectedGroups.has(props.zoning_group || 'Unknown')) return false
+      if (minMarketValue !== null && (!Number.isFinite(marketValue) || marketValue < minMarketValue)) return false
+      if (maxMarketValue !== null && (!Number.isFinite(marketValue) || marketValue > maxMarketValue)) return false
+      if (minArea !== null && (!Number.isFinite(areaM2) || areaM2 < minArea)) return false
+      if (maxArea !== null && (!Number.isFinite(areaM2) || areaM2 > maxArea)) return false
+      if (search) {
+        const haystack = [
+          props.address,
+          props.prty_nmbr,
+          props.sg26_code,
+          props.zoning,
+          props.suburb,
+          props.registered_descriptions
+        ].filter(Boolean).join(' ').toLowerCase()
+        if (!haystack.includes(search)) return false
+      }
+
+      return true
+    })
+
+    return {
+      ...landParcelsData,
+      features,
+      metadata: {
+        ...(landParcelsData.metadata || {}),
+        filteredFeatures: features.length
+      }
+    }
+  }, [landParcelsData, parcelFilters])
+
+  const parcelInsights = useMemo(() => {
+    const features = filteredLandParcelsData?.features || []
+    const allFeatures = landParcelsData?.features || []
+    const zoningGroups = [...new Set(allFeatures.map((feature) => feature.properties?.zoning_group || 'Unknown'))]
+      .sort((a, b) => a.localeCompare(b))
+
+    const summary = features.reduce((acc, feature) => {
+      const props = feature.properties || {}
+      const zoningGroup = props.zoning_group || 'Unknown'
+      const changeGroup = props.value_change_group || 'No comparison'
+      const marketValue = Number(props.market_value)
+      const marketValueChange = Number(props.market_value_change)
+      const areaM2 = Number(props.area_m2)
+      acc.count += 1
+      acc.cityOwned += props.is_city_owned ? 1 : 0
+      acc.totalAreaM2 += Number.isFinite(areaM2) ? areaM2 : 0
+      if (Number.isFinite(marketValue)) {
+        acc.totalMarketValue += marketValue
+        acc.valuedCount += 1
+      }
+      acc.byZoning[zoningGroup] = acc.byZoning[zoningGroup] || {
+        name: zoningGroup,
+        count: 0,
+        marketValue: 0,
+        areaM2: 0,
+        color: PARCEL_ZONING_COLORS[zoningGroup] || PARCEL_ZONING_COLORS.Other
+      }
+      acc.byZoning[zoningGroup].count += 1
+      acc.byZoning[zoningGroup].marketValue += Number.isFinite(marketValue) ? marketValue : 0
+      acc.byZoning[zoningGroup].areaM2 += Number.isFinite(areaM2) ? areaM2 : 0
+      acc.byChange[changeGroup] = acc.byChange[changeGroup] || {
+        name: changeGroup,
+        count: 0,
+        totalChange: 0,
+        color: PARCEL_VALUE_CHANGE_COLORS[changeGroup] || PARCEL_VALUE_CHANGE_COLORS['No comparison']
+      }
+      acc.byChange[changeGroup].count += 1
+      acc.byChange[changeGroup].totalChange += Number.isFinite(marketValueChange) ? marketValueChange : 0
+      return acc
+    }, {
+      count: 0,
+      cityOwned: 0,
+      totalAreaM2: 0,
+      totalMarketValue: 0,
+      valuedCount: 0,
+      byZoning: {},
+      byChange: {}
+    })
+
+    const zoningChart = Object.values(summary.byZoning).sort((a, b) => b.count - a.count)
+    const valueChart = [...zoningChart].sort((a, b) => b.marketValue - a.marketValue).slice(0, 8)
+    const changeOrder = ['Rising fast', 'Rising', 'Stable', 'Dropping', 'Dropping fast', 'No comparison']
+    const changeChart = changeOrder
+      .map((name) => summary.byChange[name] || {
+        name,
+        count: 0,
+        totalChange: 0,
+        color: PARCEL_VALUE_CHANGE_COLORS[name] || PARCEL_VALUE_CHANGE_COLORS['No comparison']
+      })
+      .filter((item) => item.count > 0)
+    const opportunityList = features
+      .filter((feature) => feature.properties?.is_city_owned || String(feature.properties?.owner_type || '').toLowerCase() === 'public')
+      .sort((a, b) => (Number(b.properties?.area_m2) || 0) - (Number(a.properties?.area_m2) || 0))
+      .slice(0, 8)
+
+    return {
+      zoningGroups,
+      summary,
+      zoningChart,
+      valueChart,
+      changeChart,
+      opportunityList
+    }
+  }, [filteredLandParcelsData, landParcelsData])
 
   const envHistoryDates = useMemo(() => {
     if (!envHistoryData?.rows) return []
@@ -906,6 +1079,7 @@ const UnifiedDataExplorer = () => {
         amenities: 'amenities',
         businessCategories: 'categories',
         propertySales: 'property',
+        landParcels: 'parcels',
         cityEvents: 'events'
       }
       if (modeMap[categoryId]) {
@@ -1024,6 +1198,7 @@ const UnifiedDataExplorer = () => {
   // Get businesses matching the current category/filters for bottom panel
   const getActiveBusinesses = () => {
     if (dashboardMode !== 'business' || !activeCategory) return []
+    if (activeCategory === 'landParcels') return []
 
     let features = []
     if (activeCategory === 'cityEvents') {
@@ -1143,6 +1318,7 @@ const UnifiedDataExplorer = () => {
         businessesData,
         streetStallsData,
         propertiesData,
+        landParcelsData: filteredLandParcelsData,
         eventsData: filteredEventsData,
         pedestrianData,
         cyclingData,
@@ -1163,7 +1339,7 @@ const UnifiedDataExplorer = () => {
     } finally {
       setIsExporting(false)
     }
-  }, [map, layerStack, businessesData, streetStallsData, propertiesData, filteredEventsData, pedestrianData, cyclingData, networkData, transitData, roadSteepnessData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
+  }, [map, layerStack, businessesData, streetStallsData, propertiesData, filteredLandParcelsData, filteredEventsData, pedestrianData, cyclingData, networkData, transitData, roadSteepnessData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
 
   // Resize drag handlers
   const startSidebarDrag = useCallback((e) => {
@@ -1355,6 +1531,7 @@ const UnifiedDataExplorer = () => {
                     amenities: 'amenities',
                     categories: 'businessCategories',
                     property: 'propertySales',
+                    parcels: 'landParcels',
                     events: 'cityEvents'
                   }
                   if (categoryMap[mode]) {
@@ -1368,6 +1545,12 @@ const UnifiedDataExplorer = () => {
                 businessesData={businessesData}
                 streetStallsData={streetStallsData}
                 propertiesData={propertiesData}
+                landParcelsData={filteredLandParcelsData}
+                parcelFilters={parcelFilters}
+                onParcelFiltersChange={setParcelFilters}
+                parcelInsights={parcelInsights}
+                parcelColorMode={parcelColorMode}
+                onParcelColorModeChange={setParcelColorMode}
                 surveyData={surveyData}
                 opinionSource={opinionSource}
                 onOpinionSourceChange={setOpinionSource}
@@ -1625,6 +1808,8 @@ const UnifiedDataExplorer = () => {
               streetStallsData={streetStallsData}
               surveyData={surveyData}
               propertiesData={propertiesData}
+              landParcelsData={filteredLandParcelsData}
+              parcelColorMode={parcelColorMode}
               networkData={networkData}
               pedestrianData={pedestrianData}
               cyclingData={cyclingData}
@@ -1698,6 +1883,109 @@ const UnifiedDataExplorer = () => {
               }}
             />
           </Suspense>
+
+          {dashboardMode === 'business' && activeCategory === 'landParcels' && (
+            <div
+              className={`bottom-panel parcel-insights-panel ${parcelPanelMinimized ? 'parcel-insights-panel--minimized' : ''}`}
+              style={{ right: `${effectiveSidebarWidth + 32}px` }}
+            >
+              <div className="panel-header">
+                <h3>Parcel Planning Intelligence</h3>
+                <div className="panel-header-actions">
+                  <div className="parcel-panel-meta">
+                    {(parcelInsights.summary.count || 0).toLocaleString()} parcels in current filter
+                  </div>
+                  <button
+                    onClick={() => setParcelPanelMinimized(value => !value)}
+                    className="close-btn"
+                    title={parcelPanelMinimized ? 'Expand graphs' : 'Minimize graphs'}
+                  >
+                    {parcelPanelMinimized ? '▢' : '–'}
+                  </button>
+                </div>
+              </div>
+              {!parcelPanelMinimized && (
+                <>
+                  <div className="parcel-kpi-row">
+                    <div className="route-history-chip">
+                      <span>Total Market Value</span>
+                      <strong>{formatRandCompact(parcelInsights.summary.totalMarketValue)}</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>City Owned</span>
+                      <strong>{parcelInsights.summary.cityOwned.toLocaleString()}</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>Land Area</span>
+                      <strong>{(parcelInsights.summary.totalAreaM2 / 10000).toFixed(1)} ha</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>Avg Value</span>
+                      <strong>{formatRandCompact(parcelInsights.summary.valuedCount ? parcelInsights.summary.totalMarketValue / parcelInsights.summary.valuedCount : null)}</strong>
+                    </div>
+                  </div>
+                  <div className="charts-container parcel-charts">
+                    <div className="chart-panel">
+                      <h4>Zoning Mix</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={parcelInsights.zoningChart}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                          <XAxis dataKey="name" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 10 }} />
+                          <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                          <Tooltip />
+                          <Bar dataKey="count" name="Parcels" radius={[4, 4, 0, 0]}>
+                            {parcelInsights.zoningChart.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="chart-panel">
+                      <h4>Market Value by Zoning</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={parcelInsights.valueChart}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                          <XAxis dataKey="name" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 10 }} />
+                          <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} tickFormatter={formatRandCompact} />
+                          <Tooltip formatter={(value) => formatRandCompact(value)} />
+                          <Bar dataKey="marketValue" name="Market value" fill="#00e5a0" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="chart-panel">
+                      <h4>GV Market Movement</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={parcelInsights.changeChart}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                          <XAxis dataKey="name" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 10 }} />
+                          <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                          <Tooltip formatter={(value, name) => name === 'Total change' ? formatRandCompact(value) : value} />
+                          <Bar dataKey="count" name="Parcels" radius={[4, 4, 0, 0]}>
+                            {parcelInsights.changeChart.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="chart-panel parcel-opportunity-panel">
+                      <h4>Public Land Watchlist</h4>
+                      <div className="parcel-opportunity-list">
+                        {parcelInsights.opportunityList.length ? parcelInsights.opportunityList.map((feature) => {
+                          const props = feature.properties || {}
+                          return (
+                            <div key={props.fid} className="parcel-opportunity-row">
+                              <span>{props.address || props.prty_nmbr || `Parcel ${props.fid}`}</span>
+                              <strong>{props.zoning_group} · {(Number(props.area_m2 || 0) / 10000).toFixed(2)} ha</strong>
+                            </div>
+                          )
+                        }) : (
+                          <div className="parcel-empty-state">No public parcels match the active filters.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {dashboardMode === 'walkability' && selectedRouteSegment && selectedRouteHistory && (
             <div
@@ -2745,7 +3033,7 @@ const UnifiedDataExplorer = () => {
               </div>
             )}
           </div>
-        ) : (() => {
+        ) : activeCategory !== 'landParcels' ? (() => {
           const businesses = getActiveBusinesses()
           if (businesses.length === 0) return null
           const categoryLabel = LAYER_CATEGORIES.find(c => c.id === activeCategory)?.label || 'Businesses'
@@ -2786,7 +3074,7 @@ const UnifiedDataExplorer = () => {
               </div>
             </div>
           )
-        })()}
+        })() : null}
 
       </div>
     </div>

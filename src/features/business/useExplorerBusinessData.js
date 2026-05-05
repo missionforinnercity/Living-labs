@@ -5,6 +5,7 @@ export function useExplorerBusinessData({ dashboardMode, lockedLayers }) {
   const [businessesData, setBusinessesData] = useState(null)
   const [streetStallsData, setStreetStallsData] = useState(null)
   const [propertiesData, setPropertiesData] = useState(null)
+  const [landParcelsData, setLandParcelsData] = useState(null)
   const [surveyData, setSurveyData] = useState(null)
   const [eventsData, setEventsData] = useState(null)
   const [ccidBoundary, setCcidBoundary] = useState(null)
@@ -18,13 +19,14 @@ export function useExplorerBusinessData({ dashboardMode, lockedLayers }) {
   useEffect(() => {
     const loadBusinessExplorerState = async () => {
       try {
-        const { businesses, streetStalls, properties, survey, eventsData } = await loadExplorerBusinessData()
+        const { businesses, streetStalls, properties, survey, eventsData, landParcels } = await loadExplorerBusinessData()
 
         console.log('Business data loaded:', {
           businesses: businesses.features?.length,
           stalls: streetStalls.features?.length,
           properties: properties.features?.length,
-          survey: survey.features?.length
+          survey: survey.features?.length,
+          landParcels: landParcels.features?.length
         })
 
         console.log('Sample processed property:', properties.features?.[0]?.properties)
@@ -32,6 +34,7 @@ export function useExplorerBusinessData({ dashboardMode, lockedLayers }) {
         setBusinessesData(businesses)
         setStreetStallsData(streetStalls)
         setPropertiesData(properties)
+        setLandParcelsData(landParcels)
         setSurveyData(survey)
         setEventsData(eventsData)
       } catch (error) {
@@ -39,7 +42,7 @@ export function useExplorerBusinessData({ dashboardMode, lockedLayers }) {
       }
     }
 
-    const hasLockedBusinessLayer = ['businessLiveliness', 'vendorOpinions', 'businessRatings', 'amenities', 'businessCategories', 'propertySales', 'cityEvents'].some((id) => lockedLayers.has(id))
+    const hasLockedBusinessLayer = ['businessLiveliness', 'vendorOpinions', 'businessRatings', 'amenities', 'businessCategories', 'propertySales', 'cityEvents', 'landParcels'].some((id) => lockedLayers.has(id))
     if (dashboardMode === 'business' || hasLockedBusinessLayer) {
       loadBusinessExplorerState()
     }
@@ -49,6 +52,7 @@ export function useExplorerBusinessData({ dashboardMode, lockedLayers }) {
     businessesData,
     streetStallsData,
     propertiesData,
+    landParcelsData,
     surveyData,
     eventsData,
     ccidBoundary

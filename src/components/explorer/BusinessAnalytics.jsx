@@ -15,6 +15,12 @@ const BusinessAnalytics = ({
   streetStallsData,
   surveyData,
   propertiesData,
+  landParcelsData,
+  parcelFilters,
+  onParcelFiltersChange,
+  parcelInsights,
+  parcelColorMode = 'zoning',
+  onParcelColorModeChange,
   opinionSource,
   onOpinionSourceChange,
   amenitiesFilters: amenitiesFiltersProps,
@@ -31,6 +37,44 @@ const BusinessAnalytics = ({
   renderEventsInline = true,
   hideLayerControls = false
 }) => {
+  const parcelZoningColors = {
+    Residential: '#60a5fa',
+    Business: '#f97316',
+    'Mixed Use': '#a78bfa',
+    Community: '#22c55e',
+    'Open Space': '#84cc16',
+    Transport: '#94a3b8',
+    Utility: '#facc15',
+    'Limited Use': '#fb7185',
+    Other: '#38bdf8',
+    Unknown: '#64748b'
+  }
+  const parcelValueChangeColors = {
+    'Rising fast': '#16a34a',
+    Rising: '#86efac',
+    Stable: '#facc15',
+    Dropping: '#fb923c',
+    'Dropping fast': '#dc2626',
+    'No comparison': '#64748b'
+  }
+
+  const updateParcelFilter = (patch) => {
+    onParcelFiltersChange?.({
+      ...(parcelFilters || {}),
+      ...patch
+    })
+  }
+
+  const toggleParcelZoningGroup = (group) => {
+    const current = new Set(parcelFilters?.zoningGroups || [])
+    if (current.has(group)) {
+      current.delete(group)
+    } else {
+      current.add(group)
+    }
+    updateParcelFilter({ zoningGroups: [...current] })
+  }
+
   // Define hierarchical category structure
   const CATEGORY_GROUPS = {
     'foodDining': {
@@ -258,6 +302,16 @@ const BusinessAnalytics = ({
             onChange={() => onModeChange('property')}
           />
           <span>Property Sales</span>
+        </label>
+
+        <label className="mode-radio">
+          <input
+            type="radio"
+            name="businessMode"
+            checked={businessMode === 'parcels'}
+            onChange={() => onModeChange('parcels')}
+          />
+          <span>Land Parcels</span>
         </label>
 
         <label className="mode-radio">
@@ -824,6 +878,161 @@ const BusinessAnalytics = ({
           </div>
         </div>
       )}
+
+      {/* Land Parcels Mode */}
+      {businessMode === 'parcels' && (
+        <div className="mode-content">
+          <div className="control-section parcel-command-panel">
+            <div className="control-header">LAND PARCEL FILTERS</div>
+            <p className="mode-description">
+              Combine filters to find implementation opportunities such as city-owned open space, business-zoned sites, or high-value mixed-use parcels.
+            </p>
+
+            <input
+              className="parcel-search-input"
+              type="search"
+              value={parcelFilters?.search || ''}
+              onChange={(event) => updateParcelFilter({ search: event.target.value })}
+              placeholder="Search erf, address, zoning..."
+            />
+
+            <div className="parcel-toggle-row">
+              <label className="filter-checkbox parcel-toggle">
+                <input
+                  type="checkbox"
+                  checked={parcelFilters?.cityOwnedOnly || false}
+                  onChange={() => updateParcelFilter({ cityOwnedOnly: !parcelFilters?.cityOwnedOnly })}
+                />
+                <span>City owned only</span>
+              </label>
+            </div>
+
+            <div className="parcel-range-grid">
+              <label>
+                <span>Min value</span>
+                <input
+                  type="number"
+                  value={parcelFilters?.minMarketValue || ''}
+                  onChange={(event) => updateParcelFilter({ minMarketValue: event.target.value })}
+                  placeholder="0"
+                />
+              </label>
+              <label>
+                <span>Max value</span>
+                <input
+                  type="number"
+                  value={parcelFilters?.maxMarketValue || ''}
+                  onChange={(event) => updateParcelFilter({ maxMarketValue: event.target.value })}
+                  placeholder="Any"
+                />
+              </label>
+              <label>
+                <span>Min area m2</span>
+                <input
+                  type="number"
+                  value={parcelFilters?.minArea || ''}
+                  onChange={(event) => updateParcelFilter({ minArea: event.target.value })}
+                  placeholder="0"
+                />
+              </label>
+              <label>
+                <span>Max area m2</span>
+                <input
+                  type="number"
+                  value={parcelFilters?.maxArea || ''}
+                  onChange={(event) => updateParcelFilter({ maxArea: event.target.value })}
+                  placeholder="Any"
+                />
+              </label>
+            </div>
+
+            <button
+              className="parcel-reset-btn"
+              type="button"
+              onClick={() => onParcelFiltersChange?.({
+                cityOwnedOnly: false,
+                zoningGroups: [],
+                minMarketValue: '',
+                maxMarketValue: '',
+                minArea: '',
+                maxArea: '',
+                search: ''
+              })}
+            >
+              Reset filters
+            </button>
+          </div>
+
+          <div className="control-section">
+            <div className="control-header">COLOUR MAP BY</div>
+            <div className="parcel-color-mode-switch">
+              <button
+                type="button"
+                className={parcelColorMode === 'zoning' ? 'active' : ''}
+                onClick={() => onParcelColorModeChange?.('zoning')}
+              >
+                Zoning
+              </button>
+              <button
+                type="button"
+                className={parcelColorMode === 'valueChange' ? 'active' : ''}
+                onClick={() => onParcelColorModeChange?.('valueChange')}
+              >
+                GV Change
+              </button>
+            </div>
+          </div>
+
+          <div className="control-section">
+            <div className="control-header">ZONING GROUPS</div>
+            <div className="parcel-zoning-grid">
+              {(parcelInsights?.zoningGroups || []).map((group) => {
+                const selected = (parcelFilters?.zoningGroups || []).includes(group)
+                return (
+                  <button
+                    key={group}
+                    type="button"
+                    className={`parcel-zoning-chip ${selected ? 'active' : ''}`}
+                    onClick={() => toggleParcelZoningGroup(group)}
+                    style={{ '--parcel-color': parcelZoningColors[group] || parcelZoningColors.Other }}
+                  >
+                    <span className="parcel-zoning-dot" />
+                    <span>{group}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="stats-summary parcel-stats-summary">
+            <div className="stat-card primary">
+              <div className="stat-value">{(landParcelsData?.features?.length || 0).toLocaleString()}</div>
+              <div className="stat-label">Parcels</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{(parcelInsights?.summary?.cityOwned || 0).toLocaleString()}</div>
+              <div className="stat-label">City Owned</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{(((parcelInsights?.summary?.totalAreaM2 || 0) / 10000).toFixed(1))}</div>
+              <div className="stat-label">Hectares</div>
+            </div>
+          </div>
+
+          <div className="control-section">
+            <div className="control-header">{parcelColorMode === 'valueChange' ? 'GV CHANGE LEGEND' : 'MAP LEGEND'}</div>
+            <div className="parcel-legend">
+              {Object.entries(parcelColorMode === 'valueChange' ? parcelValueChangeColors : parcelZoningColors).map(([group, color]) => (
+                <div key={group} className="legend-item">
+                  <div className="legend-color" style={{ backgroundColor: color }}></div>
+                  <span>{group}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* City Events Mode */}
       {businessMode === 'events' && (
         <EventInsightsPanel

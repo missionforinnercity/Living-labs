@@ -251,6 +251,139 @@
   color: rgba(255,255,255,0.45);
 }
 
+.parcel-command-panel {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 36%),
+    rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+}
+
+.parcel-search-input,
+.parcel-range-grid input {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.58);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 0 0.75rem;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.parcel-search-input:focus,
+.parcel-range-grid input:focus {
+  border-color: rgba(0, 229, 160, 0.58);
+  box-shadow: 0 0 0 2px rgba(0, 229, 160, 0.08);
+}
+
+.parcel-toggle-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  margin: 0.85rem 0;
+}
+
+.parcel-toggle {
+  padding: 0.55rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.parcel-range-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.parcel-range-grid label span {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.parcel-reset-btn {
+  width: 100%;
+  margin-top: 0.85rem;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.parcel-reset-btn:hover {
+  border-color: rgba(0, 229, 160, 0.45);
+  color: #00e5a0;
+}
+
+.parcel-zoning-grid,
+.parcel-legend {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.parcel-color-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.parcel-color-mode-switch button {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.parcel-color-mode-switch button.active {
+  border-color: rgba(0, 229, 160, 0.48);
+  background: rgba(0, 229, 160, 0.12);
+  color: #00e5a0;
+}
+
+.parcel-zoning-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 34px;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.72);
+  text-align: left;
+  cursor: pointer;
+}
+
+.parcel-zoning-chip.active {
+  border-color: color-mix(in srgb, var(--parcel-color) 70%, white 10%);
+  background: color-mix(in srgb, var(--parcel-color) 18%, transparent);
+  color: #fff;
+}
+
+.parcel-zoning-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--parcel-color);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--parcel-color) 65%, transparent);
+}
+
+.parcel-stats-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 /* Challenge Legend */
 .challenge-legend {
   display: flex;

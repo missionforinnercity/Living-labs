@@ -156,6 +156,128 @@ function quoteIdentifier(identifier) {
   return `"${String(identifier).replaceAll('"', '""')}"`
 }
 
+function parseMarketValueList(value) {
+  if (value === null || value === undefined) return []
+  if (Array.isArray(value)) return value.map(Number).filter(Number.isFinite)
+  return String(value)
+    .match(/-?\d+(?:\.\d+)?/g)
+    ?.map(Number)
+    .filter(Number.isFinite) || []
+}
+
+function getParcelZoningGroup(zoningValue) {
+  const zoning = String(zoningValue || '').toLowerCase()
+  if (!zoning.trim()) return 'Unknown'
+  if (zoning.includes('community')) return 'Community'
+  if (zoning.includes('general business') || zoning.includes('local business')) return 'Business'
+  if (zoning.includes('mixed use')) return 'Mixed Use'
+  if (zoning.includes('residential') || zoning.includes('housing')) return 'Residential'
+  if (zoning.includes('open space')) return 'Open Space'
+  if (zoning.includes('transport') || zoning.includes('road') || zoning.includes('parking')) return 'Transport'
+  if (zoning.includes('utility')) return 'Utility'
+  if (zoning.includes('limited use')) return 'Limited Use'
+  return 'Other'
+}
+
+function getParcelValueChangeGroup(previousValue, currentValue) {
+  if (!Number.isFinite(previousValue) || !Number.isFinite(currentValue) || previousValue <= 0 || currentValue <= 0) {
+    return 'No comparison'
+  }
+  const pctChange = ((currentValue - previousValue) / previousValue) * 100
+  if (pctChange >= 35) return 'Rising fast'
+  if (pctChange >= 8) return 'Rising'
+  if (pctChange <= -35) return 'Dropping fast'
+  if (pctChange <= -8) return 'Dropping'
+  return 'Stable'
+}
+
+function buildLandParcelFeatureCollection(rows) {
+  const features = rows
+    .filter((row) => row.geometry)
+    .map((row) => {
+      const previousMarketValues = parseMarketValueList(row.gv_market_values_numeric).filter((value) => value > 0)
+      const currentMarketValues = parseMarketValueList(row.gv2025_market_values_numeric).filter((value) => value > 0)
+      const previousMarketValue = previousMarketValues.length ? Math.max(...previousMarketValues) : null
+      const currentMarketValue = currentMarketValues.length ? Math.max(...currentMarketValues) : null
+      const marketValue = currentMarketValue || previousMarketValue
+      const marketValueChange = Number.isFinite(previousMarketValue) && Number.isFinite(currentMarketValue)
+        ? currentMarketValue - previousMarketValue
+        : null
+      const marketValueChangePct = Number.isFinite(marketValueChange) && previousMarketValue > 0
+        ? (marketValueChange / previousMarketValue) * 100
+        : null
+      const valueChangeGroup = getParcelValueChangeGroup(previousMarketValue, currentMarketValue)
+      const areaM2 = Number(row.area_m2 || row.shape__area)
+      const ownerType = row.gv2025_owner_type || row.owner_type || null
+      const isCityOwned = Boolean(row.gv2025_is_city_owned || row.is_city_owned)
+
+      return {
+        type: 'Feature',
+        properties: {
+          fid: row.fid,
+          sg26_code: row.sg26_code,
+          sl_land_prcl_key: row.sl_land_prcl_key,
+          prty_nmbr: row.prty_nmbr,
+          address: [row.adr_no, row.adr_no_sfx, row.str_name, row.lu_str_name_type]
+            .filter((part) => part !== null && part !== undefined && String(part).trim() !== '')
+            .join(' '),
+          suburb: row.ofc_sbrb_name || row.alt_name || null,
+          ward_name: row.ward_name || null,
+          zoning: row.zoning || 'Unzoned / unknown',
+          zoning_group: getParcelZoningGroup(row.zoning),
+          owner_type: ownerType,
+          is_city_owned: isCityOwned,
+          market_value: marketValue,
+          market_value_previous: previousMarketValue,
+          market_value_2025: currentMarketValue,
+          market_value_change: marketValueChange,
+          market_value_change_pct: marketValueChangePct,
+          value_change_group: valueChangeGroup,
+          market_value_count: previousMarketValues.length + currentMarketValues.length,
+          area_m2: Number.isFinite(areaM2) ? areaM2 : null,
+          rating_categories: row.gv2025_rating_categories || row.gv_rating_categories || null,
+          registered_descriptions: row.gv2025_registered_descriptions || row.gv_registered_descriptions || null,
+          valuation_types: row.gv2025_valuation_types || row.gv_valuation_types || null,
+          match_count: row.gv2025_match_count || row.gv_match_count || null,
+          source_year: row.gv2025_market_values_numeric ? 2025 : null
+        },
+        geometry: row.geometry
+      }
+    })
+
+  const zoningGroups = {}
+  let marketValueTotal = 0
+  let marketValueCount = 0
+  let cityOwnedCount = 0
+  let totalAreaM2 = 0
+
+  features.forEach((feature) => {
+    const props = feature.properties
+    zoningGroups[props.zoning_group] = (zoningGroups[props.zoning_group] || 0) + 1
+    if (props.is_city_owned) cityOwnedCount += 1
+    if (Number.isFinite(props.market_value)) {
+      marketValueTotal += props.market_value
+      marketValueCount += 1
+    }
+    if (Number.isFinite(props.area_m2)) totalAreaM2 += props.area_m2
+  })
+
+  return {
+    type: 'FeatureCollection',
+    features,
+    metadata: {
+      totalRows: rows.length,
+      totalFeatures: features.length,
+      cityOwnedCount,
+      avgMarketValue: marketValueCount ? marketValueTotal / marketValueCount : null,
+      totalAreaM2,
+      zoningGroups,
+      fetchedAt: new Date().toISOString(),
+      source: 'cadastre.landparcels_gv'
+    }
+  }
+}
+
 const CLIMATE_TABLES = {
   heat_grid: {
     source: 'climate.heat_grid',
@@ -764,8 +886,69 @@ app.get('/api/planning/events', async (_req, res) => {
   }
 })
 
+app.get('/api/cadastre/landparcels', async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 12000, 20000))
+    const { rows } = await pool.query(`
+      SELECT
+        fid,
+        sg26_code,
+        sl_land_prcl_key,
+        adr_no,
+        adr_no_sfx,
+        str_name,
+        lu_str_name_type,
+        ofc_sbrb_name,
+        alt_name,
+        ward_name,
+        prty_nmbr,
+        zoning,
+        shape__area,
+        owner_type,
+        gv2025_owner_type,
+        is_city_owned,
+        gv2025_is_city_owned,
+        gv_match_count,
+        gv2025_match_count,
+        gv_rating_categories,
+        gv2025_rating_categories,
+        gv_registered_descriptions,
+        gv2025_registered_descriptions,
+        gv_valuation_types,
+        gv2025_valuation_types,
+        gv_market_values_numeric,
+        gv2025_market_values_numeric,
+        ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.00001))::json AS geometry
+      FROM cadastre.landparcels_gv
+      WHERE geom IS NOT NULL
+      ORDER BY
+        COALESCE(gv2025_is_city_owned, is_city_owned, false) DESC,
+        shape__area DESC NULLS LAST,
+        fid
+      LIMIT $1
+    `, [limit])
+
+    res.json(buildLandParcelFeatureCollection(rows))
+  } catch (err) {
+    console.error('[API] /cadastre/landparcels error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // Health check
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }))
 
 const PORT = process.env.API_PORT || 3001
-app.listen(PORT, () => console.log(`[environment-api] listening on http://localhost:${PORT}`))
+const server = app.listen(PORT, () => console.log(`[environment-api] listening on http://localhost:${PORT}`))
+server.ref?.()
+const keepAliveInterval = setInterval(() => {}, 60 * 60 * 1000)
+
+function shutdown() {
+  clearInterval(keepAliveInterval)
+  server.close(() => {
+    pool.end().finally(() => process.exit(0))
+  })
+}
+
+process.once('SIGINT', shutdown)
+process.once('SIGTERM', shutdown)
