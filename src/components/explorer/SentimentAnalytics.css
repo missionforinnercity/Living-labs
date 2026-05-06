@@ -1,0 +1,798 @@
+.sentiment-analytics {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  color: #e5e7eb;
+}
+
+.sentiment-analytics--bottom {
+  overflow: hidden;
+}
+
+.sentiment-analytics .analytics-section {
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.sentiment-analytics .analytics-section:last-child {
+  border-bottom: none;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sentiment-analytics--bottom .analytics-section {
+  padding: 0.9rem 1rem;
+}
+
+.sentiment-analytics--bottom > .analytics-section:last-child {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.sentiment-analytics .section-header,
+.sentiment-analytics .subsection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sentiment-analytics .section-header {
+  margin-bottom: 0.75rem;
+}
+
+.sentiment-analytics .section-header h3,
+.sentiment-analytics .subsection-header h4 {
+  color: #fff;
+  margin: 0;
+}
+
+.sentiment-analytics .section-header h3 {
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+
+.sentiment-analytics .subsection-header {
+  margin-top: 1.15rem;
+  margin-bottom: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.sentiment-analytics .subsection-header:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.sentiment-analytics .subsection-header h4 {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.sentiment-analytics .data-date {
+  color: rgba(255,255,255,0.45);
+  font-size: 0.75rem;
+}
+
+.sentiment-intro,
+.sentiment-muted {
+  color: rgba(255,255,255,0.52);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.sentiment-intro {
+  margin: 0 0 1rem;
+}
+
+.sentiment-month-row label {
+  display: grid;
+  gap: 0.35rem;
+  color: #a1a1aa;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sentiment-month-row select,
+.sentiment-compare-controls select {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.78);
+  color: #f8fafc;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  outline: none;
+}
+
+.sentiment-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 0.35rem;
+}
+
+.sentiment-analytics--bottom .sentiment-tabs {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.25rem;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+}
+
+.sentiment-tabs button {
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.045);
+  color: #a1a1aa;
+  border-radius: 7px;
+  padding: 0.48rem 0.35rem;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.sentiment-analytics--bottom .sentiment-tabs button {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+}
+
+.sentiment-tabs button.active,
+.sentiment-tabs button:hover {
+  color: #fff;
+  border-color: rgba(56,189,248,0.45);
+  background: rgba(56,189,248,0.12);
+}
+
+.sentiment-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
+}
+
+.sentiment-analytics--bottom .sentiment-stat-grid {
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+}
+
+.sentiment-workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.sentiment-workflow-card {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 92px;
+  padding: 0.85rem;
+  text-align: left;
+  border: 1px solid rgba(56,189,248,0.2);
+  border-radius: 8px;
+  background: rgba(56,189,248,0.075);
+  color: #e0f2fe;
+  cursor: pointer;
+}
+
+.sentiment-workflow-card:hover {
+  background: rgba(56,189,248,0.13);
+  border-color: rgba(56,189,248,0.38);
+}
+
+.sentiment-workflow-card strong {
+  color: #f8fafc;
+  font-size: 0.88rem;
+}
+
+.sentiment-workflow-card span {
+  color: #9fb9ca;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.sentiment-stat-card,
+.sentiment-topic-card,
+.sentiment-comment-card,
+.sentiment-street-chip {
+  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-top-color: rgba(255,255,255,0.17);
+  border-radius: 8px;
+}
+
+.sentiment-stat-card {
+  padding: 0.85rem 0.45rem;
+  text-align: center;
+}
+
+.sentiment-stat-card.primary {
+  background: rgba(56,189,248,0.08);
+  border-color: rgba(56,189,248,0.2);
+}
+
+.sentiment-stat-value {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.sentiment-stat-label {
+  margin-top: 0.2rem;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.sentiment-chart {
+  width: 100%;
+  min-height: 210px;
+}
+
+.sentiment-chart-tall {
+  height: 280px;
+}
+
+.sentiment-analytics--bottom .sentiment-chart-tall {
+  height: 300px;
+}
+
+.sentiment-compare-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.sentiment-comparison-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.sentiment-street-chip {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  font-size: 0.82rem;
+}
+
+.sentiment-street-chip small,
+.sentiment-topic-card small {
+  color: #94a3b8;
+}
+
+.sentiment-topic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.sentiment-topic-card {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.65rem;
+  min-width: 0;
+}
+
+.sentiment-topic-card span {
+  color: #e5e7eb;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sentiment-street-table {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sentiment-street-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) 86px 44px 38px;
+  align-items: center;
+  gap: 0.45rem;
+  color: #d1d5db;
+  font-size: 0.78rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.045);
+}
+
+.sentiment-street-row--button,
+.sentiment-action-row,
+.sentiment-anomaly-card--button {
+  width: 100%;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sentiment-street-row--button {
+  background: transparent;
+}
+
+.sentiment-street-row--button:hover,
+.sentiment-action-row:hover,
+.sentiment-anomaly-card--button:hover {
+  background: rgba(56,189,248,0.08);
+}
+
+.sentiment-street-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sentiment-street-row small {
+  color: #94a3b8;
+  text-align: right;
+}
+
+.sentiment-row-meter {
+  height: 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.08);
+}
+
+.sentiment-row-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.sentiment-comment-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.sentiment-analytics--bottom .sentiment-comment-list {
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  align-items: start;
+}
+
+.sentiment-analytics--bottom .sentiment-comment-list--compact {
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.sentiment-comment-card {
+  padding: 0.7rem;
+}
+
+.sentiment-comment-meta {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.sentiment-comment-meta span {
+  color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sentiment-comment-meta small,
+.sentiment-comment-tags span {
+  color: #94a3b8;
+}
+
+.sentiment-comment-card p {
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin: 0.55rem 0;
+}
+
+.sentiment-comment-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.sentiment-comment-tags span,
+.sentiment-comment-tags a {
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  border-radius: 999px;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.68rem;
+  color: #94a3b8;
+  text-decoration: none;
+}
+
+.sentiment-word-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.sentiment-word-cloud span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.045);
+  border-radius: 999px;
+  padding: 0.32rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.sentiment-word-cloud small {
+  color: #94a3b8;
+  font-size: 0.65rem;
+}
+
+.sentiment-error,
+.sentiment-loading {
+  margin-top: 0.65rem;
+  padding: 0.6rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+
+.sentiment-error {
+  color: #fecaca;
+  border: 1px solid rgba(239,68,68,0.25);
+  background: rgba(239,68,68,0.1);
+}
+
+.sentiment-loading {
+  color: #bae6fd;
+  border: 1px solid rgba(56,189,248,0.2);
+  background: rgba(56,189,248,0.08);
+}
+
+.sentiment-open-analytics {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.62rem 0.75rem;
+  border: 1px solid rgba(56,189,248,0.28);
+  border-radius: 8px;
+  background: rgba(56,189,248,0.1);
+  color: #e0f2fe;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.sentiment-open-analytics:hover {
+  background: rgba(56,189,248,0.16);
+}
+
+.sentiment-control-kpis {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.sentiment-control-kpis div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.65rem;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+}
+
+.sentiment-control-kpis span {
+  color: #94a3b8;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.sentiment-control-kpis strong {
+  color: #fff;
+  font-size: 0.92rem;
+}
+
+.sentiment-analytics--bottom .sentiment-topic-grid {
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+}
+
+.sentiment-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.sentiment-priority-grid {
+  margin-bottom: 0.25rem;
+}
+
+.sentiment-overview-grid--compact .sentiment-mini-chart {
+  min-height: 260px;
+}
+
+.sentiment-mini-chart {
+  min-height: 280px;
+  padding: 0.85rem;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+}
+
+.sentiment-mini-chart h4,
+.sentiment-list-panel h4 {
+  margin: 0 0 0.75rem;
+  color: #f8fafc;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.sentiment-insight-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+}
+
+.sentiment-insight-row span {
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.045);
+  color: #94a3b8;
+  padding: 0.38rem 0.65rem;
+  font-size: 0.74rem;
+}
+
+.sentiment-action-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) auto minmax(120px, auto);
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  color: #d1d5db;
+  background: transparent;
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  font-size: 0.78rem;
+}
+
+.sentiment-action-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sentiment-action-row small {
+  color: #94a3b8;
+  text-align: right;
+}
+
+.sentiment-detail-header {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: 1rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.sentiment-detail-header label {
+  display: grid;
+  gap: 0.35rem;
+  color: #a1a1aa;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sentiment-detail-header select {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.78);
+  color: #f8fafc;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  outline: none;
+}
+
+.sentiment-detail-title {
+  display: grid;
+  gap: 0.2rem;
+  color: #f8fafc;
+}
+
+.sentiment-detail-title small {
+  color: #94a3b8;
+}
+
+.sentiment-comment-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 0.65rem;
+  align-items: end;
+  margin-bottom: 0.55rem;
+}
+
+.sentiment-comment-filters label {
+  display: grid;
+  gap: 0.35rem;
+  color: #a1a1aa;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.sentiment-comment-filters select {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.78);
+  color: #f8fafc;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  outline: none;
+}
+
+.sentiment-clear-filters {
+  height: 38px;
+  padding: 0 0.75rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.sentiment-clear-filters:hover {
+  background: rgba(255,255,255,0.085);
+}
+
+.sentiment-filter-summary {
+  margin-bottom: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.76rem;
+}
+
+.sentiment-analytics--bottom .sentiment-street-table {
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  column-gap: 1.25rem;
+}
+
+.sentiment-week-heatmap {
+  min-width: 720px;
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.035);
+}
+
+.sentiment-week-head,
+.sentiment-week-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) repeat(auto-fit, minmax(34px, 1fr));
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+}
+
+.sentiment-week-head {
+  color: #94a3b8;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.sentiment-week-row span {
+  color: #e5e7eb;
+  font-size: 0.76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sentiment-week-row i {
+  display: block;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.sentiment-anomaly-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 0.55rem;
+}
+
+.sentiment-anomaly-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 9px;
+  background: rgba(255,255,255,0.045);
+}
+
+.sentiment-anomaly-card.low {
+  border-left: 3px solid #ef4444;
+}
+
+.sentiment-anomaly-card.high {
+  border-left: 3px solid #22c55e;
+}
+
+.sentiment-anomaly-card span {
+  color: #f8fafc;
+  font-weight: 650;
+}
+
+.sentiment-anomaly-card small {
+  grid-column: 1 / -1;
+  color: #94a3b8;
+}
+
+.sentiment-breakdown-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.48rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+}
+
+.sentiment-breakdown-row span {
+  color: #e5e7eb;
+  text-transform: capitalize;
+}
+
+.sentiment-breakdown-row small {
+  font-weight: 700;
+}
+
+.sentiment-breakdown-row.priority span::after {
+  content: ' civic';
+  margin-left: 0.35rem;
+  color: #bae6fd;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sentiment-extreme-panel .sentiment-comment-card {
+  margin-top: 0.4rem;
+}
+
+.sentiment-empty {
+  color: #94a3b8;
+  padding: 0.75rem;
+  border: 1px dashed rgba(255,255,255,0.14);
+  border-radius: 8px;
+}
+
+.sentiment-analytics--bottom .sentiment-word-cloud {
+  max-height: 130px;
+  overflow: auto;
+}
+
+@media (max-width: 1180px) {
+  .sentiment-analytics--bottom .sentiment-comment-list,
+  .sentiment-analytics--bottom .sentiment-comment-list--compact,
+  .sentiment-analytics--bottom .sentiment-street-table {
+    grid-template-columns: 1fr;
+  }
+
+  .sentiment-analytics--bottom .sentiment-topic-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .sentiment-analytics--bottom .sentiment-stat-grid,
+  .sentiment-workflow-grid,
+  .sentiment-comment-filters,
+  .sentiment-overview-grid,
+  .sentiment-anomaly-list {
+    grid-template-columns: 1fr;
+  }
+}

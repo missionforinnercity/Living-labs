@@ -156,6 +156,14 @@ function quoteIdentifier(identifier) {
   return `"${String(identifier).replaceAll('"', '""')}"`
 }
 
+function quoteLiteral(value) {
+  return `'${String(value).replaceAll("'", "''")}'`
+}
+
+function normaliseStreetSql(expression) {
+  return `lower(regexp_replace(regexp_replace(coalesce(${expression}, ''), '\\s+', ' ', 'g'), '\\s+(street|st|road|rd|avenue|ave|mall|pass|lane|ln|drive|dr|boulevard|blvd)$', '', 'i'))`
+}
+
 function parseMarketValueList(value) {
   if (value === null || value === undefined) return []
   if (Array.isArray(value)) return value.map(Number).filter(Number.isFinite)
@@ -931,6 +939,694 @@ app.get('/api/cadastre/landparcels', async (req, res) => {
     res.json(buildLandParcelFeatureCollection(rows))
   } catch (err) {
     console.error('[API] /cadastre/landparcels error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+async function getSentimentTables() {
+  const { rows } = await pool.query(`
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'sentiment'
+      AND table_type = 'BASE TABLE'
+      AND table_name ~ '^city_pulse_[0-9]{4}_[0-9]{2}$'
+    ORDER BY table_name
+  `)
+  return rows.map((row) => row.table_name)
+}
+
+function getSentimentMonthKey(tableName) {
+  const match = String(tableName).match(/city_pulse_(\d{4})_(\d{2})$/)
+  return match ? `${match[1]}-${match[2]}` : tableName
+}
+
+function buildSentimentUnionSql(tables) {
+  return tables.map((tableName) => {
+    const monthKey = getSentimentMonthKey(tableName)
+    return `
+      SELECT
+        ${quoteLiteral(monthKey)} AS month_key,
+        ${quoteLiteral(tableName)} AS source_table,
+        ogc_fid,
+        id::text AS comment_id,
+        source::text AS source,
+        nullif(street_name::text, '') AS street_name,
+        nullif(place_name::text, '') AS place_name,
+        nullif(text::text, '') AS comment_text,
+        stars::double precision AS stars,
+        nullif(url::text, '') AS url,
+        collected_at::text AS collected_at,
+        date::text AS date_text,
+        month::text AS month_label,
+        week::int AS week,
+        day::text AS day_text,
+        score::double precision AS score,
+        nullif(category::text, '') AS category,
+        nullif(topic::text, '') AS topic,
+        nullif(engine::text, '') AS engine,
+        ST_AsGeoJSON(wkb_geometry)::json AS geometry
+      FROM sentiment.${quoteIdentifier(tableName)}
+    `
+  }).join('\nUNION ALL\n')
+}
+
+async function getSentimentUnion({ month = null } = {}) {
+  const tables = await getSentimentTables()
+  if (!tables.length) {
+    return {
+      tables,
+      sql: 'SELECT * FROM (VALUES (NULL)) AS empty_row WHERE false',
+      params: []
+    }
+  }
+
+  const params = []
+  const monthKeys = new Set(tables.map(getSentimentMonthKey))
+  const selectedMonth = month && month !== 'all' && monthKeys.has(month) ? month : null
+  if (selectedMonth) params.push(selectedMonth)
+
+  const baseSql = buildSentimentUnionSql(tables)
+  const filteredSql = selectedMonth
+    ? `SELECT * FROM (${baseSql}) all_sentiment WHERE month_key = $1`
+    : `SELECT * FROM (${baseSql}) all_sentiment`
+
+  return { tables, sql: filteredSql, params, selectedMonth }
+}
+
+app.get('/api/sentiment/street-segments', async (req, res) => {
+  try {
+    const { tables, sql: sentimentSql, params, selectedMonth } = await getSentimentUnion({
+      month: typeof req.query.month === 'string' ? req.query.month : null
+    })
+
+    const { rows } = await pool.query(`
+      WITH sentiment_rows AS (
+        ${sentimentSql}
+      ),
+      global_stats AS (
+        SELECT
+          coalesce(avg(score), 0)::double precision AS global_avg_sentiment,
+          greatest(max(street_counts.comment_count), 1)::double precision AS max_comment_count,
+          greatest(max(street_counts.negative_count), 1)::double precision AS max_negative_count,
+          greatest(max(street_counts.positive_count), 1)::double precision AS max_positive_count
+        FROM (
+          SELECT
+            ${normaliseStreetSql('street_name')} AS street_key,
+            count(*)::int AS comment_count,
+            count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+            count(*) FILTER (WHERE score >= 0.25)::int AS positive_count
+          FROM sentiment_rows
+          WHERE street_name IS NOT NULL
+          GROUP BY ${normaliseStreetSql('street_name')}
+        ) street_counts
+        CROSS JOIN sentiment_rows
+      ),
+      street_base AS (
+        SELECT
+          ${normaliseStreetSql('street_name')} AS street_key,
+          min(street_name) AS sentiment_street_name,
+          count(*)::int AS comment_count,
+          count(*) FILTER (WHERE score >= 0.25)::int AS positive_count,
+          count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment,
+          round(avg(stars)::numeric, 2)::double precision AS avg_stars,
+          jsonb_agg(DISTINCT topic) FILTER (WHERE topic IS NOT NULL) AS topics,
+          jsonb_agg(DISTINCT category) FILTER (WHERE category IS NOT NULL) AS categories
+        FROM sentiment_rows
+        WHERE street_name IS NOT NULL
+        GROUP BY ${normaliseStreetSql('street_name')}
+      ),
+      street_scored AS (
+        SELECT
+          sb.*,
+          round((sqrt(sb.comment_count::double precision) / (sqrt(sb.comment_count::double precision) + sqrt(20.0)))::numeric, 4)::double precision AS confidence_weight,
+          round((sb.negative_count::double precision / nullif(sb.comment_count, 0))::numeric, 4)::double precision AS negative_share,
+          round((sb.positive_count::double precision / nullif(sb.comment_count, 0))::numeric, 4)::double precision AS positive_share,
+          round((ln(sb.negative_count + 1) / nullif(ln(gs.max_negative_count + 1), 0))::numeric, 4)::double precision AS negative_burden,
+          round((ln(sb.positive_count + 1) / nullif(ln(gs.max_positive_count + 1), 0))::numeric, 4)::double precision AS positive_burden,
+          round(least(1, greatest(-1,
+            (((sb.avg_sentiment * sb.comment_count) + (gs.global_avg_sentiment * 20.0)) / nullif(sb.comment_count + 20.0, 0))
+            - (0.18 * (ln(sb.negative_count + 1) / nullif(ln(gs.max_negative_count + 1), 0)))
+            + (0.08 * (ln(sb.positive_count + 1) / nullif(ln(gs.max_positive_count + 1), 0)))
+          ))::numeric, 4)::double precision AS sentiment_index
+        FROM street_base sb
+        CROSS JOIN global_stats gs
+      ),
+      street_sentiment AS (
+        SELECT
+          ss.*,
+          round((percent_rank() OVER (ORDER BY ss.sentiment_index) * 100)::numeric, 1)::double precision AS sentiment_percentile,
+          (floor((percent_rank() OVER (ORDER BY ss.sentiment_index) * 100) / 10) * 10)::int AS sentiment_decile,
+          round(((1 - ((ss.sentiment_index + 1) / 2)) * 60 + coalesce(ss.negative_burden, 0) * 30 + ss.confidence_weight * 10)::numeric, 2)::double precision AS attention_score
+        FROM street_scored ss
+      )
+      SELECT
+        r."OBJECTID" AS objectid,
+        r."SL_STR_NAME_KEY" AS sl_str_name_key,
+        r."STR_NAME" AS street_name,
+        r."STR_NAME_MDF" AS street_name_modified,
+        r."Shape__Length" AS shape_length,
+        s.sentiment_street_name,
+        s.comment_count,
+        s.positive_count,
+        s.negative_count,
+        s.avg_sentiment,
+        s.sentiment_index,
+        s.sentiment_percentile,
+        s.sentiment_decile,
+        s.confidence_weight,
+        s.negative_share,
+        s.positive_share,
+        s.negative_burden,
+        s.positive_burden,
+        s.attention_score,
+        s.avg_stars,
+        s.topics,
+        s.categories,
+        CASE
+          WHEN s.avg_sentiment >= 0.45 THEN 'very_positive'
+          WHEN s.avg_sentiment >= 0.15 THEN 'positive'
+          WHEN s.avg_sentiment > -0.15 THEN 'mixed'
+          WHEN s.avg_sentiment > -0.45 THEN 'negative'
+          WHEN s.avg_sentiment IS NULL THEN 'no_data'
+          ELSE 'very_negative'
+        END AS sentiment_class,
+        ST_AsGeoJSON(ST_Transform(r.geom, 4326))::json AS geometry
+      FROM transport."Roads_innercity_CCID" r
+      LEFT JOIN street_sentiment s
+        ON ${normaliseStreetSql('r."STR_NAME"')} = s.street_key
+        OR ${normaliseStreetSql('r."STR_NAME_MDF"')} = s.street_key
+      WHERE r.geom IS NOT NULL
+      ORDER BY s.avg_sentiment DESC NULLS LAST, r."STR_NAME" NULLS LAST
+    `, params)
+
+    const summaryRows = await pool.query(`
+      WITH sentiment_rows AS (
+        ${sentimentSql}
+      )
+      SELECT
+        count(*)::int AS comment_count,
+        count(distinct street_name)::int AS street_count,
+        round(avg(score)::numeric, 4)::double precision AS avg_sentiment,
+        round(avg(stars)::numeric, 2)::double precision AS avg_stars,
+        count(*) FILTER (WHERE score >= 0.25)::int AS positive_count,
+        count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+        count(*) FILTER (WHERE score > -0.25 AND score < 0.25)::int AS mixed_count
+      FROM sentiment_rows
+    `, params)
+
+    res.json(buildGeoFeatureCollection(rows, {
+      source: 'sentiment.city_pulse_* joined to transport.Roads_innercity_CCID',
+      metadata: {
+        ...(summaryRows.rows[0] || {}),
+        tables,
+        selectedMonth: selectedMonth || 'all'
+      }
+    }))
+  } catch (err) {
+    console.error('[API] /sentiment/street-segments error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/sentiment/analytics', async (_req, res) => {
+  try {
+    const { tables, sql: sentimentSql } = await getSentimentUnion()
+
+    const [
+      summaryResult,
+      monthlyResult,
+      streetResult,
+      topicResult,
+      categoryResult,
+      impactResult,
+      wordResult,
+      sourceResult,
+      engineResult,
+      dailyResult,
+      distributionResult,
+      streetWeekResult,
+      anomalyResult,
+      extremeResult,
+      dropResult,
+      streetMonthlyResult,
+      streetSourceResult,
+      streetThemeResult,
+      streetCommentResult
+    ] = await Promise.all([
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          count(*)::int AS comment_count,
+          count(distinct street_name)::int AS street_count,
+          count(distinct topic)::int AS topic_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment,
+          round(avg(stars)::numeric, 2)::double precision AS avg_stars,
+          min(month_key) AS first_month,
+          max(month_key) AS latest_month
+        FROM sentiment_rows
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          month_key,
+          count(*)::int AS comment_count,
+          count(distinct street_name)::int AS street_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment,
+          count(*) FILTER (WHERE score >= 0.25)::int AS positive_count,
+          count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+          count(*) FILTER (WHERE score > -0.25 AND score < 0.25)::int AS mixed_count
+        FROM sentiment_rows
+        GROUP BY month_key
+        ORDER BY month_key
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql}),
+        global_stats AS (
+          SELECT
+            coalesce(avg(score), 0)::double precision AS global_avg_sentiment,
+            greatest(max(street_counts.negative_count), 1)::double precision AS max_negative_count,
+            greatest(max(street_counts.positive_count), 1)::double precision AS max_positive_count
+          FROM (
+            SELECT
+              street_name,
+              count(*)::int AS comment_count,
+              count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+              count(*) FILTER (WHERE score >= 0.25)::int AS positive_count
+            FROM sentiment_rows
+            WHERE street_name IS NOT NULL
+            GROUP BY street_name
+          ) street_counts
+          CROSS JOIN sentiment_rows
+        ),
+        street_base AS (
+          SELECT
+            street_name,
+            count(*)::int AS comment_count,
+            round(avg(score)::numeric, 4)::double precision AS avg_sentiment,
+            count(*) FILTER (WHERE score >= 0.25)::int AS positive_count,
+            count(*) FILTER (WHERE score <= -0.25)::int AS negative_count
+          FROM sentiment_rows
+          WHERE street_name IS NOT NULL
+          GROUP BY street_name
+          HAVING count(*) >= 3
+        ),
+        scored AS (
+          SELECT
+            sb.*,
+            round((sqrt(sb.comment_count::double precision) / (sqrt(sb.comment_count::double precision) + sqrt(20.0)))::numeric, 4)::double precision AS confidence_weight,
+            round((sb.negative_count::double precision / nullif(sb.comment_count, 0))::numeric, 4)::double precision AS negative_share,
+            round((sb.positive_count::double precision / nullif(sb.comment_count, 0))::numeric, 4)::double precision AS positive_share,
+            round((ln(sb.negative_count + 1) / nullif(ln(gs.max_negative_count + 1), 0))::numeric, 4)::double precision AS negative_burden,
+            round((ln(sb.positive_count + 1) / nullif(ln(gs.max_positive_count + 1), 0))::numeric, 4)::double precision AS positive_burden,
+            round(least(1, greatest(-1,
+              (((sb.avg_sentiment * sb.comment_count) + (gs.global_avg_sentiment * 20.0)) / nullif(sb.comment_count + 20.0, 0))
+              - (0.18 * (ln(sb.negative_count + 1) / nullif(ln(gs.max_negative_count + 1), 0)))
+              + (0.08 * (ln(sb.positive_count + 1) / nullif(ln(gs.max_positive_count + 1), 0)))
+            ))::numeric, 4)::double precision AS sentiment_index
+          FROM street_base sb
+          CROSS JOIN global_stats gs
+        )
+        SELECT
+          *,
+          round((percent_rank() OVER (ORDER BY sentiment_index) * 100)::numeric, 1)::double precision AS sentiment_percentile,
+          round(((1 - ((sentiment_index + 1) / 2)) * 60 + coalesce(negative_burden, 0) * 30 + confidence_weight * 10)::numeric, 2)::double precision AS attention_score
+        FROM scored
+        ORDER BY attention_score DESC, negative_count DESC, avg_sentiment ASC
+        LIMIT 80
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          topic,
+          count(*)::int AS comment_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment,
+          count(distinct street_name)::int AS street_count
+        FROM sentiment_rows
+        WHERE topic IS NOT NULL
+        GROUP BY topic
+        ORDER BY comment_count DESC
+        LIMIT 80
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          coalesce(category, 'Uncategorised') AS category,
+          count(*)::int AS comment_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+        FROM sentiment_rows
+        GROUP BY coalesce(category, 'Uncategorised')
+        ORDER BY comment_count DESC
+        LIMIT 40
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          month_key,
+          street_name,
+          place_name,
+          topic,
+          category,
+          score,
+          stars,
+          comment_text,
+          url,
+          source,
+          coalesce(day_text, date_text) AS comment_date
+        FROM sentiment_rows
+        WHERE comment_text IS NOT NULL AND score IS NOT NULL
+        ORDER BY abs(score) DESC, stars DESC NULLS LAST
+        LIMIT 120
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql}),
+        words AS (
+          SELECT lower(match[1]) AS word, score
+          FROM sentiment_rows,
+          regexp_matches(coalesce(comment_text, ''), '([A-Za-z][A-Za-z''-]{3,})', 'g') AS match
+        )
+        SELECT
+          word,
+          count(*)::int AS count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+        FROM words
+        WHERE word NOT IN (
+          'this','that','with','from','have','they','there','their','about','would','could','should','your','very',
+          'just','were','been','when','what','will','more','some','into','than','then','them','also','really',
+          'because','please','thank','thanks','good','great','nice','best','cape','town','street'
+        )
+        GROUP BY word
+        HAVING count(*) >= 5
+        ORDER BY count DESC
+        LIMIT 80
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          coalesce(source, 'unknown') AS source,
+          count(*)::int AS comment_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+        FROM sentiment_rows
+        GROUP BY coalesce(source, 'unknown')
+        ORDER BY comment_count DESC
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          coalesce(engine, 'unknown') AS engine,
+          count(*)::int AS comment_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+        FROM sentiment_rows
+        GROUP BY coalesce(engine, 'unknown')
+        ORDER BY comment_count DESC
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql}),
+        daily AS (
+          SELECT
+            coalesce(day_text, date_text) AS day_key,
+            count(*)::int AS comment_count,
+            count(distinct street_name)::int AS street_count,
+            round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+          FROM sentiment_rows
+          WHERE coalesce(day_text, date_text) IS NOT NULL
+          GROUP BY coalesce(day_text, date_text)
+        )
+        SELECT *
+        FROM daily
+        ORDER BY day_key
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql}),
+        labelled AS (
+          SELECT
+            CASE
+              WHEN score > 0.05 THEN 'Positive'
+              WHEN score < -0.05 THEN 'Negative'
+              ELSE 'Neutral'
+            END AS label,
+            score
+          FROM sentiment_rows
+        )
+        SELECT
+          label,
+          count(*)::int AS comment_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+        FROM labelled
+        GROUP BY label
+        ORDER BY CASE label WHEN 'Positive' THEN 1 WHEN 'Neutral' THEN 2 ELSE 3 END
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          street_name,
+          week,
+          count(*)::int AS comment_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+        FROM sentiment_rows
+        WHERE street_name IS NOT NULL AND week IS NOT NULL
+        GROUP BY street_name, week
+        HAVING count(*) >= 1
+        ORDER BY street_name, week
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql}),
+        daily_streets AS (
+          SELECT
+            street_name,
+            coalesce(day_text, date_text) AS day_key,
+            count(*)::int AS post_count,
+            avg(score)::double precision AS avg_score
+          FROM sentiment_rows
+          WHERE street_name IS NOT NULL
+            AND coalesce(day_text, date_text) IS NOT NULL
+          GROUP BY street_name, coalesce(day_text, date_text)
+        ),
+        stats AS (
+          SELECT avg(avg_score) AS overall_mean, stddev_samp(avg_score) AS overall_std
+          FROM daily_streets
+        )
+        SELECT
+          street_name,
+          day_key,
+          post_count,
+          round(avg_score::numeric, 4)::double precision AS avg_score,
+          round(((avg_score - overall_mean) / nullif(overall_std, 0))::numeric, 3)::double precision AS z_score,
+          CASE WHEN ((avg_score - overall_mean) / nullif(overall_std, 0)) < 0 THEN 'Low' ELSE 'High' END AS direction
+        FROM daily_streets, stats
+        WHERE overall_std IS NOT NULL
+          AND abs((avg_score - overall_mean) / nullif(overall_std, 0)) >= 1.5
+        ORDER BY z_score ASC NULLS LAST
+        LIMIT 80
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        (
+          SELECT
+            'positive' AS type,
+            month_key,
+            street_name,
+            place_name,
+            topic,
+            category,
+            score,
+            stars,
+            comment_text,
+            url,
+            source,
+            coalesce(day_text, date_text) AS comment_date
+          FROM sentiment_rows
+          WHERE comment_text IS NOT NULL AND score IS NOT NULL
+          ORDER BY score DESC, stars DESC NULLS LAST
+          LIMIT 12
+        )
+        UNION ALL
+        (
+          SELECT
+            'negative' AS type,
+            month_key,
+            street_name,
+            place_name,
+            topic,
+            category,
+            score,
+            stars,
+            comment_text,
+            url,
+            source,
+            coalesce(day_text, date_text) AS comment_date
+          FROM sentiment_rows
+          WHERE comment_text IS NOT NULL AND score IS NOT NULL
+          ORDER BY score ASC, stars ASC NULLS LAST
+          LIMIT 12
+        )
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql}),
+        monthly AS (
+          SELECT
+            street_name,
+            month_key,
+            count(*)::int AS comment_count,
+            count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+            round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+          FROM sentiment_rows
+          WHERE street_name IS NOT NULL
+          GROUP BY street_name, month_key
+          HAVING count(*) >= 3
+        ),
+        movement AS (
+          SELECT
+            *,
+            lag(avg_sentiment) OVER (PARTITION BY street_name ORDER BY month_key) AS previous_sentiment,
+            lag(comment_count) OVER (PARTITION BY street_name ORDER BY month_key) AS previous_comment_count
+          FROM monthly
+        )
+        SELECT
+          street_name,
+          month_key,
+          comment_count,
+          negative_count,
+          avg_sentiment,
+          previous_sentiment,
+          previous_comment_count,
+          round((avg_sentiment - previous_sentiment)::numeric, 4)::double precision AS sentiment_delta
+        FROM movement
+        WHERE previous_sentiment IS NOT NULL
+          AND previous_comment_count >= 3
+        ORDER BY sentiment_delta ASC, negative_count DESC, comment_count DESC
+        LIMIT 80
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          street_name,
+          month_key,
+          count(*)::int AS comment_count,
+          count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+          count(*) FILTER (WHERE score >= 0.25)::int AS positive_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+        FROM sentiment_rows
+        WHERE street_name IS NOT NULL
+        GROUP BY street_name, month_key
+        HAVING count(*) >= 2
+        ORDER BY street_name, month_key
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          street_name,
+          coalesce(source, 'unknown') AS source,
+          count(*)::int AS comment_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment,
+          count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+          CASE
+            WHEN lower(coalesce(source, '')) LIKE '%google%' THEN 2
+            ELSE 1
+          END AS source_priority
+        FROM sentiment_rows
+        WHERE street_name IS NOT NULL
+        GROUP BY
+          street_name,
+          coalesce(source, 'unknown'),
+          CASE
+            WHEN lower(coalesce(source, '')) LIKE '%google%' THEN 2
+            ELSE 1
+          END
+        HAVING count(*) >= 1
+        ORDER BY source_priority, negative_count DESC, comment_count DESC
+        LIMIT 500
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          street_name,
+          coalesce(category, 'Uncategorised') AS category,
+          coalesce(topic, 'General') AS topic,
+          count(*)::int AS comment_count,
+          count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment
+        FROM sentiment_rows
+        WHERE street_name IS NOT NULL
+        GROUP BY street_name, coalesce(category, 'Uncategorised'), coalesce(topic, 'General')
+        HAVING count(*) >= 1
+        ORDER BY negative_count DESC, comment_count DESC
+        LIMIT 800
+      `),
+      pool.query(`
+        WITH sentiment_rows AS (${sentimentSql}),
+        scored_comments AS (
+          SELECT
+            month_key,
+            street_name,
+            place_name,
+            topic,
+            category,
+            score,
+            stars,
+            comment_text,
+            url,
+            source,
+            coalesce(day_text, date_text) AS comment_date,
+            CASE
+              WHEN lower(coalesce(source, '')) LIKE '%google%' THEN 2
+              ELSE 1
+            END AS source_priority,
+            CASE
+              WHEN lower(coalesce(category, '') || ' ' || coalesce(topic, '')) ~ '(clean|waste|litter|crime|safety|security|shoot|theft|robbery|assault)' THEN 0
+              ELSE 1
+            END AS civic_priority
+          FROM sentiment_rows
+          WHERE street_name IS NOT NULL
+            AND comment_text IS NOT NULL
+            AND score IS NOT NULL
+        )
+        SELECT
+          month_key,
+          street_name,
+          place_name,
+          topic,
+          category,
+          score,
+          stars,
+          comment_text,
+          url,
+          source,
+          comment_date,
+          source_priority,
+          civic_priority
+        FROM scored_comments
+        ORDER BY street_name, civic_priority, source_priority, score ASC, abs(score) DESC
+      `)
+    ])
+
+    res.json({
+      metadata: {
+        ...(summaryResult.rows[0] || {}),
+        tables,
+        fetchedAt: new Date().toISOString()
+      },
+      months: monthlyResult.rows,
+      streets: streetResult.rows,
+      topics: topicResult.rows,
+      categories: categoryResult.rows,
+      impactComments: impactResult.rows,
+      words: wordResult.rows,
+      sources: sourceResult.rows,
+      engines: engineResult.rows,
+      daily: dailyResult.rows,
+      sentimentDistribution: distributionResult.rows,
+      streetWeeks: streetWeekResult.rows,
+      anomalies: anomalyResult.rows,
+      extremeComments: extremeResult.rows,
+      streetDrops: dropResult.rows,
+      streetMonthly: streetMonthlyResult.rows,
+      streetSources: streetSourceResult.rows,
+      streetThemes: streetThemeResult.rows,
+      streetComments: streetCommentResult.rows
+    })
+  } catch (err) {
+    console.error('[API] /sentiment/analytics error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })

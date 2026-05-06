@@ -32,6 +32,7 @@ import { useExplorerWalkabilityData } from '../../features/walkability/useExplor
 import { useExplorerLightingData } from '../../features/lighting/useExplorerLightingData'
 import { useExplorerEnvironmentData } from '../../features/environment/useExplorerEnvironmentData'
 import { useExplorerTrafficData } from '../../features/traffic/useExplorerTrafficData'
+import { useExplorerSentimentData } from '../../features/sentiment/useExplorerSentimentData'
 import './UnifiedDataExplorer.css'
 
 const ExplorerMap = lazy(() => import('./ExplorerMap'))
@@ -43,6 +44,7 @@ const GreeneryAnalytics = lazy(() => import('./GreeneryAnalytics'))
 const EcologyHeatAnalytics = lazy(() => import('./EcologyHeatAnalytics'))
 const EcologyHeatDetailPanel = lazy(() => import('./EcologyHeatDetailPanel'))
 const DateAvailabilityCalendar = lazy(() => import('./DateAvailabilityCalendar'))
+const SentimentAnalytics = lazy(() => import('./SentimentAnalytics'))
 
 const toEcologyFeatureKey = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -151,7 +153,8 @@ const DASHBOARD_MODES = [
   { id: 'lighting', label: 'Street Lighting' },
   { id: 'climate', label: 'Climate' },
   { id: 'environment', label: 'Environment' },
-  { id: 'traffic', label: 'Traffic' }
+  { id: 'traffic', label: 'Traffic' },
+  { id: 'sentiment', label: 'Sentiment' }
 ]
 
 // All available layer categories - these are what users click to view
@@ -186,7 +189,9 @@ const LAYER_CATEGORIES = [
   { id: 'greeneryIndex', label: 'Greenery Access', dashboard: 'environment', dataKey: 'greenerySegments' },
   { id: 'treeCanopy', label: 'Tree Canopy', dashboard: 'environment', dataKey: 'treeCanopy' },
   // Traffic layers
-  { id: 'trafficFlow', label: 'Traffic Flow', dashboard: 'traffic', dataKey: 'trafficSegments' }
+  { id: 'trafficFlow', label: 'Traffic Flow', dashboard: 'traffic', dataKey: 'trafficSegments' },
+  // Sentiment layers
+  { id: 'streetSentiment', label: 'Street Sentiment', dashboard: 'sentiment', dataKey: 'sentimentSegments' }
 ]
 
 const getExplorerUrlState = () => {
@@ -265,6 +270,12 @@ const UnifiedDataExplorer = () => {
   
   // Lighting dashboard state
   const [lightIntensityRaster, setLightIntensityRaster] = useState(null)
+
+  // Sentiment dashboard state
+  const [selectedSentimentMonth, setSelectedSentimentMonth] = useState('all')
+  const [sentimentPanelMinimized, setSentimentPanelMinimized] = useState(true)
+  const [sentimentPanelOpen, setSentimentPanelOpen] = useState(false)
+  const [sentimentPanelExpanded, setSentimentPanelExpanded] = useState(false)
   
   // Climate heat street state
   const [selectedSegment, setSelectedSegment] = useState(null)
@@ -328,7 +339,9 @@ const UnifiedDataExplorer = () => {
     treeCanopy: false,
     parksNearby: false,
     // Traffic layers
-    trafficSegments: false
+    trafficSegments: false,
+    // Sentiment layers
+    sentimentSegments: false
   })
   
   // Active layer stack - shows what's currently on the map
@@ -393,6 +406,17 @@ const UnifiedDataExplorer = () => {
   } = useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, season, timeOfDay, windDirection, windSpeedKmh })
 
   const { trafficData } = useExplorerTrafficData({ dashboardMode, lockedLayers })
+
+  const {
+    sentimentSegments,
+    sentimentAnalytics,
+    sentimentLoading,
+    sentimentError
+  } = useExplorerSentimentData({
+    dashboardMode,
+    lockedLayers,
+    selectedMonth: selectedSentimentMonth
+  })
 
   const filteredEventsData = useMemo(() => {
     if (!eventsData?.features) return eventsData
@@ -1103,6 +1127,21 @@ const UnifiedDataExplorer = () => {
     // Switch to the appropriate dashboard
     setDashboardMode(category.dashboard)
   }
+
+  const selectDashboardMode = (modeId) => {
+    if (modeId === 'sentiment') {
+      selectCategory('streetSentiment')
+      return
+    }
+
+    setDashboardMode(modeId)
+  }
+
+  useEffect(() => {
+    if (dashboardMode !== 'sentiment') return
+    if (activeCategory === 'streetSentiment') return
+    selectCategory('streetSentiment')
+  }, [dashboardMode, activeCategory]) // eslint-disable-line react-hooks/exhaustive-deps
   
   // Toggle lock on a layer in the stack
   const toggleLayerLock = (categoryId) => {
@@ -1439,7 +1478,7 @@ const UnifiedDataExplorer = () => {
             <button
               key={mode.id}
               className={`mode-btn ${dashboardMode === mode.id ? 'active' : ''}`}
-              onClick={() => setDashboardMode(mode.id)}
+              onClick={() => selectDashboardMode(mode.id)}
             >
               <span className="mode-icon">{mode.icon}</span>
               <span className="mode-label">{mode.label}</span>
@@ -1767,6 +1806,26 @@ const UnifiedDataExplorer = () => {
               hideLayerControls={true}
             />
           )}
+
+          {dashboardMode === 'sentiment' && (
+            <SentimentAnalytics
+              analytics={sentimentAnalytics}
+              segmentsData={sentimentSegments}
+              selectedMonth={selectedSentimentMonth}
+              onMonthChange={(month) => {
+                setSelectedSentimentMonth(month)
+                selectCategory('streetSentiment')
+              }}
+              loading={sentimentLoading}
+              error={sentimentError}
+              variant="controls"
+              analyticsMinimized={!sentimentPanelOpen || sentimentPanelMinimized}
+              onOpenAnalytics={() => {
+                setSentimentPanelOpen(true)
+                setSentimentPanelMinimized(false)
+              }}
+            />
+          )}
           </div>
 
           {/* Active Layers — inline at sidebar bottom */}
@@ -1860,6 +1919,7 @@ const UnifiedDataExplorer = () => {
               eventsScope={eventsScope}
               trafficData={trafficData}
               trafficScenario={trafficScenario}
+              sentimentSegments={sentimentSegments}
               ratingFilter={ratingFilter ? Array.from(ratingFilter) : null}
               selectedSegment={selectedSegment}
               onSegmentSelect={setSelectedSegment}
@@ -1883,6 +1943,59 @@ const UnifiedDataExplorer = () => {
               }}
             />
           </Suspense>
+
+          {dashboardMode === 'sentiment' && sentimentPanelOpen && !sentimentPanelMinimized && (
+            <div
+              className={`bottom-panel sentiment-bottom-panel ${sentimentPanelExpanded ? 'sentiment-bottom-panel--expanded' : ''}`}
+              style={sentimentPanelExpanded ? undefined : { right: `${effectiveSidebarWidth + 32}px` }}
+            >
+              <div className="panel-header sentiment-bottom-header">
+                <div>
+                  <h3>Sentiment Analytics</h3>
+                  <div className="sentiment-bottom-subtitle">
+                    Start with problem streets and drops, then drill into one street when needed.
+                  </div>
+                </div>
+                <div className="panel-header-actions">
+                  <div className="parcel-panel-meta">
+                    {sentimentAnalytics?.metadata?.comment_count
+                      ? `${Number(sentimentAnalytics.metadata.comment_count).toLocaleString()} comments`
+                      : 'Loading comments'}
+                  </div>
+                  <button
+                    onClick={() => setSentimentPanelExpanded((value) => !value)}
+                    className="close-btn sentiment-expand-btn"
+                    title={sentimentPanelExpanded ? 'Return to map panel' : 'Expand sentiment analytics'}
+                  >
+                    {sentimentPanelExpanded ? '↙' : '↗'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSentimentPanelExpanded(false)
+                      setSentimentPanelOpen(false)
+                      setSentimentPanelMinimized(true)
+                    }}
+                    className="close-btn"
+                    title="Hide sentiment analytics"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <SentimentAnalytics
+                analytics={sentimentAnalytics}
+                segmentsData={sentimentSegments}
+                selectedMonth={selectedSentimentMonth}
+                onMonthChange={(month) => {
+                  setSelectedSentimentMonth(month)
+                  selectCategory('streetSentiment')
+                }}
+                loading={sentimentLoading}
+                error={sentimentError}
+                variant="bottom"
+              />
+            </div>
+          )}
 
           {dashboardMode === 'business' && activeCategory === 'landParcels' && (
             <div

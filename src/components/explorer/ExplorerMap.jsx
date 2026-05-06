@@ -458,6 +458,7 @@ const ExplorerMap = ({
   onRouteSegmentClick,
   trafficData,
   trafficScenario = 'WORK_MORNING',
+  sentimentSegments,
   eventsData,
   eventsMonth,
   ratingFilter = null   // null = all, array of floor values e.g. [4,5]
@@ -1276,6 +1277,7 @@ const ExplorerMap = ({
           'tree-canopy-layer',
           'env-grid-fill',
           'traffic-layer',
+          'sentiment-streets-layer',
           'events-points-layer'
         ]}
         onClick={handleMapClick}
@@ -2990,6 +2992,73 @@ const ExplorerMap = ({
             </Source>
           )
         })()}
+
+        {/* Sentiment Layers */}
+        {shouldRenderCategory('streetSentiment') && sentimentSegments && (
+          <Source id="sentiment-streets" type="geojson" data={sentimentSegments}>
+            <Layer
+              id="sentiment-streets-glow"
+              type="line"
+              paint={{
+                'line-color': [
+                  'case',
+                  ['==', ['get', 'avg_sentiment'], null], 'rgba(15,23,42,0.2)',
+                  ['interpolate', ['linear'], [
+                    'coalesce',
+                    ['to-number', ['get', 'sentiment_percentile']],
+                    ['*', ['+', ['coalesce', ['to-number', ['get', 'avg_sentiment']], 0], 1], 50]
+                  ],
+                    0, '#7f1d1d',
+                    10, '#dc2626',
+                    25, '#f97316',
+                    40, '#facc15',
+                    55, '#a3e635',
+                    70, '#22c55e',
+                    90, '#06b6d4',
+                    100, '#bae6fd'
+                  ]
+                ],
+                'line-width': [
+                  'interpolate', ['linear'], ['zoom'],
+                  12, ['case', ['==', ['get', 'avg_sentiment'], null], 1, 7],
+                  16, ['case', ['==', ['get', 'avg_sentiment'], null], 2, 14]
+                ],
+                'line-opacity': ['case', ['==', ['get', 'avg_sentiment'], null], 0.03, 0.28],
+                'line-blur': 7
+              }}
+            />
+            <Layer
+              id="sentiment-streets-layer"
+              type="line"
+              paint={{
+                'line-color': [
+                  'case',
+                  ['==', ['get', 'avg_sentiment'], null], 'rgba(15,23,42,0.14)',
+                  ['interpolate', ['linear'], [
+                    'coalesce',
+                    ['to-number', ['get', 'sentiment_percentile']],
+                    ['*', ['+', ['coalesce', ['to-number', ['get', 'avg_sentiment']], 0], 1], 50]
+                  ],
+                    0, '#991b1b',
+                    10, '#ef4444',
+                    25, '#fb923c',
+                    40, '#fde047',
+                    55, '#bef264',
+                    70, '#4ade80',
+                    90, '#22d3ee',
+                    100, '#e0f2fe'
+                  ]
+                ],
+                'line-width': [
+                  'interpolate', ['linear'], ['zoom'],
+                  12, ['case', ['==', ['get', 'avg_sentiment'], null], 0.7, ['interpolate', ['linear'], ['coalesce', ['get', 'comment_count'], 0], 1, 2.5, 50, 4, 250, 6.5]],
+                  16, ['case', ['==', ['get', 'avg_sentiment'], null], 1.2, ['interpolate', ['linear'], ['coalesce', ['get', 'comment_count'], 0], 1, 4.5, 50, 7, 250, 12]]
+                ],
+                'line-opacity': ['case', ['==', ['get', 'avg_sentiment'], null], 0.06, 0.98]
+              }}
+            />
+          </Source>
+        )}
         
         {/* 3D Buildings — composite tileset from dark-v11 */}
         {(() => {
@@ -3685,6 +3754,79 @@ const ExplorerMap = ({
                         )
                       })}
                     </div>
+                  </>
+                )
+              })()}
+
+              {dashboardMode === 'sentiment' && (() => {
+                const p = popupInfo.feature.properties
+                const score = Number(p.avg_sentiment)
+                const index = Number(p.sentiment_index)
+                const percentile = Number(p.sentiment_percentile)
+                const attention = Number(p.attention_score)
+                const count = Number(p.comment_count || 0)
+                const pos = Number(p.positive_count || 0)
+                const neg = Number(p.negative_count || 0)
+                const mixed = Math.max(0, count - pos - neg)
+                const color = Number.isFinite(score)
+                  ? score >= 0.25 ? '#22c55e' : score <= -0.25 ? '#ef4444' : '#94a3b8'
+                  : '#64748b'
+                const topics = Array.isArray(p.topics) ? p.topics : (() => {
+                  try { return JSON.parse(p.topics || '[]') } catch { return [] }
+                })()
+                return (
+                  <>
+                    <h3>{p.sentiment_street_name || p.street_name || 'Street Sentiment'}</h3>
+                    {Number.isFinite(score) ? (
+                      <>
+                        <p style={{ margin: '0.25rem 0' }}>
+                          <strong>Average Sentiment:</strong>{' '}
+                          <span style={{ color, fontWeight: 700 }}>{score.toFixed(2)}</span>
+                        </p>
+                        {Number.isFinite(index) && (
+                          <p style={{ margin: '0.25rem 0' }}>
+                            <strong>Weighted Index:</strong>{' '}
+                            <span style={{ color, fontWeight: 700 }}>{index.toFixed(2)}</span>
+                            {Number.isFinite(percentile) && <span style={{ color: '#9ca3af' }}> · P{percentile.toFixed(0)}</span>}
+                          </p>
+                        )}
+                        <p style={{ margin: '0.25rem 0' }}>
+                          <strong>Comments:</strong> {count.toLocaleString()}
+                        </p>
+                        {Number.isFinite(attention) && (
+                          <p style={{ margin: '0.25rem 0' }}>
+                            <strong>Attention Score:</strong> {attention.toFixed(0)}
+                          </p>
+                        )}
+                        {p.avg_stars != null && (
+                          <p style={{ margin: '0.25rem 0' }}>
+                            <strong>Average Stars:</strong> {Number(p.avg_stars).toFixed(1)}
+                          </p>
+                        )}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.35rem', marginTop: '0.65rem' }}>
+                          <div style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.24)', borderRadius: 6, padding: '0.35rem', textAlign: 'center' }}>
+                            <strong style={{ color: '#86efac' }}>{pos}</strong>
+                            <span style={{ display: 'block', color: '#9ca3af', fontSize: '0.68rem' }}>Positive</span>
+                          </div>
+                          <div style={{ background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.18)', borderRadius: 6, padding: '0.35rem', textAlign: 'center' }}>
+                            <strong style={{ color: '#cbd5e1' }}>{mixed}</strong>
+                            <span style={{ display: 'block', color: '#9ca3af', fontSize: '0.68rem' }}>Mixed</span>
+                          </div>
+                          <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.24)', borderRadius: 6, padding: '0.35rem', textAlign: 'center' }}>
+                            <strong style={{ color: '#fca5a5' }}>{neg}</strong>
+                            <span style={{ display: 'block', color: '#9ca3af', fontSize: '0.68rem' }}>Negative</span>
+                          </div>
+                        </div>
+                        {topics.length > 0 && (
+                          <div style={{ marginTop: '0.65rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem' }}>
+                            <p style={{ fontSize: '0.7rem', color: '#6b7280', margin: '0 0 0.3rem' }}>Topics</p>
+                            <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.74rem' }}>{topics.slice(0, 5).join(', ')}</p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p style={{ color: '#9ca3af' }}>No sentiment comments matched to this road yet.</p>
+                    )}
                   </>
                 )
               })()}
