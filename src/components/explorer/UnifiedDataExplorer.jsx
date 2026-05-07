@@ -1807,6 +1807,33 @@ const UnifiedDataExplorer = () => {
             />
           )}
 
+          {dashboardMode === 'sentiment' && activeCategory === 'streetSentiment' && (
+            <aside
+              className="sentiment-map-legend sentiment-map-legend--sidebar"
+              aria-label="Sentiment colour legend"
+            >
+              <div className="sentiment-map-legend-header">
+                <span>Street Sentiment</span>
+                <strong>Colour Key</strong>
+              </div>
+              <div className="sentiment-map-legend-gradient" />
+              <div className="sentiment-map-legend-scale">
+                <span>P0</span>
+                <span>P25</span>
+                <span>P50</span>
+                <span>P75</span>
+                <span>P100</span>
+              </div>
+              <div className="sentiment-map-legend-items">
+                <div><i style={{ background: '#ef4444' }} />Poor / negative</div>
+                <div><i style={{ background: '#fde047' }} />Mixed / neutral</div>
+                <div><i style={{ background: '#4ade80' }} />Positive</div>
+                <div><i style={{ background: '#22d3ee' }} />Strong positive</div>
+              </div>
+              <p>Thicker streets have more matched comments.</p>
+            </aside>
+          )}
+
           {dashboardMode === 'sentiment' && (
             <SentimentAnalytics
               analytics={sentimentAnalytics}

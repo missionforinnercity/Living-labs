@@ -760,6 +760,99 @@
   line-height: 1;
 }
 
+.sentiment-map-legend {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.72rem 0.78rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-top-color: rgba(255, 255, 255, 0.24);
+  background:
+    radial-gradient(circle at top right, rgba(0, 229, 160, 0.10), transparent 36%),
+    linear-gradient(155deg, rgba(200, 210, 220, 0.14), rgba(71, 85, 105, 0.16));
+  backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
+  -webkit-backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.24),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  z-index: 80;
+  color: rgba(248, 250, 252, 0.86);
+  pointer-events: none;
+}
+
+.sentiment-map-legend--sidebar {
+  width: calc(100% - 1.8rem);
+  margin: 0.85rem 0.9rem 0.35rem;
+}
+
+.sentiment-map-legend-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: baseline;
+  margin-bottom: 0.52rem;
+}
+
+.sentiment-map-legend-header span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.sentiment-map-legend-header strong {
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.sentiment-map-legend-gradient {
+  height: 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(90deg, #991b1b 0%, #ef4444 10%, #fb923c 25%, #fde047 40%, #bef264 55%, #4ade80 70%, #22d3ee 90%, #e0f2fe 100%);
+}
+
+.sentiment-map-legend-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.32rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.sentiment-map-legend-items {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.34rem 0.5rem;
+  margin-top: 0.62rem;
+}
+
+.sentiment-map-legend-items div {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.68rem;
+}
+
+.sentiment-map-legend-items i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
+  flex: 0 0 auto;
+}
+
+.sentiment-map-legend p {
+  margin: 0.58rem 0 0;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
 .parcel-insights-panel .panel-header {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
