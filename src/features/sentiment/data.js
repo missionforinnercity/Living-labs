@@ -18,9 +18,10 @@ async function fetchSentimentJson(path, errorLabel) {
   }
 }
 
-export async function loadExplorerSentimentData(month = 'all') {
+export async function loadExplorerSentimentData(month = 'all', sourceMode = 'public') {
   const params = new URLSearchParams()
   if (month && month !== 'all') params.set('month', month)
+  if (sourceMode && sourceMode !== 'all') params.set('sourceMode', sourceMode)
   const suffix = params.toString() ? `?${params.toString()}` : ''
   const [sentimentFeatureCollection, roadSegments] = await Promise.all([
     fetchSentimentJson(`/api/sentiment/street-segments${suffix}`, 'Sentiment street layer load failed'),
@@ -32,8 +33,11 @@ export async function loadExplorerSentimentData(month = 'all') {
   )
 }
 
-export async function loadExplorerSentimentAnalytics() {
-  return fetchSentimentJson('/api/sentiment/analytics', 'Sentiment analytics load failed')
+export async function loadExplorerSentimentAnalytics(sourceMode = 'public') {
+  const params = new URLSearchParams()
+  if (sourceMode && sourceMode !== 'all') params.set('sourceMode', sourceMode)
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  return fetchSentimentJson(`/api/sentiment/analytics${suffix}`, 'Sentiment analytics load failed')
 }
 
 function loadRoadSegments() {

@@ -57,6 +57,17 @@ const PARCEL_VALUE_CHANGE_COLOR_EXPRESSION = [
   'No comparison', '#64748b',
   '#64748b'
 ]
+const SERVICE_REQUEST_GROUPS = [
+  { id: 'Sewage', color: '#2563eb', soft: 'rgba(37,99,235,0.12)', mid: 'rgba(37,99,235,0.46)', strong: 'rgba(37,99,235,0.86)' },
+  { id: 'Water', color: '#06b6d4', soft: 'rgba(6,182,212,0.12)', mid: 'rgba(6,182,212,0.46)', strong: 'rgba(6,182,212,0.86)' },
+  { id: 'Electricity', color: '#f59e0b', soft: 'rgba(245,158,11,0.12)', mid: 'rgba(245,158,11,0.48)', strong: 'rgba(245,158,11,0.9)' },
+  { id: 'Roads & Stormwater', color: '#a855f7', soft: 'rgba(168,85,247,0.12)', mid: 'rgba(168,85,247,0.48)', strong: 'rgba(168,85,247,0.9)' },
+  { id: 'Waste & Cleansing', color: '#22c55e', soft: 'rgba(34,197,94,0.12)', mid: 'rgba(34,197,94,0.46)', strong: 'rgba(34,197,94,0.86)' },
+  { id: 'Public Realm', color: '#84cc16', soft: 'rgba(132,204,22,0.12)', mid: 'rgba(132,204,22,0.46)', strong: 'rgba(132,204,22,0.86)' },
+  { id: 'Other', color: '#94a3b8', soft: 'rgba(148,163,184,0.1)', mid: 'rgba(148,163,184,0.36)', strong: 'rgba(148,163,184,0.68)' }
+]
+
+const slugifyLayerId = (value) => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 const formatRandCompact = (value) => {
   const numeric = Number(value)
@@ -459,6 +470,8 @@ const ExplorerMap = ({
   trafficData,
   trafficScenario = 'WORK_MORNING',
   sentimentSegments,
+  sentimentPerspective = 'public',
+  serviceRequests,
   eventsData,
   eventsMonth,
   ratingFilter = null   // null = all, array of floor values e.g. [4,5]
@@ -966,6 +979,22 @@ const ExplorerMap = ({
         )
       }
     : null
+
+  const serviceRequestClustersByGroup = useMemo(() => {
+    const features = serviceRequests?.features || []
+    if (!features.length) return []
+
+    return SERVICE_REQUEST_GROUPS
+      .map((group) => ({
+        ...group,
+        slug: slugifyLayerId(group.id),
+        data: {
+          type: 'FeatureCollection',
+          features: features.filter((feature) => feature?.properties?.complaint_group === group.id)
+        }
+      }))
+      .filter((group) => group.data.features.length > 0)
+  }, [serviceRequests])
   
   // Handle map click
   const handleMapClick = (event) => {
@@ -1278,6 +1307,7 @@ const ExplorerMap = ({
           'env-grid-fill',
           'traffic-layer',
           'sentiment-streets-layer',
+          'service-requests-points-layer',
           'events-points-layer'
         ]}
         onClick={handleMapClick}
@@ -1434,7 +1464,7 @@ const ExplorerMap = ({
             
             {/* Review Ratings - Bubble chart */}
             {shouldRenderCategory('businessRatings') && businessesData && (() => {
-              const ratingsData = ratingFilter && ratingFilter.length > 0
+              const ratingsData = dashboardMode !== 'sentiment' && ratingFilter && ratingFilter.length > 0
                 ? {
                     type: 'FeatureCollection',
                     features: businessesData.features.filter(f => {
@@ -3059,6 +3089,105 @@ const ExplorerMap = ({
             />
           </Source>
         )}
+
+        {shouldRenderCategory('serviceRequests') && serviceRequests && (
+          <>
+            {serviceRequestClustersByGroup.map((group) => (
+              <Source
+                key={group.id}
+                id={`service-requests-clusters-${group.slug}`}
+                type="geojson"
+                data={group.data}
+                cluster={true}
+                clusterMaxZoom={16}
+                clusterRadius={58}
+              >
+                <Layer
+                  id={`service-requests-cluster-zone-${group.slug}`}
+                  type="circle"
+                  filter={['has', 'point_count']}
+                  paint={{
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['get', 'point_count'],
+                      2, 28,
+                      8, 48,
+                      20, 72,
+                      60, 104
+                    ],
+                    'circle-color': group.color,
+                    'circle-opacity': [
+                      'interpolate', ['linear'], ['zoom'],
+                      11, 0.42,
+                      15, 0.34,
+                      18, 0.22
+                    ],
+                    'circle-blur': 0.68,
+                    'circle-stroke-width': 0
+                  }}
+                />
+                <Layer
+                  id={`service-requests-cluster-core-${group.slug}`}
+                  type="circle"
+                  filter={['has', 'point_count']}
+                  paint={{
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['get', 'point_count'],
+                      2, 8,
+                      8, 14,
+                      20, 22,
+                      60, 32
+                    ],
+                    'circle-color': group.color,
+                    'circle-opacity': 0.72,
+                    'circle-stroke-color': 'rgba(248,250,252,0.62)',
+                    'circle-stroke-width': 0.9,
+                    'circle-blur': 0.08
+                  }}
+                />
+                <Layer
+                  id={`service-requests-cluster-count-${group.slug}`}
+                  type="symbol"
+                  filter={['has', 'point_count']}
+                  layout={{
+                    'text-field': ['get', 'point_count_abbreviated'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': ['interpolate', ['linear'], ['get', 'point_count'], 2, 10, 20, 12, 60, 14],
+                    'text-allow-overlap': true
+                  }}
+                  paint={{
+                    'text-color': '#f8fafc',
+                    'text-halo-color': 'rgba(15,23,42,0.85)',
+                    'text-halo-width': 1.2
+                  }}
+                />
+              </Source>
+            ))}
+            <Source id="service-requests" type="geojson" data={serviceRequests}>
+              <Layer
+                id="service-requests-points-layer"
+                type="circle"
+                paint={{
+                  'circle-radius': [
+                    'interpolate', ['linear'], ['zoom'],
+                    11, 1.2,
+                    15, 2.4,
+                    18, 4
+                  ],
+                  'circle-color': '#f8fafc',
+                  'circle-stroke-color': [
+                    'match',
+                    ['coalesce', ['get', 'complaint_group'], 'Other'],
+                    ...SERVICE_REQUEST_GROUPS.flatMap((group) => [group.id, group.color]),
+                    '#94a3b8'
+                  ],
+                  'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 11, 0.35, 16, 0.8],
+                  'circle-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.16, 16, 0.42],
+                  'circle-blur': 0.12
+                }}
+              />
+            </Source>
+          </>
+        )}
         
         {/* 3D Buildings — composite tileset from dark-v11 */}
         {(() => {
@@ -3758,7 +3887,102 @@ const ExplorerMap = ({
                 )
               })()}
 
-              {dashboardMode === 'sentiment' && (() => {
+              {dashboardMode === 'sentiment' && popupInfo.feature.source === 'service-requests' && (() => {
+                const p = popupInfo.feature.properties
+                const responseDays = Number(p.response_days)
+                const isComplete = p.record_status === 'complete'
+                const statusColor = isComplete ? '#e5e7eb' : '#38bdf8'
+                return (
+                  <>
+                    <h3>{p.complaint_type || 'Service Request'}</h3>
+                    <p style={{ margin: '0.25rem 0' }}><strong>Group:</strong> {p.complaint_group || 'Other'}</p>
+                    <p style={{ margin: '0.25rem 0' }}>
+                      <strong>Record:</strong>{' '}
+                      <span style={{ color: statusColor, fontWeight: 700 }}>
+                        {isComplete ? 'Complete dates' : 'Incomplete dates'}
+                      </span>
+                    </p>
+                    <p style={{ margin: '0.25rem 0' }}><strong>Created:</strong> {p.created_on_date || p.created_date || '—'}</p>
+                    {(p.completed_date && p.completed_date !== '#') && (
+                      <p style={{ margin: '0.25rem 0' }}><strong>Completed:</strong> {p.completed_date}</p>
+                    )}
+                    <p style={{ margin: '0.25rem 0' }}>
+                      <strong>Response:</strong>{' '}
+                      {Number.isFinite(responseDays) ? `${responseDays.toFixed(responseDays >= 10 ? 0 : 1)} days` : 'Not calculated'}
+                    </p>
+                    <p style={{ margin: '0.25rem 0' }}><strong>Work center:</strong> {p.work_center || 'Unknown'}</p>
+                    {p.notification && (
+                      <p style={{ margin: '0.25rem 0', color: '#94a3b8' }}><strong>Notification:</strong> {p.notification}</p>
+                    )}
+                  </>
+                )
+              })()}
+
+              {dashboardMode === 'sentiment' && popupInfo.feature.source === 'sentiment-streets' && sentimentPerspective === 'retail' && (() => {
+                const p = popupInfo.feature.properties
+                const score = Number(p.avg_sentiment)
+                const index = Number(p.sentiment_index)
+                const percentile = Number(p.sentiment_percentile)
+                const attention = Number(p.attention_score)
+                const count = Number(p.comment_count || 0)
+                const pos = Number(p.positive_count || 0)
+                const neg = Number(p.negative_count || 0)
+                const mixed = Math.max(0, count - pos - neg)
+                const color = Number.isFinite(score)
+                  ? score >= 0.25 ? '#22c55e' : score <= -0.25 ? '#ef4444' : '#94a3b8'
+                  : '#64748b'
+                return (
+                  <>
+                    <h3>{p.sentiment_street_name || p.street_name || 'Retail Sentiment'}</h3>
+                    {Number.isFinite(score) ? (
+                      <>
+                        <p style={{ margin: '0.25rem 0' }}>
+                          <strong>Average Sentiment:</strong>{' '}
+                          <span style={{ color, fontWeight: 700 }}>
+                            {score.toFixed(2)}
+                          </span>
+                        </p>
+                        {Number.isFinite(index) && (
+                          <p style={{ margin: '0.25rem 0' }}>
+                            <strong>Weighted Index:</strong>{' '}
+                            <span style={{ color, fontWeight: 700 }}>{index.toFixed(2)}</span>
+                            {Number.isFinite(percentile) && <span style={{ color: '#9ca3af' }}> · P{percentile.toFixed(0)}</span>}
+                          </p>
+                        )}
+                        <p style={{ margin: '0.25rem 0' }}>
+                          <strong>Review Comments:</strong> {count.toLocaleString()}
+                        </p>
+                        {Number.isFinite(attention) && (
+                          <p style={{ margin: '0.25rem 0' }}>
+                            <strong>Attention Score:</strong> {attention.toFixed(0)}
+                          </p>
+                        )}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.35rem', marginTop: '0.65rem' }}>
+                          <div style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.24)', borderRadius: 6, padding: '0.35rem', textAlign: 'center' }}>
+                            <strong style={{ color: '#86efac' }}>{pos}</strong>
+                            <span style={{ display: 'block', color: '#9ca3af', fontSize: '0.68rem' }}>Positive</span>
+                          </div>
+                          <div style={{ background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.18)', borderRadius: 6, padding: '0.35rem', textAlign: 'center' }}>
+                            <strong style={{ color: '#cbd5e1' }}>{mixed}</strong>
+                            <span style={{ display: 'block', color: '#9ca3af', fontSize: '0.68rem' }}>Mixed</span>
+                          </div>
+                          <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.24)', borderRadius: 6, padding: '0.35rem', textAlign: 'center' }}>
+                            <strong style={{ color: '#fca5a5' }}>{neg}</strong>
+                            <span style={{ display: 'block', color: '#9ca3af', fontSize: '0.68rem' }}>Negative</span>
+                          </div>
+                        </div>
+                        <p style={{ marginTop: '0.65rem', color: '#9ca3af', fontSize: '0.72rem' }}>
+                          Derived only from Google Maps review text matched to this street. Scores use the same sentiment model as the public-area lens.
+                        </p>
+                      </>
+                    ) : (
+                      <p style={{ color: '#9ca3af' }}>No Google Maps review sentiment matched to this road yet.</p>
+                    )}
+                  </>
+                )
+              })()}
+
+              {dashboardMode === 'sentiment' && popupInfo.feature.source === 'sentiment-streets' && sentimentPerspective === 'public' && (() => {
                 const p = popupInfo.feature.properties
                 const score = Number(p.avg_sentiment)
                 const index = Number(p.sentiment_index)
@@ -3796,11 +4020,6 @@ const ExplorerMap = ({
                         {Number.isFinite(attention) && (
                           <p style={{ margin: '0.25rem 0' }}>
                             <strong>Attention Score:</strong> {attention.toFixed(0)}
-                          </p>
-                        )}
-                        {p.avg_stars != null && (
-                          <p style={{ margin: '0.25rem 0' }}>
-                            <strong>Average Stars:</strong> {Number(p.avg_stars).toFixed(1)}
                           </p>
                         )}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.35rem', marginTop: '0.65rem' }}>

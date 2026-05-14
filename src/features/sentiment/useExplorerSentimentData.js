@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadExplorerSentimentAnalytics, loadExplorerSentimentData } from './data'
 
-export function useExplorerSentimentData({ dashboardMode, lockedLayers, selectedMonth }) {
+export function useExplorerSentimentData({ dashboardMode, lockedLayers, selectedMonth, sourceMode = 'public' }) {
   const [sentimentSegments, setSentimentSegments] = useState(null)
   const [sentimentAnalytics, setSentimentAnalytics] = useState(null)
   const [sentimentLoading, setSentimentLoading] = useState(false)
@@ -18,8 +18,8 @@ export function useExplorerSentimentData({ dashboardMode, lockedLayers, selected
         setSentimentLoading(true)
         setSentimentError(null)
         const [segments, analytics] = await Promise.all([
-          loadExplorerSentimentData(selectedMonth || 'all'),
-          sentimentAnalytics ? Promise.resolve(sentimentAnalytics) : loadExplorerSentimentAnalytics()
+          loadExplorerSentimentData(selectedMonth || 'all', sourceMode),
+          loadExplorerSentimentAnalytics(sourceMode)
         ])
         if (cancelled) return
         setSentimentSegments(segments)
@@ -37,7 +37,7 @@ export function useExplorerSentimentData({ dashboardMode, lockedLayers, selected
     return () => {
       cancelled = true
     }
-  }, [dashboardMode, lockedLayers, selectedMonth]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dashboardMode, lockedLayers, selectedMonth, sourceMode])
 
   return {
     sentimentSegments,

@@ -33,6 +33,7 @@ import { useExplorerLightingData } from '../../features/lighting/useExplorerLigh
 import { useExplorerEnvironmentData } from '../../features/environment/useExplorerEnvironmentData'
 import { useExplorerTrafficData } from '../../features/traffic/useExplorerTrafficData'
 import { useExplorerSentimentData } from '../../features/sentiment/useExplorerSentimentData'
+import { useExplorerServiceRequestsData } from '../../features/serviceRequests/useExplorerServiceRequestsData'
 import './UnifiedDataExplorer.css'
 
 const ExplorerMap = lazy(() => import('./ExplorerMap'))
@@ -45,6 +46,7 @@ const EcologyHeatAnalytics = lazy(() => import('./EcologyHeatAnalytics'))
 const EcologyHeatDetailPanel = lazy(() => import('./EcologyHeatDetailPanel'))
 const DateAvailabilityCalendar = lazy(() => import('./DateAvailabilityCalendar'))
 const SentimentAnalytics = lazy(() => import('./SentimentAnalytics'))
+const ServiceRequestsAnalytics = lazy(() => import('./ServiceRequestsAnalytics'))
 
 const toEcologyFeatureKey = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -136,6 +138,16 @@ const PARCEL_VALUE_CHANGE_COLORS = {
   'No comparison': '#64748b'
 }
 
+const SERVICE_REQUEST_GROUP_COLORS = [
+  { label: 'Sewage', color: '#2563eb' },
+  { label: 'Water', color: '#06b6d4' },
+  { label: 'Electricity', color: '#f59e0b' },
+  { label: 'Roads & Stormwater', color: '#a855f7' },
+  { label: 'Waste & Cleansing', color: '#22c55e' },
+  { label: 'Public Realm', color: '#84cc16' },
+  { label: 'Other', color: '#94a3b8' }
+]
+
 const formatRandCompact = (value) => {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return '—'
@@ -191,7 +203,8 @@ const LAYER_CATEGORIES = [
   // Traffic layers
   { id: 'trafficFlow', label: 'Traffic Flow', dashboard: 'traffic', dataKey: 'trafficSegments' },
   // Sentiment layers
-  { id: 'streetSentiment', label: 'Street Sentiment', dashboard: 'sentiment', dataKey: 'sentimentSegments' }
+  { id: 'streetSentiment', label: 'Street Sentiment', dashboard: 'sentiment', dataKey: 'sentimentSegments' },
+  { id: 'serviceRequests', label: 'Service Requests', dashboard: 'sentiment', dataKey: 'serviceRequests' }
 ]
 
 const getExplorerUrlState = () => {
@@ -273,6 +286,7 @@ const UnifiedDataExplorer = () => {
 
   // Sentiment dashboard state
   const [selectedSentimentMonth, setSelectedSentimentMonth] = useState('all')
+  const [sentimentPerspective, setSentimentPerspective] = useState('public')
   const [sentimentPanelMinimized, setSentimentPanelMinimized] = useState(true)
   const [sentimentPanelOpen, setSentimentPanelOpen] = useState(false)
   const [sentimentPanelExpanded, setSentimentPanelExpanded] = useState(false)
@@ -341,7 +355,8 @@ const UnifiedDataExplorer = () => {
     // Traffic layers
     trafficSegments: false,
     // Sentiment layers
-    sentimentSegments: false
+    sentimentSegments: false,
+    serviceRequests: false
   })
   
   // Active layer stack - shows what's currently on the map
@@ -415,8 +430,16 @@ const UnifiedDataExplorer = () => {
   } = useExplorerSentimentData({
     dashboardMode,
     lockedLayers,
-    selectedMonth: selectedSentimentMonth
+    selectedMonth: selectedSentimentMonth,
+    sourceMode: sentimentPerspective
   })
+
+  const {
+    serviceRequests,
+    serviceRequestAnalytics,
+    serviceRequestsLoading,
+    serviceRequestsError
+  } = useExplorerServiceRequestsData({ dashboardMode, lockedLayers })
 
   const filteredEventsData = useMemo(() => {
     if (!eventsData?.features) return eventsData
@@ -1022,7 +1045,7 @@ const UnifiedDataExplorer = () => {
       setShowGreenDestinations(true)
     }
   }, [activeCategory, dashboardMode])
-  
+
   // Listen for clear segment selection event
   useEffect(() => {
     const handleClearSelection = () => {
@@ -1130,6 +1153,7 @@ const UnifiedDataExplorer = () => {
 
   const selectDashboardMode = (modeId) => {
     if (modeId === 'sentiment') {
+      setSentimentPerspective('public')
       selectCategory('streetSentiment')
       return
     }
@@ -1137,9 +1161,19 @@ const UnifiedDataExplorer = () => {
     setDashboardMode(modeId)
   }
 
+  const retailSentimentStats = useMemo(() => {
+    const metadata = sentimentAnalytics?.metadata || {}
+    return {
+      streetCount: Number(metadata.street_count || 0),
+      commentCount: Number(metadata.comment_count || 0),
+      avgSentiment: Number(metadata.avg_sentiment),
+      negativeCount: Number(metadata.negative_count || 0)
+    }
+  }, [sentimentAnalytics])
+
   useEffect(() => {
     if (dashboardMode !== 'sentiment') return
-    if (activeCategory === 'streetSentiment') return
+    if (activeCategory === 'streetSentiment' || activeCategory === 'serviceRequests') return
     selectCategory('streetSentiment')
   }, [dashboardMode, activeCategory]) // eslint-disable-line react-hooks/exhaustive-deps
   
@@ -1808,33 +1842,82 @@ const UnifiedDataExplorer = () => {
           )}
 
           {dashboardMode === 'sentiment' && activeCategory === 'streetSentiment' && (
-            <aside
-              className="sentiment-map-legend sentiment-map-legend--sidebar"
-              aria-label="Sentiment colour legend"
-            >
-              <div className="sentiment-map-legend-header">
-                <span>Street Sentiment</span>
-                <strong>Colour Key</strong>
+            <div className="sentiment-lens-panel">
+              <div className="sentiment-lens-header">
+                <span>Sentiment Lens</span>
+                <strong>{sentimentPerspective === 'public' ? 'Public area' : 'Retail reviews'}</strong>
               </div>
-              <div className="sentiment-map-legend-gradient" />
-              <div className="sentiment-map-legend-scale">
-                <span>P0</span>
-                <span>P25</span>
-                <span>P50</span>
-                <span>P75</span>
-                <span>P100</span>
+              <div className="sentiment-lens-toggle" role="tablist" aria-label="Choose sentiment lens">
+                <button
+                  type="button"
+                  className={sentimentPerspective === 'public' ? 'active' : ''}
+                  onClick={() => setSentimentPerspective('public')}
+                >
+                  Public Area
+                </button>
+                <button
+                  type="button"
+                  className={sentimentPerspective === 'retail' ? 'active' : ''}
+                  onClick={() => setSentimentPerspective('retail')}
+                >
+                  Retail
+                </button>
               </div>
-              <div className="sentiment-map-legend-items">
-                <div><i style={{ background: '#ef4444' }} />Poor / negative</div>
-                <div><i style={{ background: '#fde047' }} />Mixed / neutral</div>
-                <div><i style={{ background: '#4ade80' }} />Positive</div>
-                <div><i style={{ background: '#22d3ee' }} />Strong positive</div>
-              </div>
-              <p>Thicker streets have more matched comments.</p>
-            </aside>
+              <p className="sentiment-lens-copy">
+                {sentimentPerspective === 'public'
+                  ? 'Surrounding area sentiment from Instagram, Twitter/X, Google News and other non-Google-Maps public sources matched to streets.'
+                  : 'Retail sentiment from Google Maps review text matched to streets, scored with the same sentiment model as public area posts.'}
+              </p>
+
+              <aside
+                className={`sentiment-map-legend sentiment-map-legend--sidebar ${sentimentPerspective === 'retail' ? 'sentiment-map-legend--retail' : ''}`}
+                aria-label="Sentiment colour legend"
+              >
+                <div className="sentiment-map-legend-header">
+                  <span>{sentimentPerspective === 'public' ? 'Street Sentiment' : 'Retail Sentiment'}</span>
+                  <strong>Colour Key</strong>
+                </div>
+                <div className="sentiment-map-legend-gradient" />
+                <div className="sentiment-map-legend-scale">
+                  <span>P0</span>
+                  <span>P25</span>
+                  <span>P50</span>
+                  <span>P75</span>
+                  <span>P100</span>
+                </div>
+                <div className="sentiment-map-legend-items">
+                  <div><i style={{ background: '#ef4444' }} />Poor / negative</div>
+                  <div><i style={{ background: '#fde047' }} />Mixed / neutral</div>
+                  <div><i style={{ background: '#4ade80' }} />Positive</div>
+                  <div><i style={{ background: '#22d3ee' }} />Strong positive</div>
+                </div>
+                <p>{sentimentPerspective === 'public' ? 'Thicker streets have more matched public comments.' : 'Thicker streets have more matched Google Maps reviews.'}</p>
+              </aside>
+
+              {sentimentPerspective === 'retail' && (
+                <div className="sentiment-retail-summary">
+                  <div>
+                    <span>Streets</span>
+                    <strong>{retailSentimentStats.streetCount.toLocaleString()}</strong>
+                  </div>
+                  <div>
+                    <span>Avg sentiment</span>
+                    <strong>{Number.isFinite(retailSentimentStats.avgSentiment) ? retailSentimentStats.avgSentiment.toFixed(2) : '—'}</strong>
+                  </div>
+                  <div>
+                    <span>Comments</span>
+                    <strong>{retailSentimentStats.commentCount.toLocaleString()}</strong>
+                  </div>
+                  <div>
+                    <span>Negative</span>
+                    <strong>{retailSentimentStats.negativeCount.toLocaleString()}</strong>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
-          {dashboardMode === 'sentiment' && (
+          {dashboardMode === 'sentiment' && activeCategory === 'streetSentiment' && (
             <SentimentAnalytics
               analytics={sentimentAnalytics}
               segmentsData={sentimentSegments}
@@ -1852,6 +1935,49 @@ const UnifiedDataExplorer = () => {
                 setSentimentPanelMinimized(false)
               }}
             />
+          )}
+          {dashboardMode === 'sentiment' && activeCategory === 'serviceRequests' && (
+            <div className="service-requests-sidebar-panel">
+              <div className="service-requests-sidebar-header">
+                <span>Infrastructure Lens</span>
+                <strong>Service Requests</strong>
+              </div>
+              <p>
+                Mapped municipal service requests by complaint type. Response-time metrics only use records with both created and completed dates.
+              </p>
+              <div className="service-requests-legend" aria-label="Complaint type colour legend">
+                {SERVICE_REQUEST_GROUP_COLORS.map((item) => (
+                  <div key={item.label}>
+                    <i style={{ background: item.color }} />
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="service-requests-sidebar-stats">
+                <div>
+                  <span>Requests</span>
+                  <strong>{Number(serviceRequestAnalytics?.metadata?.request_count || 0).toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span>Incomplete</span>
+                  <strong>{Number(serviceRequestAnalytics?.metadata?.incomplete_count || 0).toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span>Median</span>
+                  <strong>{Number.isFinite(Number(serviceRequestAnalytics?.metadata?.median_response_days)) ? `${Number(serviceRequestAnalytics.metadata.median_response_days).toFixed(1)}d` : '-'}</strong>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="service-requests-open-panel"
+                onClick={() => {
+                  setSentimentPanelOpen(true)
+                  setSentimentPanelMinimized(false)
+                }}
+              >
+                Open Analytics
+              </button>
+            </div>
           )}
           </div>
 
@@ -1947,6 +2073,8 @@ const UnifiedDataExplorer = () => {
               trafficData={trafficData}
               trafficScenario={trafficScenario}
               sentimentSegments={sentimentSegments}
+              sentimentPerspective={sentimentPerspective}
+              serviceRequests={serviceRequests}
               ratingFilter={ratingFilter ? Array.from(ratingFilter) : null}
               selectedSegment={selectedSegment}
               onSegmentSelect={setSelectedSegment}
@@ -1978,16 +2106,22 @@ const UnifiedDataExplorer = () => {
             >
               <div className="panel-header sentiment-bottom-header">
                 <div>
-                  <h3>Sentiment Analytics</h3>
+                  <h3>{activeCategory === 'serviceRequests' ? 'Service Request Analytics' : 'Sentiment Analytics'}</h3>
                   <div className="sentiment-bottom-subtitle">
-                    Start with problem streets and drops, then drill into one street when needed.
+                    {activeCategory === 'serviceRequests'
+                      ? 'Track infrastructure demand, complaint-type zones, surge days and completed-record response speed.'
+                      : 'Start with problem streets and drops, then drill into one street when needed.'}
                   </div>
                 </div>
                 <div className="panel-header-actions">
                   <div className="parcel-panel-meta">
-                    {sentimentAnalytics?.metadata?.comment_count
-                      ? `${Number(sentimentAnalytics.metadata.comment_count).toLocaleString()} comments`
-                      : 'Loading comments'}
+                    {activeCategory === 'serviceRequests'
+                      ? (serviceRequestAnalytics?.metadata?.request_count
+                          ? `${Number(serviceRequestAnalytics.metadata.request_count).toLocaleString()} requests`
+                          : 'Loading requests')
+                      : (sentimentAnalytics?.metadata?.comment_count
+                          ? `${Number(sentimentAnalytics.metadata.comment_count).toLocaleString()} comments`
+                          : 'Loading comments')}
                   </div>
                   <button
                     onClick={() => setSentimentPanelExpanded((value) => !value)}
@@ -2009,18 +2143,28 @@ const UnifiedDataExplorer = () => {
                   </button>
                 </div>
               </div>
-              <SentimentAnalytics
-                analytics={sentimentAnalytics}
-                segmentsData={sentimentSegments}
-                selectedMonth={selectedSentimentMonth}
-                onMonthChange={(month) => {
-                  setSelectedSentimentMonth(month)
-                  selectCategory('streetSentiment')
-                }}
-                loading={sentimentLoading}
-                error={sentimentError}
-                variant="bottom"
-              />
+              {activeCategory === 'serviceRequests' ? (
+                <ServiceRequestsAnalytics
+                  analytics={serviceRequestAnalytics}
+                  requestsData={serviceRequests}
+                  loading={serviceRequestsLoading}
+                  error={serviceRequestsError}
+                  variant="bottom"
+                />
+              ) : (
+                <SentimentAnalytics
+                  analytics={sentimentAnalytics}
+                  segmentsData={sentimentSegments}
+                  selectedMonth={selectedSentimentMonth}
+                  onMonthChange={(month) => {
+                    setSelectedSentimentMonth(month)
+                    selectCategory('streetSentiment')
+                  }}
+                  loading={sentimentLoading}
+                  error={sentimentError}
+                  variant="bottom"
+                />
+              )}
             </div>
           )}
 

@@ -990,33 +990,56 @@ function buildSentimentUnionSql(tables) {
   }).join('\nUNION ALL\n')
 }
 
-async function getSentimentUnion({ month = null } = {}) {
+async function getSentimentUnion({ month = null, sourceMode = 'all' } = {}) {
   const tables = await getSentimentTables()
   if (!tables.length) {
     return {
       tables,
       sql: 'SELECT * FROM (VALUES (NULL)) AS empty_row WHERE false',
-      params: []
+      params: [],
+      selectedSourceMode: 'all'
     }
   }
 
   const params = []
   const monthKeys = new Set(tables.map(getSentimentMonthKey))
   const selectedMonth = month && month !== 'all' && monthKeys.has(month) ? month : null
-  if (selectedMonth) params.push(selectedMonth)
+  const selectedSourceMode = ['public', 'retail'].includes(sourceMode) ? sourceMode : 'all'
 
   const baseSql = buildSentimentUnionSql(tables)
-  const filteredSql = selectedMonth
-    ? `SELECT * FROM (${baseSql}) all_sentiment WHERE month_key = $1`
+  const filters = []
+  if (selectedMonth) {
+    params.push(selectedMonth)
+    filters.push(`month_key = $${params.length}`)
+  }
+  const googleMapsReviewFilter = `(
+    lower(coalesce(source, '')) LIKE '%google%map%'
+    OR lower(coalesce(source, '')) LIKE '%google_map%'
+    OR lower(coalesce(source, '')) LIKE '%maps%'
+    OR lower(coalesce(source, '')) LIKE '%google review%'
+    OR (
+      lower(coalesce(source, '')) LIKE '%google%'
+      AND stars IS NOT NULL
+    )
+  )`
+  if (selectedSourceMode === 'retail') {
+    filters.push(googleMapsReviewFilter)
+  } else if (selectedSourceMode === 'public') {
+    filters.push(`NOT ${googleMapsReviewFilter}`)
+  }
+
+  const filteredSql = filters.length
+    ? `SELECT * FROM (${baseSql}) all_sentiment WHERE ${filters.join(' AND ')}`
     : `SELECT * FROM (${baseSql}) all_sentiment`
 
-  return { tables, sql: filteredSql, params, selectedMonth }
+  return { tables, sql: filteredSql, params, selectedMonth, selectedSourceMode }
 }
 
 app.get('/api/sentiment/street-segments', async (req, res) => {
   try {
-    const { tables, sql: sentimentSql, params, selectedMonth } = await getSentimentUnion({
-      month: typeof req.query.month === 'string' ? req.query.month : null
+    const { tables, sql: sentimentSql, params, selectedMonth, selectedSourceMode } = await getSentimentUnion({
+      month: typeof req.query.month === 'string' ? req.query.month : null,
+      sourceMode: typeof req.query.sourceMode === 'string' ? req.query.sourceMode : 'all'
     })
 
     const { rows } = await pool.query(`
@@ -1140,7 +1163,8 @@ app.get('/api/sentiment/street-segments', async (req, res) => {
       metadata: {
         ...(summaryRows.rows[0] || {}),
         tables,
-        selectedMonth: selectedMonth || 'all'
+        selectedMonth: selectedMonth || 'all',
+        sourceMode: selectedSourceMode
       }
     }))
   } catch (err) {
@@ -1149,9 +1173,11 @@ app.get('/api/sentiment/street-segments', async (req, res) => {
   }
 })
 
-app.get('/api/sentiment/analytics', async (_req, res) => {
+app.get('/api/sentiment/analytics', async (req, res) => {
   try {
-    const { tables, sql: sentimentSql } = await getSentimentUnion()
+    const { tables, sql: sentimentSql, selectedSourceMode } = await getSentimentUnion({
+      sourceMode: typeof req.query.sourceMode === 'string' ? req.query.sourceMode : 'all'
+    })
 
     const [
       summaryResult,
@@ -1604,6 +1630,7 @@ app.get('/api/sentiment/analytics', async (_req, res) => {
       metadata: {
         ...(summaryResult.rows[0] || {}),
         tables,
+        sourceMode: selectedSourceMode,
         fetchedAt: new Date().toISOString()
       },
       months: monthlyResult.rows,
@@ -1627,6 +1654,306 @@ app.get('/api/sentiment/analytics', async (_req, res) => {
     })
   } catch (err) {
     console.error('[API] /sentiment/analytics error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+const serviceRequestDateSql = (columnName) => `
+  CASE
+    WHEN ${columnName} ~ '^\\d{2}\\.\\d{2}\\.\\d{4}$' THEN to_date(${columnName}, 'DD.MM.YYYY')
+    WHEN ${columnName} ~ '^\\d{4}/\\d{2}/\\d{2}$' THEN to_date(${columnName}, 'YYYY/MM/DD')
+    WHEN ${columnName} ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN ${columnName}::date
+    ELSE NULL
+  END
+`
+
+const serviceRequestBaseSql = `
+  SELECT
+    object_id,
+    arcgis_id,
+    suburb,
+    sub_council,
+    ward,
+    nullif(complaint_type, '') AS complaint_type,
+    nullif(work_center, '') AS work_center,
+    notification,
+    nullif(notification_type, '') AS notification_type,
+    longitude,
+    latitude,
+    created_on_date,
+    changed_on,
+    completed_date,
+    ${serviceRequestDateSql('created_on_date')} AS created_date,
+    ${serviceRequestDateSql('changed_on')} AS changed_date,
+    ${serviceRequestDateSql('completed_date')} AS completed_dt,
+    notifications_created,
+    source_url,
+    fetched_at,
+    inserted_at,
+    updated_at
+  FROM planning.cape_town_cbd_service_requests
+`
+
+const serviceRequestComplaintGroupSql = (columnName = 'complaint_type') => `
+  CASE
+    WHEN lower(coalesce(${columnName}, '')) ~ '(sew|sewer|blocked|overflow)' THEN 'Sewage'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(water|wat:|leak|meter)' THEN 'Water'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(power|electric|prepaid|street.?light|light)' THEN 'Electricity'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(road|pothole|stormwater|drain|kerb|pavement|traffic)' THEN 'Roads & Stormwater'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(refuse|waste|litter|clean|dump|bin)' THEN 'Waste & Cleansing'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(park|tree|grass|open space)' THEN 'Public Realm'
+    ELSE 'Other'
+  END
+`
+
+app.get('/api/service-requests/points', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      WITH requests AS (${serviceRequestBaseSql})
+      SELECT
+        object_id,
+        arcgis_id,
+        suburb,
+        sub_council,
+        ward,
+        coalesce(complaint_type, 'Uncategorised') AS complaint_type,
+        ${serviceRequestComplaintGroupSql('complaint_type')} AS complaint_group,
+        coalesce(work_center, 'Unknown work center') AS work_center,
+        notification,
+        notification_type,
+        created_on_date,
+        changed_on,
+        completed_date,
+        created_date,
+        completed_dt AS completed_date_parsed,
+        CASE
+          WHEN completed_dt IS NULL THEN NULL
+          ELSE greatest(0, completed_dt - created_date)
+        END AS response_days,
+        CASE
+          WHEN completed_dt IS NULL OR created_date IS NULL THEN 'Incomplete record'
+          WHEN completed_dt - created_date <= 1 THEN 'Same day'
+          WHEN completed_dt - created_date <= 3 THEN '1-3 days'
+          WHEN completed_dt - created_date <= 7 THEN '4-7 days'
+          ELSE '8+ days'
+        END AS response_band,
+        CASE WHEN completed_dt IS NULL OR created_date IS NULL THEN 'incomplete' ELSE 'complete' END AS record_status,
+        notifications_created,
+        source_url,
+        ST_AsGeoJSON(ST_SetSRID(ST_MakePoint(longitude, latitude), 4326))::json AS geometry
+      FROM requests
+      WHERE longitude IS NOT NULL
+        AND latitude IS NOT NULL
+        AND created_date IS NOT NULL
+      ORDER BY created_date DESC, object_id DESC
+      LIMIT 12000
+    `)
+
+    res.json(buildGeoFeatureCollection(rows, {
+      source: 'planning.cape_town_cbd_service_requests',
+      metadata: {
+        table: 'planning.cape_town_cbd_service_requests'
+      }
+    }))
+  } catch (err) {
+    console.error('[API] /service-requests/points error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/service-requests/analytics', async (_req, res) => {
+  try {
+    const baseCte = `WITH requests AS (${serviceRequestBaseSql})`
+    const [
+      summaryResult,
+      dailyResult,
+      monthlyResult,
+      complaintResult,
+      workCenterResult,
+      responseBandResult,
+      weekdayResult,
+      slowestResult,
+      openResult
+    ] = await Promise.all([
+      pool.query(`
+        ${baseCte},
+        clean AS (
+          SELECT *, CASE WHEN completed_dt IS NULL THEN NULL ELSE greatest(0, completed_dt - created_date) END AS response_days
+          FROM requests
+          WHERE created_date IS NOT NULL
+        )
+        SELECT
+          count(*)::int AS request_count,
+          count(*) FILTER (WHERE longitude IS NOT NULL AND latitude IS NOT NULL)::int AS mapped_count,
+          count(*) FILTER (WHERE completed_dt IS NULL OR created_date IS NULL)::int AS incomplete_count,
+          count(*) FILTER (WHERE completed_dt IS NOT NULL AND created_date IS NOT NULL)::int AS complete_count,
+          count(distinct complaint_type)::int AS complaint_type_count,
+          count(distinct work_center)::int AS work_center_count,
+          min(created_date) AS first_created,
+          max(created_date) AS latest_created,
+          round(avg(response_days) FILTER (WHERE response_days IS NOT NULL)::numeric, 2)::double precision AS avg_response_days,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY response_days) FILTER (WHERE response_days IS NOT NULL)::double precision AS median_response_days,
+          percentile_cont(0.9) WITHIN GROUP (ORDER BY response_days) FILTER (WHERE response_days IS NOT NULL)::double precision AS p90_response_days,
+          round((count(*) FILTER (WHERE completed_dt IS NOT NULL AND created_date IS NOT NULL)::double precision / nullif(count(*), 0) * 100)::numeric, 1)::double precision AS completion_record_rate
+        FROM clean
+      `),
+      pool.query(`
+        ${baseCte},
+        daily AS (
+          SELECT
+            created_date AS day_key,
+            count(*)::int AS request_count,
+            count(*) FILTER (WHERE completed_dt IS NULL OR created_date IS NULL)::int AS incomplete_count,
+            round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
+          FROM requests
+          WHERE created_date IS NOT NULL
+          GROUP BY created_date
+        ),
+        stats AS (
+          SELECT avg(request_count)::double precision AS mean_count, stddev_samp(request_count)::double precision AS std_count
+          FROM daily
+        )
+        SELECT
+          daily.*,
+          round(avg(request_count) OVER (ORDER BY day_key ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)::numeric, 2)::double precision AS rolling_7d_count,
+          CASE
+            WHEN request_count >= coalesce(mean_count, 0) + 2 * coalesce(std_count, 0) THEN true
+            ELSE false
+          END AS is_surge
+        FROM daily CROSS JOIN stats
+        ORDER BY day_key
+      `),
+      pool.query(`
+        ${baseCte}
+        SELECT
+          to_char(date_trunc('month', created_date), 'YYYY-MM') AS month_key,
+          count(*)::int AS request_count,
+          count(*) FILTER (WHERE completed_dt IS NULL OR created_date IS NULL)::int AS incomplete_count,
+          round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
+        FROM requests
+        WHERE created_date IS NOT NULL
+        GROUP BY date_trunc('month', created_date)
+        ORDER BY month_key
+      `),
+      pool.query(`
+        ${baseCte}
+        SELECT
+          coalesce(complaint_type, 'Uncategorised') AS complaint_type,
+          ${serviceRequestComplaintGroupSql('complaint_type')} AS complaint_group,
+          count(*)::int AS request_count,
+          count(*) FILTER (WHERE completed_dt IS NULL OR created_date IS NULL)::int AS incomplete_count,
+          round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
+        FROM requests
+        WHERE created_date IS NOT NULL
+        GROUP BY coalesce(complaint_type, 'Uncategorised'), ${serviceRequestComplaintGroupSql('complaint_type')}
+        ORDER BY request_count DESC
+        LIMIT 30
+      `),
+      pool.query(`
+        ${baseCte}
+        SELECT
+          coalesce(work_center, 'Unknown work center') AS work_center,
+          count(*)::int AS request_count,
+          count(*) FILTER (WHERE completed_dt IS NULL OR created_date IS NULL)::int AS incomplete_count,
+          round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
+        FROM requests
+        WHERE created_date IS NOT NULL
+        GROUP BY coalesce(work_center, 'Unknown work center')
+        ORDER BY request_count DESC
+        LIMIT 24
+      `),
+      pool.query(`
+        ${baseCte},
+        labelled AS (
+          SELECT
+            CASE
+              WHEN completed_dt IS NULL OR created_date IS NULL THEN 'Incomplete'
+              WHEN completed_dt - created_date <= 1 THEN 'Same day'
+              WHEN completed_dt - created_date <= 3 THEN '1-3 days'
+              WHEN completed_dt - created_date <= 7 THEN '4-7 days'
+              ELSE '8+ days'
+            END AS response_band
+          FROM requests
+          WHERE created_date IS NOT NULL
+        )
+        SELECT response_band, count(*)::int AS request_count
+        FROM labelled
+        GROUP BY response_band
+        ORDER BY CASE response_band WHEN 'Same day' THEN 1 WHEN '1-3 days' THEN 2 WHEN '4-7 days' THEN 3 WHEN '8+ days' THEN 4 ELSE 5 END
+      `),
+      pool.query(`
+        ${baseCte}
+        SELECT
+          extract(isodow from created_date)::int AS weekday,
+          to_char(created_date, 'Dy') AS weekday_label,
+          count(*)::int AS request_count,
+          round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
+        FROM requests
+        WHERE created_date IS NOT NULL
+        GROUP BY extract(isodow from created_date), to_char(created_date, 'Dy')
+        ORDER BY weekday
+      `),
+      pool.query(`
+        ${baseCte}
+        SELECT
+          object_id,
+          notification,
+          coalesce(complaint_type, 'Uncategorised') AS complaint_type,
+          coalesce(work_center, 'Unknown work center') AS work_center,
+          created_date,
+          completed_dt AS completed_date,
+          greatest(0, completed_dt - created_date)::int AS response_days,
+          longitude,
+          latitude
+        FROM requests
+        WHERE created_date IS NOT NULL
+          AND completed_dt IS NOT NULL
+        ORDER BY response_days DESC, created_date DESC
+        LIMIT 40
+      `),
+      pool.query(`
+        ${baseCte}
+        SELECT
+          object_id,
+          notification,
+          coalesce(complaint_type, 'Uncategorised') AS complaint_type,
+          coalesce(work_center, 'Unknown work center') AS work_center,
+          created_date,
+          (current_date - created_date)::int AS age_days,
+          longitude,
+          latitude
+        FROM requests
+        WHERE created_date IS NOT NULL
+          AND completed_dt IS NULL
+        ORDER BY age_days DESC, created_date ASC
+        LIMIT 40
+      `)
+    ])
+
+    const dailyRows = dailyResult.rows
+    const surgeDays = dailyRows
+      .filter((row) => row.is_surge)
+      .sort((a, b) => b.request_count - a.request_count)
+      .slice(0, 20)
+
+    res.json({
+      metadata: {
+        ...(summaryResult.rows[0] || {}),
+        source: 'planning.cape_town_cbd_service_requests',
+        fetchedAt: new Date().toISOString()
+      },
+      daily: dailyRows,
+      surgeDays,
+      monthly: monthlyResult.rows,
+      complaintTypes: complaintResult.rows,
+      workCenters: workCenterResult.rows,
+      responseBands: responseBandResult.rows,
+      weekdays: weekdayResult.rows,
+      slowestCompleted: slowestResult.rows,
+      incompleteRecords: openResult.rows
+    })
+  } catch (err) {
+    console.error('[API] /service-requests/analytics error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })
