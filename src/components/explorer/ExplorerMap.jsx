@@ -67,8 +67,6 @@ const SERVICE_REQUEST_GROUPS = [
   { id: 'Other', color: '#94a3b8', soft: 'rgba(148,163,184,0.1)', mid: 'rgba(148,163,184,0.36)', strong: 'rgba(148,163,184,0.68)' }
 ]
 
-const slugifyLayerId = (value) => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-
 const formatRandCompact = (value) => {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return '—'
@@ -453,6 +451,7 @@ const ExplorerMap = ({
   onGreeneryStreetSelect,
   onEcologyFeatureSelect,
   onHeatGridFeatureSelect,
+  onServiceRequestSegmentClick,
   visibleLayers,
   layerStack = [],
   activeCategory,
@@ -977,22 +976,6 @@ const ExplorerMap = ({
       }
     : null
 
-  const serviceRequestClustersByGroup = useMemo(() => {
-    const features = serviceRequests?.features || []
-    if (!features.length) return []
-
-    return SERVICE_REQUEST_GROUPS
-      .map((group) => ({
-        ...group,
-        slug: slugifyLayerId(group.id),
-        data: {
-          type: 'FeatureCollection',
-          features: features.filter((feature) => feature?.properties?.complaint_group === group.id)
-        }
-      }))
-      .filter((group) => group.data.features.length > 0)
-  }, [serviceRequests])
-  
   // Handle map click
   const handleMapClick = (event) => {
     const walkabilityFeature = dashboardMode === 'walkability'
@@ -1016,6 +999,11 @@ const ExplorerMap = ({
       if (dashboardMode === 'walkability' && (feature.source === 'pedestrian-routes' || feature.source === 'cycling-routes' || feature.source === 'transit-accessibility')) {
         onRouteSegmentClick?.(feature.properties, feature.source === 'transit-accessibility' ? 'transit' : 'activity')
         return // Don't show popup for route segments
+      }
+
+      if (dashboardMode === 'sentiment' && feature.source === 'service-request-segments') {
+        onServiceRequestSegmentClick?.(feature.properties)
+        return
       }
 
       if (feature.source === 'road-steepness') {
@@ -1302,7 +1290,7 @@ const ExplorerMap = ({
           'env-grid-fill',
           'traffic-layer',
           'sentiment-streets-layer',
-          'service-requests-points-layer',
+          'service-request-segments-layer',
           'events-points-layer'
         ]}
         onClick={handleMapClick}
@@ -3057,102 +3045,37 @@ const ExplorerMap = ({
         )}
 
         {shouldRenderCategory('serviceRequests') && serviceRequests && (
-          <>
-            {serviceRequestClustersByGroup.map((group) => (
-              <Source
-                key={group.id}
-                id={`service-requests-clusters-${group.slug}`}
-                type="geojson"
-                data={group.data}
-                cluster={true}
-                clusterMaxZoom={16}
-                clusterRadius={58}
-              >
-                <Layer
-                  id={`service-requests-cluster-zone-${group.slug}`}
-                  type="circle"
-                  filter={['has', 'point_count']}
-                  paint={{
-                    'circle-radius': [
-                      'interpolate', ['linear'], ['get', 'point_count'],
-                      2, 28,
-                      8, 48,
-                      20, 72,
-                      60, 104
-                    ],
-                    'circle-color': group.color,
-                    'circle-opacity': [
-                      'interpolate', ['linear'], ['zoom'],
-                      11, 0.42,
-                      15, 0.34,
-                      18, 0.22
-                    ],
-                    'circle-blur': 0.68,
-                    'circle-stroke-width': 0
-                  }}
-                />
-                <Layer
-                  id={`service-requests-cluster-core-${group.slug}`}
-                  type="circle"
-                  filter={['has', 'point_count']}
-                  paint={{
-                    'circle-radius': [
-                      'interpolate', ['linear'], ['get', 'point_count'],
-                      2, 8,
-                      8, 14,
-                      20, 22,
-                      60, 32
-                    ],
-                    'circle-color': group.color,
-                    'circle-opacity': 0.72,
-                    'circle-stroke-color': 'rgba(248,250,252,0.62)',
-                    'circle-stroke-width': 0.9,
-                    'circle-blur': 0.08
-                  }}
-                />
-                <Layer
-                  id={`service-requests-cluster-count-${group.slug}`}
-                  type="symbol"
-                  filter={['has', 'point_count']}
-                  layout={{
-                    'text-field': ['get', 'point_count_abbreviated'],
-                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-                    'text-size': ['interpolate', ['linear'], ['get', 'point_count'], 2, 10, 20, 12, 60, 14],
-                    'text-allow-overlap': true
-                  }}
-                  paint={{
-                    'text-color': '#f8fafc',
-                    'text-halo-color': 'rgba(15,23,42,0.85)',
-                    'text-halo-width': 1.2
-                  }}
-                />
-              </Source>
-            ))}
-            <Source id="service-requests" type="geojson" data={serviceRequests}>
-              <Layer
-                id="service-requests-points-layer"
-                type="circle"
-                paint={{
-                  'circle-radius': [
-                    'interpolate', ['linear'], ['zoom'],
-                    11, 1.2,
-                    15, 2.4,
-                    18, 4
-                  ],
-                  'circle-color': '#f8fafc',
-                  'circle-stroke-color': [
-                    'match',
-                    ['coalesce', ['get', 'complaint_group'], 'Other'],
-                    ...SERVICE_REQUEST_GROUPS.flatMap((group) => [group.id, group.color]),
-                    '#94a3b8'
-                  ],
-                  'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 11, 0.35, 16, 0.8],
-                  'circle-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.16, 16, 0.42],
-                  'circle-blur': 0.12
-                }}
-              />
-            </Source>
-          </>
+          <Source id="service-request-segments" type="geojson" data={serviceRequests}>
+            <Layer
+              id="service-request-segments-base"
+              type="line"
+              paint={{
+                'line-color': 'rgba(148,163,184,0.28)',
+                'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.65, 16, 1.6],
+                'line-opacity': ['case', ['>', ['coalesce', ['get', 'request_count'], 0], 0], 0.18, 0.08]
+              }}
+            />
+            <Layer
+              id="service-request-segments-layer"
+              type="line"
+              filter={['>', ['coalesce', ['get', 'request_count'], 0], 0]}
+              paint={{
+                'line-color': [
+                  'match',
+                  ['coalesce', ['get', 'dominant_complaint_group'], 'Other'],
+                  ...SERVICE_REQUEST_GROUPS.flatMap((group) => [group.id, group.color]),
+                  '#94a3b8'
+                ],
+                'line-width': [
+                  'interpolate', ['linear'], ['coalesce', ['get', 'request_count'], 0],
+                  1, ['interpolate', ['linear'], ['zoom'], 11, 2.2, 16, 5],
+                  6, ['interpolate', ['linear'], ['zoom'], 11, 4, 16, 8],
+                  18, ['interpolate', ['linear'], ['zoom'], 11, 7, 16, 13]
+                ],
+                'line-opacity': 0.94
+              }}
+            />
+          </Source>
         )}
         
         {/* 3D Buildings — composite tileset from dark-v11 */}
@@ -3849,37 +3772,6 @@ const ExplorerMap = ({
                         )
                       })}
                     </div>
-                  </>
-                )
-              })()}
-
-              {dashboardMode === 'sentiment' && popupInfo.feature.source === 'service-requests' && (() => {
-                const p = popupInfo.feature.properties
-                const responseDays = Number(p.response_days)
-                const isComplete = p.record_status === 'complete'
-                const statusColor = isComplete ? '#e5e7eb' : '#38bdf8'
-                return (
-                  <>
-                    <h3>{p.complaint_type || 'Service Request'}</h3>
-                    <p style={{ margin: '0.25rem 0' }}><strong>Group:</strong> {p.complaint_group || 'Other'}</p>
-                    <p style={{ margin: '0.25rem 0' }}>
-                      <strong>Record:</strong>{' '}
-                      <span style={{ color: statusColor, fontWeight: 700 }}>
-                        {isComplete ? 'Complete dates' : 'Incomplete dates'}
-                      </span>
-                    </p>
-                    <p style={{ margin: '0.25rem 0' }}><strong>Created:</strong> {p.created_on_date || p.created_date || '—'}</p>
-                    {(p.completed_date && p.completed_date !== '#') && (
-                      <p style={{ margin: '0.25rem 0' }}><strong>Completed:</strong> {p.completed_date}</p>
-                    )}
-                    <p style={{ margin: '0.25rem 0' }}>
-                      <strong>Response:</strong>{' '}
-                      {Number.isFinite(responseDays) ? `${responseDays.toFixed(responseDays >= 10 ? 0 : 1)} days` : 'Not calculated'}
-                    </p>
-                    <p style={{ margin: '0.25rem 0' }}><strong>Work center:</strong> {p.work_center || 'Unknown'}</p>
-                    {p.notification && (
-                      <p style={{ margin: '0.25rem 0', color: '#94a3b8' }}><strong>Notification:</strong> {p.notification}</p>
-                    )}
                   </>
                 )
               })()}

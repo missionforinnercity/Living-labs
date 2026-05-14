@@ -16,8 +16,8 @@ async function fetchServiceRequestJson(path, errorLabel) {
   }
 }
 
-export function loadServiceRequestPoints() {
-  return fetchServiceRequestJson('/api/service-requests/points', 'Service request map layer load failed')
+export function loadServiceRequestStreetSegments() {
+  return fetchServiceRequestJson('/api/service-requests/street-segments', 'Service request street segments load failed')
 }
 
 export function loadServiceRequestAnalytics() {

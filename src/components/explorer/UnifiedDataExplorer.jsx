@@ -144,6 +144,20 @@ const SERVICE_REQUEST_GROUP_COLORS = [
   { label: 'Other', color: '#94a3b8' }
 ]
 
+const serviceRequestGroupColor = (group) => (
+  SERVICE_REQUEST_GROUP_COLORS.find((item) => item.label === group)?.color || '#94a3b8'
+)
+
+const parseServiceRequestProperty = (value, fallback) => {
+  if (value == null) return fallback
+  if (typeof value !== 'string') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
 const formatRandCompact = (value) => {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return '—'
@@ -284,6 +298,7 @@ const UnifiedDataExplorer = () => {
   const [sentimentPanelMinimized, setSentimentPanelMinimized] = useState(true)
   const [sentimentPanelOpen, setSentimentPanelOpen] = useState(false)
   const [sentimentPanelExpanded, setSentimentPanelExpanded] = useState(false)
+  const [selectedServiceRequestSegment, setSelectedServiceRequestSegment] = useState(null)
   
   // Climate heat street state
   const [selectedSegment, setSelectedSegment] = useState(null)
@@ -1501,6 +1516,21 @@ const UnifiedDataExplorer = () => {
     }
   }, [selectedRouteHistory, compareRouteHistory, walkabilityMonths])
 
+  const selectedServiceRequestDetails = useMemo(() => {
+    if (!selectedServiceRequestSegment) return null
+    const complaints = parseServiceRequestProperty(selectedServiceRequestSegment.complaints, [])
+    const groupCounts = parseServiceRequestProperty(selectedServiceRequestSegment.complaint_group_counts, {})
+    const groupRows = Object.entries(groupCounts || {})
+      .map(([group, count]) => ({ group, count: Number(count) || 0 }))
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.count - a.count)
+
+    return {
+      complaints: Array.isArray(complaints) ? complaints : [],
+      groupRows
+    }
+  }, [selectedServiceRequestSegment])
+
   return (
     <div className="unified-data-explorer">
       <div className="explorer-header">
@@ -1940,7 +1970,7 @@ const UnifiedDataExplorer = () => {
                 <strong>Service Requests</strong>
               </div>
               <p>
-                Mapped municipal service requests by complaint type. Response-time metrics only use records with both created and completed dates.
+                Street segments coloured by their majority complaint type. Click a segment to inspect the attached requests and response stats.
               </p>
               <div className="service-requests-legend" aria-label="Complaint type colour legend">
                 {SERVICE_REQUEST_GROUP_COLORS.map((item) => (
@@ -2071,6 +2101,11 @@ const UnifiedDataExplorer = () => {
               sentimentSegments={sentimentSegments}
               sentimentPerspective={sentimentPerspective}
               serviceRequests={serviceRequests}
+              onServiceRequestSegmentClick={(segment) => {
+                setSelectedServiceRequestSegment(segment)
+                setSentimentPanelOpen(false)
+                setSentimentPanelMinimized(true)
+              }}
               ratingFilter={ratingFilter ? Array.from(ratingFilter) : null}
               selectedSegment={selectedSegment}
               onSegmentSelect={setSelectedSegment}
@@ -2153,6 +2188,89 @@ const UnifiedDataExplorer = () => {
                   variant="bottom"
                 />
               )}
+            </div>
+          )}
+
+          {dashboardMode === 'sentiment' && activeCategory === 'serviceRequests' && selectedServiceRequestSegment && (
+            <div
+              className="bottom-panel service-segment-panel"
+              style={{ right: `${effectiveSidebarWidth + 32}px` }}
+            >
+              <div className="panel-header service-segment-header">
+                <div>
+                  <h3>{selectedServiceRequestSegment.street_name || 'Service Request Segment'}</h3>
+                  <div className="sentiment-bottom-subtitle">
+                    Segment {selectedServiceRequestSegment.segment_id} · {selectedServiceRequestSegment.dominant_complaint_group || 'No requests'}
+                  </div>
+                </div>
+                <div className="panel-header-actions">
+                  <button
+                    onClick={() => setSelectedServiceRequestSegment(null)}
+                    className="close-btn"
+                    title="Close segment detail"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className="service-segment-body">
+                <div className="service-segment-summary">
+                  <div className="service-segment-kpi service-segment-kpi--primary">
+                    <span>Total requests</span>
+                    <strong>{Number(selectedServiceRequestSegment.request_count || 0).toLocaleString()}</strong>
+                  </div>
+                  <div className="service-segment-kpi">
+                    <span>Main complaint</span>
+                    <strong style={{ color: serviceRequestGroupColor(selectedServiceRequestSegment.dominant_complaint_group) }}>
+                      {selectedServiceRequestSegment.dominant_complaint_group || 'No requests'}
+                    </strong>
+                  </div>
+                  <div className="service-segment-kpi">
+                    <span>Incomplete</span>
+                    <strong>{Number(selectedServiceRequestSegment.incomplete_count || 0).toLocaleString()}</strong>
+                  </div>
+                  <div className="service-segment-kpi">
+                    <span>Median response</span>
+                    <strong>{Number.isFinite(Number(selectedServiceRequestSegment.median_response_days)) ? `${Number(selectedServiceRequestSegment.median_response_days).toFixed(1)}d` : '-'}</strong>
+                  </div>
+                </div>
+                <div className="service-segment-content">
+                  <section className="service-segment-card">
+                    <h4>Complaint Mix</h4>
+                    <div className="service-segment-mix">
+                      {(selectedServiceRequestDetails?.groupRows || []).map((item) => (
+                        <div key={item.group} className="service-segment-mix-row">
+                          <i style={{ background: serviceRequestGroupColor(item.group) }} />
+                          <span>{item.group}</span>
+                          <strong>{item.count.toLocaleString()}</strong>
+                        </div>
+                      ))}
+                      {!selectedServiceRequestDetails?.groupRows?.length && (
+                        <div className="service-segment-empty">No requests attached to this segment.</div>
+                      )}
+                    </div>
+                  </section>
+                  <section className="service-segment-card service-segment-card--wide">
+                    <h4>Attached Service Complaints</h4>
+                    <div className="service-segment-complaints">
+                      {(selectedServiceRequestDetails?.complaints || []).map((complaint, index) => (
+                        <article key={`${complaint.object_id || complaint.arcgis_id || index}`} className="service-segment-complaint">
+                          <div>
+                            <strong>{complaint.complaint_type || 'Uncategorised'}</strong>
+                            <span>{complaint.created_on_date || complaint.created_date || '-'}</span>
+                          </div>
+                          <p>{complaint.notification || 'No notification text attached.'}</p>
+                          <footer>
+                            <span>{complaint.work_center || 'Unknown work center'}</span>
+                            <span>{Number.isFinite(Number(complaint.response_days)) ? `${Number(complaint.response_days).toFixed(0)}d response` : 'Incomplete dates'}</span>
+                            <span>{Number.isFinite(Number(complaint.distance_m)) ? `${Number(complaint.distance_m).toFixed(0)}m from road` : ''}</span>
+                          </footer>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              </div>
             </div>
           )}
 

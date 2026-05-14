@@ -1798,6 +1798,140 @@ app.get('/api/service-requests/points', async (req, res) => {
   }
 })
 
+app.get('/api/service-requests/street-segments', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      WITH requests AS (${serviceRequestBaseSql}),
+      request_points AS (
+        SELECT
+          *,
+          ${serviceRequestComplaintGroupSql('complaint_type')} AS complaint_group,
+          ST_SetSRID(ST_MakePoint(longitude, latitude), 4326) AS geom
+        FROM requests
+        WHERE longitude IS NOT NULL
+          AND latitude IS NOT NULL
+          AND created_date IS NOT NULL
+      ),
+      snapped AS (
+        SELECT
+          rp.*,
+          nearest."OBJECTID" AS road_objectid,
+          nearest."STR_NAME" AS road_name,
+          nearest.distance_m
+        FROM request_points rp
+        JOIN LATERAL (
+          SELECT
+            r."OBJECTID",
+            r."STR_NAME",
+            ST_Distance(ST_Transform(r.geom, 4326)::geography, rp.geom::geography) AS distance_m
+          FROM transport."Roads_innercity_CCID" r
+          WHERE r.geom IS NOT NULL
+            AND ST_DWithin(ST_Transform(r.geom, 4326)::geography, rp.geom::geography, 55)
+          ORDER BY ST_Transform(r.geom, 4326)::geography <-> rp.geom::geography
+          LIMIT 1
+        ) nearest ON true
+      ),
+      segment_counts AS (
+        SELECT
+          road_objectid,
+          complaint_group,
+          count(*)::int AS complaint_count
+        FROM snapped
+        GROUP BY road_objectid, complaint_group
+      ),
+      dominant AS (
+        SELECT DISTINCT ON (road_objectid)
+          road_objectid,
+          complaint_group AS dominant_complaint_group,
+          complaint_count AS dominant_complaint_count
+        FROM segment_counts
+        ORDER BY road_objectid, complaint_count DESC, complaint_group
+      ),
+      group_rollup AS (
+        SELECT
+          road_objectid,
+          jsonb_object_agg(complaint_group, complaint_count ORDER BY complaint_group) AS complaint_group_counts
+        FROM segment_counts
+        GROUP BY road_objectid
+      ),
+      request_rollup AS (
+        SELECT
+          road_objectid,
+          count(*)::int AS request_count,
+          count(*) FILTER (WHERE completed_dt IS NULL OR created_date IS NULL)::int AS incomplete_count,
+          min(created_date) AS first_created,
+          max(created_date) AS latest_created,
+          round(avg(CASE WHEN completed_dt IS NOT NULL THEN greatest(0, completed_dt - created_date) END)::numeric, 2)::double precision AS avg_response_days,
+          percentile_cont(0.5) WITHIN GROUP (
+            ORDER BY CASE WHEN completed_dt IS NOT NULL THEN greatest(0, completed_dt - created_date) END
+          )::double precision AS median_response_days,
+          jsonb_agg(
+            jsonb_build_object(
+              'object_id', object_id,
+              'arcgis_id', arcgis_id,
+              'complaint_type', coalesce(complaint_type, 'Uncategorised'),
+              'complaint_group', complaint_group,
+              'work_center', coalesce(work_center, 'Unknown work center'),
+              'notification', notification,
+              'notification_type', notification_type,
+              'created_on_date', created_on_date,
+              'changed_on', changed_on,
+              'completed_date', completed_date,
+              'created_date', created_date,
+              'response_days', CASE WHEN completed_dt IS NULL THEN NULL ELSE greatest(0, completed_dt - created_date) END,
+              'record_status', CASE WHEN completed_dt IS NULL OR created_date IS NULL THEN 'incomplete' ELSE 'complete' END,
+              'distance_m', round(distance_m::numeric, 1)
+            )
+            ORDER BY created_date DESC, object_id DESC
+          ) AS complaints
+        FROM snapped
+        GROUP BY road_objectid
+      )
+      SELECT
+        r."OBJECTID" AS segment_id,
+        r."SL_STR_NAME_KEY" AS street_name_key,
+        coalesce(nullif(r."STR_NAME", ''), 'Unnamed street') AS street_name,
+        r."STR_NAME_MDF" AS modified_street_name,
+        COALESCE(rr.request_count, 0)::int AS request_count,
+        COALESCE(rr.incomplete_count, 0)::int AS incomplete_count,
+        rr.first_created,
+        rr.latest_created,
+        rr.avg_response_days,
+        rr.median_response_days,
+        COALESCE(d.dominant_complaint_group, 'No requests') AS dominant_complaint_group,
+        COALESCE(d.dominant_complaint_count, 0)::int AS dominant_complaint_count,
+        COALESCE(gr.complaint_group_counts, '{}'::jsonb) AS complaint_group_counts,
+        COALESCE(rr.complaints, '[]'::jsonb) AS complaints,
+        ST_AsGeoJSON(ST_Transform(r.geom, 4326))::json AS geometry
+      FROM transport."Roads_innercity_CCID" r
+      LEFT JOIN request_rollup rr ON rr.road_objectid = r."OBJECTID"
+      LEFT JOIN dominant d ON d.road_objectid = r."OBJECTID"
+      LEFT JOIN group_rollup gr ON gr.road_objectid = r."OBJECTID"
+      WHERE r.geom IS NOT NULL
+      ORDER BY request_count DESC, street_name
+    `)
+
+    const totalRequests = rows.reduce((sum, row) => sum + (Number(row.request_count) || 0), 0)
+    const activeSegments = rows.filter((row) => Number(row.request_count) > 0).length
+
+    res.json(buildGeoFeatureCollection(rows, {
+      source: 'transport.Roads_innercity_CCID joined to planning.cape_town_cbd_service_requests',
+      metadata: {
+        table: 'planning.cape_town_cbd_service_requests',
+        segment_source: 'transport.Roads_innercity_CCID',
+        request_count: totalRequests,
+        mapped_count: totalRequests,
+        active_segment_count: activeSegments,
+        segment_count: rows.length,
+        snap_distance_m: 55
+      }
+    }))
+  } catch (err) {
+    console.error('[API] /service-requests/street-segments error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.get('/api/service-requests/analytics', async (_req, res) => {
   try {
     const baseCte = `WITH requests AS (${serviceRequestBaseSql})`

@@ -85,7 +85,7 @@ const ServiceRequestsAnalytics = ({ analytics, requestsData, loading, error, var
     () => responseBands.filter((row) => row.response_band !== 'Incomplete'),
     [responseBands]
   )
-  const mappedCount = requestsData?.metadata?.totalFeatures ?? metadata.mapped_count
+  const mappedCount = requestsData?.metadata?.mapped_count ?? metadata.mapped_count
 
   if (loading && !analytics) {
     return <div className={`service-analytics service-analytics--${variant}`}><div className="service-loading">Loading service request intelligence...</div></div>
@@ -101,7 +101,7 @@ const ServiceRequestsAnalytics = ({ analytics, requestsData, loading, error, var
         <div className="service-hero-copy">
           <span>Infrastructure Response</span>
           <h3>Service Requests</h3>
-          <p>{dateLabel(metadata.first_created)} to {dateLabel(metadata.latest_created)} · {compact(mappedCount)} mapped points</p>
+          <p>{dateLabel(metadata.first_created)} to {dateLabel(metadata.latest_created)} · {compact(mappedCount)} mapped requests</p>
         </div>
         <div className="service-kpi-grid">
           <div className="service-kpi service-kpi--primary">

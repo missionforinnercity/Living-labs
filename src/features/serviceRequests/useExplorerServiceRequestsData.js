@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { loadServiceRequestAnalytics, loadServiceRequestPoints } from './data'
+import { loadServiceRequestAnalytics, loadServiceRequestStreetSegments } from './data'
 
 export function useExplorerServiceRequestsData({ dashboardMode, lockedLayers }) {
   const [serviceRequests, setServiceRequests] = useState(null)
@@ -17,12 +17,12 @@ export function useExplorerServiceRequestsData({ dashboardMode, lockedLayers }) 
       try {
         setServiceRequestsLoading(true)
         setServiceRequestsError(null)
-        const [points, analytics] = await Promise.all([
-          loadServiceRequestPoints(),
+        const [streetSegments, analytics] = await Promise.all([
+          loadServiceRequestStreetSegments(),
           loadServiceRequestAnalytics()
         ])
         if (cancelled) return
-        setServiceRequests(points)
+        setServiceRequests(streetSegments)
         setServiceRequestAnalytics(analytics)
       } catch (error) {
         if (cancelled) return
