@@ -48,7 +48,6 @@ const WalkabilityAnalytics = ({
   onMonthChange,
   pedestrianData,
   cyclingData,
-  anomaliesData,
   networkData,
   transitData,
   roadSteepnessData,
@@ -80,21 +79,7 @@ const WalkabilityAnalytics = ({
   }, [transitData])
 
   const selectedMonthIndex = Math.max(0, walkabilityMonths.findIndex(month => month.key === selectedMonth))
-  const anomalyStats = useMemo(() => {
-    const features = anomaliesData?.features || []
-    const topReasons = Object.entries(features.reduce((acc, feature) => {
-      const reason = feature.properties?.likely_reason || 'Unknown'
-      acc[reason] = (acc[reason] || 0) + 1
-      return acc
-    }, {})).sort((a, b) => b[1] - a[1]).slice(0, 3)
-    return {
-      total: features.length,
-      highConfidence: features.filter(feature => feature.properties?.confidence === 'high').length,
-      eventLinked: features.filter(feature => feature.properties?.event_name && feature.properties.event_name !== 'unknown').length,
-      topReasons
-    }
-  }, [anomaliesData])
-
+  const selectedMonthLabel = walkabilityMonths.find(month => month.key === selectedMonth)?.label || 'All months average'
   const popularRouteStats = useMemo(() => {
     const walkingPopular = (pedestrianData?.features || []).filter(feature => feature.properties?.popular_corridor_flag === 1)
     const cyclingPopular = (cyclingData?.features || []).filter(feature => feature.properties?.popular_corridor_flag === 1)
@@ -160,9 +145,16 @@ const WalkabilityAnalytics = ({
 
         <div className="month-slider-card">
           <div className="month-slider-copy">
-            <span className="month-slider-label">Selected month</span>
-            <strong>{walkabilityMonths.find(month => month.key === selectedMonth)?.label || 'No month available'}</strong>
+            <span className="month-slider-label">Map time window</span>
+            <strong>{walkabilityMonths.length ? selectedMonthLabel : 'No month available'}</strong>
           </div>
+          <button
+            className={`temporal-pill ${!selectedMonth ? 'active' : ''}`}
+            onClick={() => onMonthChange?.(null)}
+            disabled={!walkabilityMonths.length}
+          >
+            All Months Avg
+          </button>
           <input
             className="month-slider"
             type="range"
@@ -194,52 +186,25 @@ const WalkabilityAnalytics = ({
               <button className={`temporal-pill ${routeLayerMode === 'combined' ? 'active' : ''}`} onClick={() => onRouteLayerModeChange?.('combined')}>Both Modes</button>
               <button className={`temporal-pill ${routeLayerMode === 'walking' ? 'active' : ''}`} onClick={() => onRouteLayerModeChange?.('walking')}>Walking Only</button>
               <button className={`temporal-pill ${routeLayerMode === 'cycling' ? 'active' : ''}`} onClick={() => onRouteLayerModeChange?.('cycling')}>Cycling Only</button>
-              <button className={`temporal-pill ${routeLayerMode === 'anomalies' ? 'active' : ''}`} onClick={() => onRouteLayerModeChange?.('anomalies')}>Anomalies</button>
             </div>
-            {routeLayerMode !== 'anomalies' && (
-              <div className="temporal-mode-pills temporal-mode-pills--secondary temporal-mode-pills--top-routes">
-                <button
-                  className={`temporal-pill ${showPopularRoutesOnly ? 'active' : ''}`}
-                  onClick={() => onShowPopularRoutesOnlyChange?.(!showPopularRoutesOnly)}
-                >
-                  {showPopularRoutesOnly ? 'Showing High-Use Routes' : 'Highlight High-Use Routes'}
-                </button>
-                <span className="temporal-top-routes-note">
-                  Walking: {popularRouteStats.walkingCount} highlighted corridors. Cycling: {popularRouteStats.cyclingCount}. Visually thick, light routes stay included, plus tied cutoff routes.
-                </span>
-              </div>
-            )}
+            <div className="temporal-mode-pills temporal-mode-pills--secondary temporal-mode-pills--top-routes">
+              <button
+                className={`temporal-pill ${showPopularRoutesOnly ? 'active' : ''}`}
+                onClick={() => onShowPopularRoutesOnlyChange?.(!showPopularRoutesOnly)}
+              >
+                {showPopularRoutesOnly ? 'Showing High-Use Routes' : 'Highlight High-Use Routes'}
+              </button>
+              <span className="temporal-top-routes-note">
+                Walking: {popularRouteStats.walkingCount} highlighted corridors. Cycling: {popularRouteStats.cyclingCount}. Visually thick, light routes stay included, plus tied cutoff routes.
+              </span>
+            </div>
             <p>
-              Orange corridors show walking and running demand. Blue corridors show cycling demand. Pink-violet dashed corridors show anomalies. The map is filtered to the selected month, while route and anomaly clicks open detailed bottom-panel explanations and stats.
+              Orange corridors show walking and running demand. Blue corridors show cycling demand. The map is filtered to the selected month, while route clicks open detailed bottom-panel explanations and stats.
             </p>
             {selectedSegment && (
               <div className="temporal-selection-note">
                 <span>Selected edge</span>
                 <strong>{selectedSegment.edge_uid}</strong>
-              </div>
-            )}
-            <div className="temporal-anomaly-band">
-              <div className="temporal-anomaly-stat">
-                <span>Anomalies This Month</span>
-                <strong>{anomalyStats.total}</strong>
-              </div>
-              <div className="temporal-anomaly-stat">
-                <span>High Confidence</span>
-                <strong>{anomalyStats.highConfidence}</strong>
-              </div>
-              <div className="temporal-anomaly-stat">
-                <span>Event-Linked</span>
-                <strong>{anomalyStats.eventLinked}</strong>
-              </div>
-            </div>
-            {anomalyStats.topReasons.length > 0 && (
-              <div className="temporal-anomaly-reasons">
-                {anomalyStats.topReasons.map(([reason, count]) => (
-                  <div key={reason} className="temporal-anomaly-chip">
-                    <span>{count}</span>
-                    <strong>{reason}</strong>
-                  </div>
-                ))}
               </div>
             )}
           </div>

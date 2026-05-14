@@ -422,7 +422,6 @@ const ExplorerMap = ({
   networkData,
   pedestrianData,
   cyclingData,
-  anomaliesData,
   transitData,
   busStopsData,
   trainStationData,
@@ -503,16 +502,14 @@ const ExplorerMap = ({
   // Helper function to check if a category should be rendered
   const shouldRenderCategory = (categoryId) => {
     const hasMobilityContext = (
-      layerStack.some(layer => layer.id === 'activeMobility' || layer.id === 'mobilityAnomalies')
+      layerStack.some(layer => layer.id === 'activeMobility')
       || activeCategory === 'activeMobility'
-      || activeCategory === 'mobilityAnomalies'
     )
 
-    if ((categoryId === 'pedestrianRoutes' || categoryId === 'cyclingRoutes' || categoryId === 'mobilityAnomalies') && hasMobilityContext) {
+    if ((categoryId === 'pedestrianRoutes' || categoryId === 'cyclingRoutes') && hasMobilityContext) {
       if (walkabilityMode !== 'activity') return false
       if (routeLayerMode === 'walking') return categoryId === 'pedestrianRoutes'
       if (routeLayerMode === 'cycling') return categoryId === 'cyclingRoutes'
-      if (routeLayerMode === 'anomalies') return categoryId === 'mobilityAnomalies'
       return true
     }
     // Check if this category is in the layer stack (either as active or locked)
@@ -1000,8 +997,7 @@ const ExplorerMap = ({
   const handleMapClick = (event) => {
     const walkabilityFeature = dashboardMode === 'walkability'
       ? (
-        event.features?.find(item => item.source === 'anomaly-routes')
-        || event.features?.find(item => (
+        event.features?.find(item => (
           item.source === 'pedestrian-routes'
           || item.source === 'cycling-routes'
           || item.source === 'transit-accessibility'
@@ -1017,7 +1013,7 @@ const ExplorerMap = ({
       }
       
       // For walkability dashboard, set selected route segment (no popup)
-      if (dashboardMode === 'walkability' && (feature.source === 'pedestrian-routes' || feature.source === 'cycling-routes' || feature.source === 'transit-accessibility' || feature.source === 'anomaly-routes')) {
+      if (dashboardMode === 'walkability' && (feature.source === 'pedestrian-routes' || feature.source === 'cycling-routes' || feature.source === 'transit-accessibility')) {
         onRouteSegmentClick?.(feature.properties, feature.source === 'transit-accessibility' ? 'transit' : 'activity')
         return // Don't show popup for route segments
       }
@@ -1285,7 +1281,6 @@ const ExplorerMap = ({
           'cycling-layer',
           'pedestrian-routes-layer',
           'cycling-routes-layer',
-          'anomaly-routes-layer',
           'road-steepness-layer',
           'transit-accessibility-layer',
           'bus-stops-layer',
@@ -1913,35 +1908,6 @@ const ExplorerMap = ({
           </Source>
         )}
 
-        {shouldRenderCategory('mobilityAnomalies') && anomaliesData?.features?.length > 0 && (
-          <Source id="anomaly-routes" type="geojson" data={anomaliesData}>
-            <Layer
-              id="anomaly-routes-layer"
-              type="line"
-              paint={{
-                'line-color': [
-                  'interpolate',
-                  ['linear'],
-                  ['coalesce', ['get', 'anomaly_score'], 0],
-                  0, '#f9a8d4',
-                  1.2, '#f472b6',
-                  1.8, '#e879f9',
-                  2.4, '#a855f7'
-                ],
-                'line-width': [
-                  'interpolate',
-                  ['linear'],
-                  ['coalesce', ['get', 'anomaly_score'], 0],
-                  0, 2,
-                  1.5, 4,
-                  2.5, 6
-                ],
-                'line-dasharray': [1.2, 1.2],
-                'line-opacity': 0.92
-              }}
-            />
-          </Source>
-        )}
 
         {shouldRenderCategory('roadSteepness') && roadSteepnessData?.features?.length > 0 && (
           <Source id="road-steepness" type="geojson" data={roadSteepnessData}>

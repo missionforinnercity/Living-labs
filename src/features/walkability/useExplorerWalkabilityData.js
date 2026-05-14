@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   buildStravaActivityLayers,
-  buildRouteHistory,
-  filterStravaAnomaliesByMonth
+  buildRouteHistory
 } from '../../utils/dataLoader'
 import { loadExplorerWalkabilityData } from './data'
 
@@ -16,7 +15,6 @@ export function useExplorerWalkabilityData({
   const [networkData, setNetworkData] = useState(null)
   const [stravaAggregated, setStravaAggregated] = useState(null)
   const [walkabilityMonths, setWalkabilityMonths] = useState([])
-  const [stravaAnomalies, setStravaAnomalies] = useState(null)
   const [transitData, setTransitData] = useState(null)
   const [busStopsData, setBusStopsData] = useState(null)
   const [trainStationData, setTrainStationData] = useState(null)
@@ -31,7 +29,6 @@ export function useExplorerWalkabilityData({
           network,
           stravaAggregated: rawStrava,
           availableMonths,
-          anomalies,
           transit,
           busStops,
           trainStation,
@@ -50,7 +47,6 @@ export function useExplorerWalkabilityData({
 
         setNetworkData(network)
         setStravaAggregated(rawStrava)
-        setStravaAnomalies(anomalies)
         setWalkabilityMonths(availableMonths)
         setTransitData(transit)
         setBusStopsData(busStops)
@@ -61,24 +57,22 @@ export function useExplorerWalkabilityData({
       }
     }
 
-    const hasLockedWalkabilityLayer = ['activeMobility', 'mobilityAnomalies', 'networkAnalysis', 'transitAccessibility', 'roadSteepness'].some((id) => lockedLayers.has(id))
+    const hasLockedWalkabilityLayer = ['activeMobility', 'networkAnalysis', 'transitAccessibility', 'roadSteepness'].some((id) => lockedLayers.has(id))
     if (dashboardMode === 'walkability' || hasLockedWalkabilityLayer) {
       loadWalkabilityExplorerState()
     }
   }, [dashboardMode, lockedLayers])
 
-  const effectiveSelectedMonth = selectedMonth || walkabilityMonths[walkabilityMonths.length - 1]?.key || null
+  const effectiveSelectedMonth = selectedMonth || null
 
   const activityLayers = useMemo(() => {
     if (!stravaAggregated) return { pedestrianData: null, cyclingData: null }
-    const { pedestrian, cycling } = buildStravaActivityLayers(stravaAggregated, effectiveSelectedMonth ? { months: effectiveSelectedMonth } : {})
+    const { pedestrian, cycling } = buildStravaActivityLayers(
+      stravaAggregated,
+      effectiveSelectedMonth ? { months: effectiveSelectedMonth } : { averageMonthly: true }
+    )
     return { pedestrianData: pedestrian, cyclingData: cycling }
   }, [effectiveSelectedMonth, stravaAggregated])
-
-  const filteredStravaAnomalies = useMemo(() => {
-    if (!stravaAnomalies) return null
-    return filterStravaAnomaliesByMonth(stravaAnomalies, effectiveSelectedMonth)
-  }, [effectiveSelectedMonth, stravaAnomalies])
 
   const selectedRouteHistory = useMemo(() => {
     if (!selectedRouteSegment || !stravaAggregated) return null
@@ -96,8 +90,6 @@ export function useExplorerWalkabilityData({
     cyclingData: activityLayers.cyclingData,
     stravaAggregated,
     walkabilityMonths,
-    stravaAnomalies,
-    filteredStravaAnomalies,
     transitData,
     busStopsData,
     trainStationData,

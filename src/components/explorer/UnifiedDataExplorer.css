@@ -1175,39 +1175,6 @@
   background: linear-gradient(145deg, rgba(131, 24, 67, 0.75), rgba(244, 114, 182, 0.18));
 }
 
-.anomaly-context-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.85rem;
-}
-
-.anomaly-context-item {
-  padding: 0.9rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.anomaly-context-item--wide {
-  grid-column: 1 / -1;
-}
-
-.anomaly-context-item span {
-  display: block;
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.anomaly-context-item strong {
-  display: block;
-  margin-top: 0.45rem;
-  color: #fff;
-  font-size: 0.95rem;
-  line-height: 1.35;
-}
-
 @media (max-width: 1200px) {
   .route-history-charts {
     grid-template-columns: 1fr;

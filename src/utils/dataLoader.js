@@ -2,7 +2,7 @@
  * Data loading utilities
  */
 
-const STRAVA_AGGREGATED_PATH = '/data/walkabilty/strava_metro_monthly_aggregated.geojson'
+const STRAVA_AGGREGATED_PATH = '/api/transport/strava-mobility'
 
 function sumValues(values) {
   return values.reduce((sum, value) => sum + (Number(value) || 0), 0)
@@ -135,7 +135,43 @@ function annotatePopularCorridors(features) {
   })
 }
 
-function buildActivityFeature(feature, statsEntries, mode) {
+function scaleActivityFeatureCounts(feature, divisor) {
+  if (!feature || divisor <= 1) return feature
+
+  const averagedFields = [
+    'total_trip_count',
+    'forward_trip_count',
+    'reverse_trip_count',
+    'total_trips',
+    'total_people_count',
+    'male',
+    'female',
+    'unknown_gender',
+    'age_20_34',
+    'age_35_54',
+    'age_55_64',
+    'age_65_plus',
+    'commute',
+    'recreation',
+    'ride_count',
+    'ebike_ride_count'
+  ]
+
+  const properties = { ...feature.properties }
+  averagedFields.forEach((field) => {
+    const value = Number(properties[field])
+    if (Number.isFinite(value)) properties[field] = value / divisor
+  })
+  properties.activity_aggregation = 'monthly_average'
+  properties.activity_month_count = divisor
+
+  return {
+    ...feature,
+    properties
+  }
+}
+
+function buildActivityFeature(feature, statsEntries, mode, options = {}) {
   const totalTripCount = sumValues(statsEntries.map(entry => entry.total_trip_count))
   if (totalTripCount <= 0) return null
 
@@ -155,7 +191,7 @@ function buildActivityFeature(feature, statsEntries, mode) {
   const sourceMonths = sortStrings(new Set(statsEntries.map(entry => entry._month)))
   const sourceDayparts = sortStrings(new Set(statsEntries.map(entry => entry._daypart)))
 
-  return {
+  const activityFeature = {
     type: 'Feature',
     geometry: feature.geometry,
     properties: {
@@ -187,10 +223,15 @@ function buildActivityFeature(feature, statsEntries, mode) {
       source_mode: mode === 'ride' ? 'cycling' : 'pedestrian'
     }
   }
+
+  return scaleActivityFeatureCounts(activityFeature, options.averageDivisor || 1)
 }
 
 export function buildStravaActivityLayers(stravaData, options = {}) {
   const features = stravaData?.features ?? []
+  const availableMonths = sortStrings(new Set(features.flatMap(feature => (
+    Object.keys(feature.properties?.monthly_stats ?? {})
+  ))))
   const requestedMonths = options.months && options.months !== 'all'
     ? new Set(Array.isArray(options.months) ? options.months : [options.months])
     : null
@@ -204,6 +245,9 @@ export function buildStravaActivityLayers(stravaData, options = {}) {
   const cyclingFeatures = []
   let pedestrianTrips = 0
   let cyclingTrips = 0
+  const averageDivisor = options.averageMonthly
+    ? Math.max(1, requestedMonths?.size || availableMonths.length || 1)
+    : 1
 
   features.forEach(feature => {
     const monthlyStats = feature.properties?.monthly_stats ?? {}
@@ -224,13 +268,13 @@ export function buildStravaActivityLayers(stravaData, options = {}) {
       })
     })
 
-    const pedestrianFeature = buildActivityFeature(feature, pedEntries, 'ped')
+    const pedestrianFeature = buildActivityFeature(feature, pedEntries, 'ped', { averageDivisor })
     if (pedestrianFeature) {
       pedestrianTrips += pedestrianFeature.properties.total_trip_count
       pedestrianFeatures.push(pedestrianFeature)
     }
 
-    const cyclingFeature = buildActivityFeature(feature, rideEntries, 'ride')
+    const cyclingFeature = buildActivityFeature(feature, rideEntries, 'ride', { averageDivisor })
     if (cyclingFeature) {
       cyclingTrips += cyclingFeature.properties.total_trip_count
       cyclingFeatures.push(cyclingFeature)
@@ -243,9 +287,10 @@ export function buildStravaActivityLayers(stravaData, options = {}) {
   const enrichedCyclingFeatures = annotatePopularCorridors(cyclingFeatures)
 
   const peakStats = {
-    source: 'strava_metro_monthly_aggregated.geojson',
+    source: 'transport.strava_mobility',
     months,
     dayparts,
+    aggregation: options.averageMonthly ? 'monthly_average' : 'sum',
     pedestrian: {
       total_trips: pedestrianTrips,
       active_segments: pedestrianFeatures.length,
@@ -278,18 +323,6 @@ export function getStravaAvailableMonths(stravaData) {
     key: month,
     label: formatMonthLabel(month)
   }))
-}
-
-export function filterStravaAnomaliesByMonth(anomaliesData, monthKey) {
-  const features = (anomaliesData?.features ?? []).filter(feature => {
-    if (!monthKey) return true
-    return feature.properties?.month_start?.slice(0, 7) === monthKey
-  })
-
-  return {
-    type: 'FeatureCollection',
-    features
-  }
 }
 
 export function buildRouteHistory(stravaData, edgeUid) {

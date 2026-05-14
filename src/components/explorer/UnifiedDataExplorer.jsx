@@ -22,10 +22,6 @@ import {
 import * as turf from '@turf/turf'
 import TrafficAnalytics from './TrafficAnalytics'
 import EventInsightsPanel from './EventInsightsPanel'
-import {
-  formatStravaDaypartLabel,
-  summarizeStravaDayparts
-} from '../../utils/dataLoader'
 import { buildEnvDisplayData } from '../../features/environment/data'
 import { useExplorerBusinessData } from '../../features/business/useExplorerBusinessData'
 import { useExplorerWalkabilityData } from '../../features/walkability/useExplorerWalkabilityData'
@@ -182,7 +178,6 @@ const LAYER_CATEGORIES = [
   { id: 'cityEvents', label: 'City Events', dashboard: 'business', dataKey: 'eventsData' },
   // Walkability layers
   { id: 'activeMobility', label: 'Walking, Running & Cycling', dashboard: 'walkability', dataKey: 'activeMobility' },
-  { id: 'mobilityAnomalies', label: 'Mobility Anomalies', dashboard: 'walkability', dataKey: 'activeMobilityAnomalies' },
   { id: 'roadSteepness', label: 'Road Steepness', dashboard: 'walkability', dataKey: 'roadSteepness' },
   { id: 'networkAnalysis', label: 'Network Analysis', dashboard: 'walkability', dataKey: 'network' },
   { id: 'transitAccessibility', label: 'Transit Accessibility', dashboard: 'walkability', dataKey: 'transitData' },
@@ -271,12 +266,11 @@ const UnifiedDataExplorer = () => {
   
   // Walkability dashboard state
   const [walkabilityMode, setWalkabilityMode] = useState('activity') // 'activity', 'network', 'transit'
-  const [routeLayerMode, setRouteLayerMode] = useState('combined') // 'combined' | 'walking' | 'cycling' | 'anomalies'
+  const [routeLayerMode, setRouteLayerMode] = useState('combined') // 'combined' | 'walking' | 'cycling'
   const [showPopularRoutesOnly, setShowPopularRoutesOnly] = useState(false)
   const [networkMetric, setNetworkMetric] = useState('betweenness_800') // betweenness metric to display
   const [transitView, setTransitView] = useState('combined') // 'combined', 'bus', 'train'
   const [selectedWalkabilityMonth, setSelectedWalkabilityMonth] = useState(null)
-  const [selectedAnomalySegment, setSelectedAnomalySegment] = useState(null)
   const [selectedRouteSegment, setSelectedRouteSegment] = useState(null)
   const [compareRouteSegment, setCompareRouteSegment] = useState(null)
   const [routePanelMinimized, setRoutePanelMinimized] = useState(false)
@@ -384,7 +378,6 @@ const UnifiedDataExplorer = () => {
     cyclingData,
     stravaAggregated,
     walkabilityMonths,
-    filteredStravaAnomalies,
     transitData,
     busStopsData,
     trainStationData,
@@ -750,12 +743,6 @@ const UnifiedDataExplorer = () => {
       return { streetKey: summary.streetKey, destinations: ranked }
     })
   }, [parksData, selectedGreenerySummaries])
-
-  useEffect(() => {
-    if (!selectedWalkabilityMonth && effectiveSelectedMonth) {
-      setSelectedWalkabilityMonth(effectiveSelectedMonth)
-    }
-  }, [effectiveSelectedMonth, selectedWalkabilityMonth])
 
   const openEnvGridDetail = useCallback((gridId) => {
     if (!gridId) return
@@ -1135,7 +1122,6 @@ const UnifiedDataExplorer = () => {
     } else if (category.dashboard === 'walkability') {
       const modeMap = {
         activeMobility: 'activity',
-        mobilityAnomalies: 'activity',
         roadSteepness: 'steepness',
         networkAnalysis: 'network',
         transitAccessibility: 'transit'
@@ -1257,10 +1243,7 @@ const UnifiedDataExplorer = () => {
   
   // Get categories for current dashboard
   const getCurrentDashboardCategories = () => {
-    return LAYER_CATEGORIES.filter(c => (
-      c.dashboard === dashboardMode
-      && !(dashboardMode === 'walkability' && c.id === 'mobilityAnomalies')
-    ))
+    return LAYER_CATEGORIES.filter(c => c.dashboard === dashboardMode)
   }
 
   const showAllLayersToggle = useMemo(() => {
@@ -1462,16 +1445,31 @@ const UnifiedDataExplorer = () => {
   const routeCompareData = useMemo(() => {
     if (!selectedRouteHistory) return null
 
-    const monthLookup = new Map()
+    const monthLookup = new Map(
+      (walkabilityMonths.length ? walkabilityMonths : selectedRouteHistory.monthly || []).map(item => [
+        item.key || item.month,
+        {
+          month: item.key || item.month,
+          monthLabel: item.label || item.monthLabel,
+          aTrips: 0,
+          bTrips: 0,
+          aPeople: 0,
+          bPeople: 0
+        }
+      ])
+    )
     ;(selectedRouteHistory.monthly || []).forEach(item => {
-      monthLookup.set(item.month, {
+      const existing = monthLookup.get(item.month) || {
         month: item.month,
         monthLabel: item.monthLabel,
-        aTrips: item.totalTrips,
+        aTrips: 0,
         bTrips: 0,
-        aPeople: item.totalPeople,
+        aPeople: 0,
         bPeople: 0
-      })
+      }
+      existing.aTrips = item.totalTrips
+      existing.aPeople = item.totalPeople
+      monthLookup.set(item.month, existing)
     })
     ;(compareRouteHistory?.monthly || []).forEach(item => {
       const existing = monthLookup.get(item.month) || {
@@ -1501,7 +1499,7 @@ const UnifiedDataExplorer = () => {
         { label: '65+', a: selectedRouteHistory.summary.age65plus, b: compareRouteHistory?.summary.age65plus || 0 }
       ]
     }
-  }, [selectedRouteHistory, compareRouteHistory])
+  }, [selectedRouteHistory, compareRouteHistory, walkabilityMonths])
 
   return (
     <div className="unified-data-explorer">
@@ -1743,7 +1741,7 @@ const UnifiedDataExplorer = () => {
                 routeLayerMode={routeLayerMode}
                 onRouteLayerModeChange={(mode) => {
                   setRouteLayerMode(mode)
-                  selectCategory(mode === 'anomalies' ? 'mobilityAnomalies' : 'activeMobility')
+                  selectCategory('activeMobility')
                 }}
                 showPopularRoutesOnly={showPopularRoutesOnly}
                 onShowPopularRoutesOnlyChange={setShowPopularRoutesOnly}
@@ -1752,7 +1750,6 @@ const UnifiedDataExplorer = () => {
                 onMonthChange={setSelectedWalkabilityMonth}
                 pedestrianData={pedestrianData}
                 cyclingData={cyclingData}
-                anomaliesData={filteredStravaAnomalies}
                 networkData={networkData}
                 transitData={transitData}
                 roadSteepnessData={roadSteepnessData}
@@ -2025,7 +2022,6 @@ const UnifiedDataExplorer = () => {
               networkData={networkData}
               pedestrianData={pedestrianData}
               cyclingData={cyclingData}
-              anomaliesData={filteredStravaAnomalies}
               transitData={transitData}
               busStopsData={busStopsData}
               trainStationData={trainStationData}
@@ -2079,14 +2075,6 @@ const UnifiedDataExplorer = () => {
               selectedSegment={selectedSegment}
               onSegmentSelect={setSelectedSegment}
               onRouteSegmentClick={(segment) => {
-                if (segment?.anomaly_score != null) {
-                  setSelectedAnomalySegment(segment)
-                  setSelectedRouteSegment(null)
-                  setCompareRouteSegment(null)
-                  setRoutePanelMinimized(false)
-                  return
-                }
-                setSelectedAnomalySegment(null)
                 if (!selectedRouteSegment || Number(selectedRouteSegment.edge_uid) === Number(segment.edge_uid)) {
                   setSelectedRouteSegment(segment)
                 } else if (!compareRouteSegment || Number(compareRouteSegment.edge_uid) === Number(segment.edge_uid)) {
@@ -2306,8 +2294,8 @@ const UnifiedDataExplorer = () => {
                   <strong>{compareRouteHistory ? (selectedRouteHistory.summary.totalPeople - compareRouteHistory.summary.totalPeople).toLocaleString() : '—'}</strong>
                 </div>
                 <div className="route-history-chip">
-                  <span>Current Filter Month</span>
-                  <strong>{walkabilityMonths.find(m => m.key === selectedWalkabilityMonth)?.label ?? 'All'}</strong>
+                  <span>Map Time Window</span>
+                  <strong>{walkabilityMonths.find(m => m.key === selectedWalkabilityMonth)?.label ?? 'All months avg'}</strong>
                 </div>
               </div>
               <div className="charts-container route-history-charts">
@@ -2503,129 +2491,6 @@ const UnifiedDataExplorer = () => {
                 </div>
               </div>
               </>
-              )}
-            </div>
-          )}
-
-          {dashboardMode === 'walkability' && selectedAnomalySegment && (
-            <div
-              className={`bottom-panel route-history-panel ${routePanelMinimized ? 'route-history-panel--minimized' : ''}`}
-              style={{ right: `${effectiveSidebarWidth + 32}px` }}
-            >
-              <div className="panel-header">
-                <h3>Anomaly Detail: edge {selectedAnomalySegment.edge_uid}</h3>
-                <div className="panel-header-actions">
-                  <button onClick={() => setRoutePanelMinimized(value => !value)} className="close-btn" title={routePanelMinimized ? 'Expand panel' : 'Minimize panel'}>
-                    {routePanelMinimized ? '▢' : '–'}
-                  </button>
-                  <button onClick={() => { setSelectedAnomalySegment(null); setRoutePanelMinimized(false) }} className="close-btn">✕</button>
-                </div>
-              </div>
-              {!routePanelMinimized && (
-                <>
-                  <div className="route-history-meta">
-                    <div className="route-history-chip">
-                      <span>Likely Cause</span>
-                      <strong>{selectedAnomalySegment.likely_reason || 'Unknown'}</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>Confidence</span>
-                      <strong>{selectedAnomalySegment.confidence || '—'}</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>Event Date</span>
-                      <strong>{selectedAnomalySegment.event_date || selectedAnomalySegment.date || '—'}</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>Event Type</span>
-                      <strong>{selectedAnomalySegment.event_type || 'unknown'}</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>Anomaly Score</span>
-                      <strong>{Number(selectedAnomalySegment.anomaly_score || 0).toFixed(2)}</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>Status</span>
-                      <strong>{selectedAnomalySegment.status || '—'}</strong>
-                    </div>
-                  </div>
-                  <div className="charts-container route-history-charts">
-                    <div className="chart-panel chart-panel--facts">
-                      <h4>Anomaly Snapshot</h4>
-                      <div className="route-facts-grid">
-                        <div className="route-fact route-fact--orange">
-                          <span>Observed Total</span>
-                          <strong>{Number(selectedAnomalySegment.observed_total || 0).toLocaleString()}</strong>
-                        </div>
-                        <div className="route-fact route-fact--blue">
-                          <span>Baseline Total</span>
-                          <strong>{Number(selectedAnomalySegment.baseline_total || 0).toLocaleString()}</strong>
-                        </div>
-                        <div className="route-fact route-fact--green">
-                          <span>Percent Delta</span>
-                          <strong>{`${(Number(selectedAnomalySegment.percent_delta || 0) * 100).toFixed(1)}%`}</strong>
-                        </div>
-                        <div className="route-fact route-fact--pink">
-                          <span>Daypart Trips</span>
-                          <strong>{Number(selectedAnomalySegment.route_daypart_trip_count || 0).toLocaleString()}</strong>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="chart-panel">
-                      <h4>Observed vs Baseline</h4>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={[
-                          { label: 'Observed', value: Number(selectedAnomalySegment.observed_total || 0) },
-                          { label: 'Baseline', value: Number(selectedAnomalySegment.baseline_total || 0) },
-                          { label: 'Route Total', value: Number(selectedAnomalySegment.route_total_trip_count || 0) }
-                        ]}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                          <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                          <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                          <Tooltip />
-                          <Bar dataKey="value" fill="#c084fc" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="chart-panel">
-                      <h4>Top Dayparts</h4>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={summarizeStravaDayparts(selectedAnomalySegment.top_dayparts)}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                          <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                          <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                          <Tooltip />
-                          <Bar dataKey="value" fill="#f472b6" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="chart-panel chart-panel--facts">
-                      <h4>Context</h4>
-                      <div className="anomaly-context-grid">
-                        <div className="anomaly-context-item">
-                          <span>Dataset</span>
-                          <strong>{selectedAnomalySegment.dataset_name}</strong>
-                        </div>
-                        <div className="anomaly-context-item">
-                          <span>Month</span>
-                          <strong>{selectedAnomalySegment.month_label}</strong>
-                        </div>
-                        <div className="anomaly-context-item">
-                          <span>Daypart</span>
-                          <strong>{formatStravaDaypartLabel(selectedAnomalySegment.daypart)}</strong>
-                        </div>
-                        <div className="anomaly-context-item">
-                          <span>Event</span>
-                          <strong>{selectedAnomalySegment.event_name || 'unknown'}</strong>
-                        </div>
-                        <div className="anomaly-context-item anomaly-context-item--wide">
-                          <span>Source Summary</span>
-                          <strong>{selectedAnomalySegment.source_summary || 'No summary attached'}</strong>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </>
               )}
             </div>
           )}

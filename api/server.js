@@ -682,6 +682,43 @@ app.get('/api/transport/road-steepness', async (_req, res) => {
   }
 })
 
+app.get('/api/transport/strava-mobility', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        ogc_fid,
+        edge_uid,
+        osm_reference_id,
+        monthly_stats,
+        ST_AsGeoJSON(wkb_geometry)::json AS geometry
+      FROM transport.strava_mobility
+      WHERE wkb_geometry IS NOT NULL
+      ORDER BY edge_uid
+    `)
+
+    const { rows: summaryRows } = await pool.query(`
+      WITH months AS (
+        SELECT jsonb_object_keys(COALESCE(monthly_stats::jsonb, '{}'::jsonb)) AS month_key
+        FROM transport.strava_mobility
+      )
+      SELECT
+        (SELECT count(*) FROM transport.strava_mobility WHERE wkb_geometry IS NOT NULL) AS segment_count,
+        count(DISTINCT month_key) AS month_count,
+        min(month_key) AS first_month,
+        max(month_key) AS latest_month
+      FROM months
+    `)
+
+    res.json(buildGeoFeatureCollection(rows, {
+      source: 'transport.strava_mobility',
+      metadata: summaryRows[0] || {}
+    }))
+  } catch (err) {
+    console.error('[API] /transport/strava-mobility error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.get('/api/climate/heat-streets', async (_req, res) => {
   try {
     const { rows } = await pool.query(`
