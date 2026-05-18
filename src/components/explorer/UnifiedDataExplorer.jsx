@@ -138,10 +138,22 @@ const SERVICE_REQUEST_GROUP_COLORS = [
   { label: 'Sewage', color: '#2563eb' },
   { label: 'Water', color: '#06b6d4' },
   { label: 'Electricity', color: '#f59e0b' },
-  { label: 'Roads & Stormwater', color: '#a855f7' },
+  { label: 'Stormwater & Drainage', color: '#0ea5e9' },
+  { label: 'Roads & Pavements', color: '#a855f7' },
+  { label: 'Traffic & Parking', color: '#f97316' },
   { label: 'Waste & Cleansing', color: '#22c55e' },
-  { label: 'Public Realm', color: '#84cc16' },
+  { label: 'Parks & Trees', color: '#84cc16' },
+  { label: 'Safety & Bylaw', color: '#ef4444' },
+  { label: 'Property & Planning', color: '#ec4899' },
+  { label: 'Animals & Pests', color: '#14b8a6' },
   { label: 'Other', color: '#94a3b8' }
+]
+
+const SERVICE_REQUEST_TIMEFRAMES = [
+  { id: 'all', label: 'All' },
+  { id: 'past_year', label: 'Past year' },
+  { id: 'past_90', label: '90 days' },
+  { id: 'past_30', label: '30 days' }
 ]
 
 const serviceRequestGroupColor = (group) => (
@@ -156,6 +168,23 @@ const parseServiceRequestProperty = (value, fallback) => {
   } catch {
     return fallback
   }
+}
+
+const formatDatasetUpdatedAt = (value) => {
+  if (!value) return 'Update unknown'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Update unknown'
+  return `Updated ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+}
+
+const formatServiceRequestResponseBand = (complaint) => {
+  if (complaint?.response_band) return complaint.response_band
+  const days = Number(complaint?.response_days)
+  if (!Number.isFinite(days)) return 'Incomplete dates'
+  if (days <= 1) return 'Same day'
+  if (days <= 3) return '1-3 days'
+  if (days <= 7) return '4-7 days'
+  return '8+ days'
 }
 
 const formatRandCompact = (value) => {
@@ -299,6 +328,7 @@ const UnifiedDataExplorer = () => {
   const [sentimentPanelOpen, setSentimentPanelOpen] = useState(false)
   const [sentimentPanelExpanded, setSentimentPanelExpanded] = useState(false)
   const [selectedServiceRequestSegment, setSelectedServiceRequestSegment] = useState(null)
+  const [serviceRequestTimeframe, setServiceRequestTimeframe] = useState('all')
   
   // Climate heat street state
   const [selectedSegment, setSelectedSegment] = useState(null)
@@ -447,7 +477,7 @@ const UnifiedDataExplorer = () => {
     serviceRequestAnalytics,
     serviceRequestsLoading,
     serviceRequestsError
-  } = useExplorerServiceRequestsData({ dashboardMode, lockedLayers })
+  } = useExplorerServiceRequestsData({ dashboardMode, lockedLayers, timeframe: serviceRequestTimeframe })
 
   const filteredEventsData = useMemo(() => {
     if (!eventsData?.features) return eventsData
@@ -1177,6 +1207,10 @@ const UnifiedDataExplorer = () => {
     if (activeCategory === 'streetSentiment' || activeCategory === 'serviceRequests') return
     selectCategory('streetSentiment')
   }, [dashboardMode, activeCategory]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setSelectedServiceRequestSegment(null)
+  }, [serviceRequestTimeframe])
   
   // Toggle lock on a layer in the stack
   const toggleLayerLock = (categoryId) => {
@@ -1966,12 +2000,27 @@ const UnifiedDataExplorer = () => {
           {dashboardMode === 'sentiment' && activeCategory === 'serviceRequests' && (
             <div className="service-requests-sidebar-panel">
               <div className="service-requests-sidebar-header">
-                <span>Infrastructure Lens</span>
-                <strong>Service Requests</strong>
+                <div>
+                  <span>Infrastructure Lens</span>
+                  <strong>Service Requests</strong>
+                </div>
+                <small>{formatDatasetUpdatedAt(serviceRequestAnalytics?.metadata?.dataset_updated_at || serviceRequests?.metadata?.dataset_updated_at)}</small>
               </div>
               <p>
                 Street segments coloured by their majority complaint type. Click a segment to inspect the attached requests and response stats.
               </p>
+              <div className="service-requests-timeframes" role="tablist" aria-label="Service request timeframe">
+                {SERVICE_REQUEST_TIMEFRAMES.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={serviceRequestTimeframe === item.id ? 'active' : ''}
+                    onClick={() => setServiceRequestTimeframe(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
               <div className="service-requests-legend" aria-label="Complaint type colour legend">
                 {SERVICE_REQUEST_GROUP_COLORS.map((item) => (
                   <div key={item.label}>
@@ -2262,8 +2311,7 @@ const UnifiedDataExplorer = () => {
                           <p>{complaint.notification || 'No notification text attached.'}</p>
                           <footer>
                             <span>{complaint.work_center || 'Unknown work center'}</span>
-                            <span>{Number.isFinite(Number(complaint.response_days)) ? `${Number(complaint.response_days).toFixed(0)}d response` : 'Incomplete dates'}</span>
-                            <span>{Number.isFinite(Number(complaint.distance_m)) ? `${Number(complaint.distance_m).toFixed(0)}m from road` : ''}</span>
+                            <span>{formatServiceRequestResponseBand(complaint)}</span>
                           </footer>
                         </article>
                       ))}

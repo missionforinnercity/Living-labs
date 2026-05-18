@@ -1,11 +1,205 @@
 import express from 'express'
 import cors from 'cors'
 import pg from 'pg'
+import * as turf from '@turf/turf'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const roadSegmentsPath = join(__dirname, '..', 'data', 'roads', 'segments.geojson')
+const SERVICE_REQUEST_SNAP_DISTANCE_M = 55
+let roadSegmentsGeojson = null
+let roadSegmentIndex = null
+
+function getRoadSegmentsGeojson() {
+  if (!roadSegmentsGeojson) {
+    roadSegmentsGeojson = JSON.parse(readFileSync(roadSegmentsPath, 'utf-8'))
+  }
+  return roadSegmentsGeojson
+}
+
+function getRoadSegmentIndex() {
+  if (!roadSegmentIndex) {
+    const segmentsGeojson = getRoadSegmentsGeojson()
+    roadSegmentIndex = (segmentsGeojson.features || [])
+      .map((feature, index) => ({
+        feature,
+        segment_key: index + 1,
+        bbox: turf.bbox(feature),
+        lines: feature.geometry?.type === 'MultiLineString'
+          ? (feature.geometry.coordinates || [])
+              .filter((coordinates) => Array.isArray(coordinates) && coordinates.length >= 2)
+              .map((coordinates) => turf.lineString(coordinates))
+          : [feature]
+      }))
+      .filter((segment) => segment.bbox.every(Number.isFinite) && segment.lines.length > 0)
+  }
+  return roadSegmentIndex
+}
+
+function pointSearchBox(lng, lat, distanceM) {
+  const latDelta = distanceM / 111320
+  const lonScale = Math.max(Math.cos(lat * Math.PI / 180), 0.01)
+  const lonDelta = distanceM / (111320 * lonScale)
+  return [lng - lonDelta, lat - latDelta, lng + lonDelta, lat + latDelta]
+}
+
+function bboxesIntersect(a, b) {
+  return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1]
+}
+
+function findNearestServiceRequestSegment(lng, lat, maxDistanceM = SERVICE_REQUEST_SNAP_DISTANCE_M) {
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null
+
+  const point = turf.point([lng, lat])
+  const searchBox = pointSearchBox(lng, lat, maxDistanceM)
+  let best = null
+
+  for (const segment of getRoadSegmentIndex()) {
+    if (!bboxesIntersect(segment.bbox, searchBox)) continue
+
+    for (const line of segment.lines) {
+      const distanceM = turf.pointToLineDistance(point, line, { units: 'meters' })
+      if (!Number.isFinite(distanceM) || distanceM > maxDistanceM) continue
+      if (!best || distanceM < best.distance_m) {
+        best = {
+          segment_key: segment.segment_key,
+          distance_m: distanceM
+        }
+      }
+    }
+  }
+
+  return best
+}
+
+function buildServiceRequestRollups(requestRows) {
+  const rollups = new Map()
+
+  for (const row of requestRows) {
+    const nearest = findNearestServiceRequestSegment(Number(row.longitude), Number(row.latitude))
+    if (!nearest) continue
+
+    if (!rollups.has(nearest.segment_key)) {
+      rollups.set(nearest.segment_key, {
+        segment_key: nearest.segment_key,
+        request_count: 0,
+        incomplete_count: 0,
+        first_created: null,
+        latest_created: null,
+        response_days_values: [],
+        complaint_group_counts: {},
+        complaints: []
+      })
+    }
+
+    const rollup = rollups.get(nearest.segment_key)
+    const complaintGroup = row.complaint_group || 'Other'
+    const responseDays = Number(row.response_days)
+
+    rollup.request_count += 1
+    if (row.completed_dt == null || row.created_date == null) rollup.incomplete_count += 1
+    if (row.created_date && (!rollup.first_created || row.created_date < rollup.first_created)) rollup.first_created = row.created_date
+    if (row.created_date && (!rollup.latest_created || row.created_date > rollup.latest_created)) rollup.latest_created = row.created_date
+    if (Number.isFinite(responseDays)) rollup.response_days_values.push(responseDays)
+    rollup.complaint_group_counts[complaintGroup] = (rollup.complaint_group_counts[complaintGroup] || 0) + 1
+    rollup.complaints.push({
+      object_id: row.object_id,
+      arcgis_id: row.arcgis_id,
+      complaint_type: row.complaint_type || 'Uncategorised',
+      complaint_group: complaintGroup,
+      work_center: row.work_center || 'Unknown work center',
+      notification: row.notification,
+      notification_type: row.notification_type,
+      created_on_date: row.created_on_date,
+      changed_on: row.changed_on,
+      completed_date: row.completed_date,
+      created_date: row.created_date,
+      response_days: Number.isFinite(responseDays) ? responseDays : null,
+      response_band: serviceRequestResponseBand(row.created_date, row.completed_dt, responseDays),
+      record_status: row.completed_dt == null || row.created_date == null ? 'incomplete' : 'complete',
+      distance_m: Math.round(nearest.distance_m * 10) / 10
+    })
+  }
+
+  return [...rollups.values()].map((rollup) => {
+    const sortedGroups = Object.entries(rollup.complaint_group_counts)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    const sortedResponses = rollup.response_days_values.sort((a, b) => a - b)
+    const responseSum = sortedResponses.reduce((sum, value) => sum + value, 0)
+    const medianIndex = Math.floor(sortedResponses.length / 2)
+    const medianResponseDays = sortedResponses.length
+      ? (sortedResponses.length % 2
+          ? sortedResponses[medianIndex]
+          : (sortedResponses[medianIndex - 1] + sortedResponses[medianIndex]) / 2)
+      : null
+
+    return {
+      segment_key: rollup.segment_key,
+      request_count: rollup.request_count,
+      incomplete_count: rollup.incomplete_count,
+      first_created: rollup.first_created,
+      latest_created: rollup.latest_created,
+      avg_response_days: sortedResponses.length ? Math.round((responseSum / sortedResponses.length) * 100) / 100 : null,
+      median_response_days: medianResponseDays == null ? null : Math.round(medianResponseDays * 100) / 100,
+      dominant_complaint_group: sortedGroups[0]?.[0] || 'No requests',
+      dominant_complaint_count: sortedGroups[0]?.[1] || 0,
+      complaint_group_counts: rollup.complaint_group_counts,
+      complaints: rollup.complaints.sort((a, b) => String(b.created_date || '').localeCompare(String(a.created_date || '')))
+    }
+  })
+}
+
+function serviceRequestResponseBand(createdDate, completedDate, responseDays) {
+  if (!createdDate || !completedDate || !Number.isFinite(Number(responseDays))) return 'Incomplete dates'
+  const days = Number(responseDays)
+  if (days <= 1) return 'Same day'
+  if (days <= 3) return '1-3 days'
+  if (days <= 7) return '4-7 days'
+  return '8+ days'
+}
+
+function buildServiceRequestSegmentFeatureCollection(segmentsGeojson, rollupRows, metadata = {}) {
+  const rollupsBySegmentKey = new Map(rollupRows.map((row) => [Number(row.segment_key), row]))
+
+  const features = (segmentsGeojson.features || []).map((feature, index) => {
+    const segmentKey = index + 1
+    const rollup = rollupsBySegmentKey.get(segmentKey) || {}
+    const baseProps = feature.properties || {}
+
+    return {
+      ...feature,
+      properties: {
+        ...baseProps,
+        segment_id: baseProps.id ?? baseProps.OBJECTID ?? segmentKey,
+        segment_key: segmentKey,
+        street_name: baseProps.street_name || baseProps.STR_NAME || 'Unnamed street',
+        request_count: Number(rollup.request_count || 0),
+        incomplete_count: Number(rollup.incomplete_count || 0),
+        first_created: rollup.first_created || null,
+        latest_created: rollup.latest_created || null,
+        avg_response_days: rollup.avg_response_days ?? null,
+        median_response_days: rollup.median_response_days ?? null,
+        dominant_complaint_group: rollup.dominant_complaint_group || 'No requests',
+        dominant_complaint_count: Number(rollup.dominant_complaint_count || 0),
+        complaint_group_counts: rollup.complaint_group_counts || {},
+        complaints: rollup.complaints || []
+      }
+    }
+  })
+
+  return {
+    type: 'FeatureCollection',
+    features,
+    metadata: {
+      totalRows: features.length,
+      totalFeatures: features.length,
+      fetchedAt: new Date().toISOString(),
+      ...metadata
+    }
+  }
+}
 
 // Load .env from project root
 const envPath = join(__dirname, '..', '.env')
@@ -1736,12 +1930,43 @@ const serviceRequestComplaintGroupSql = (columnName = 'complaint_type') => `
     WHEN lower(coalesce(${columnName}, '')) ~ '(sew|sewer|blocked|overflow)' THEN 'Sewage'
     WHEN lower(coalesce(${columnName}, '')) ~ '(water|wat:|leak|meter)' THEN 'Water'
     WHEN lower(coalesce(${columnName}, '')) ~ '(power|electric|prepaid|street.?light|light)' THEN 'Electricity'
-    WHEN lower(coalesce(${columnName}, '')) ~ '(road|pothole|stormwater|drain|kerb|pavement|traffic)' THEN 'Roads & Stormwater'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(stormwater|drain|gully|catchpit|flood|flooding)' THEN 'Stormwater & Drainage'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(road|pothole|tar|asphalt|kerb|pavement|sidewalk|footway)' THEN 'Roads & Pavements'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(traffic|signal|robot|sign|marking|parking|vehicle|speed|bollard)' THEN 'Traffic & Parking'
     WHEN lower(coalesce(${columnName}, '')) ~ '(refuse|waste|litter|clean|dump|bin)' THEN 'Waste & Cleansing'
-    WHEN lower(coalesce(${columnName}, '')) ~ '(park|tree|grass|open space)' THEN 'Public Realm'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(park|tree|grass|open space|garden|playground|verge|weed)' THEN 'Parks & Trees'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(noise|law enforcement|by.?law|illegal|vagrant|safety|security|anti.?social)' THEN 'Safety & Bylaw'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(building|planning|land use|property|informal|encroachment|structure)' THEN 'Property & Planning'
+    WHEN lower(coalesce(${columnName}, '')) ~ '(animal|dog|cat|carcass|pest|rodent)' THEN 'Animals & Pests'
     ELSE 'Other'
   END
 `
+
+function serviceRequestTimeframeMeta(timeframe = 'all') {
+  switch (timeframe) {
+    case 'past_year':
+      return { id: 'past_year', label: 'Past year', interval: "interval '1 year'" }
+    case 'past_90':
+      return { id: 'past_90', label: 'Past 90 days', interval: "interval '90 days'" }
+    case 'past_30':
+      return { id: 'past_30', label: 'Past 30 days', interval: "interval '30 days'" }
+    default:
+      return { id: 'all', label: 'All time', interval: null }
+  }
+}
+
+function serviceRequestTimeframeWhereSql(timeframe = 'all') {
+  const meta = serviceRequestTimeframeMeta(timeframe)
+  return meta.interval ? `AND created_date >= current_date - ${meta.interval}` : ''
+}
+
+async function getServiceRequestDatasetUpdatedAt() {
+  const { rows } = await pool.query(`
+    SELECT max(greatest(updated_at, inserted_at, fetched_at)) AS dataset_updated_at
+    FROM planning.cape_town_cbd_service_requests
+  `)
+  return rows[0]?.dataset_updated_at || null
+}
 
 app.get('/api/service-requests/points', async (req, res) => {
   try {
@@ -1798,132 +2023,60 @@ app.get('/api/service-requests/points', async (req, res) => {
   }
 })
 
-app.get('/api/service-requests/street-segments', async (_req, res) => {
+app.get('/api/service-requests/street-segments', async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      WITH requests AS (${serviceRequestBaseSql}),
-      request_points AS (
-        SELECT
-          *,
-          ${serviceRequestComplaintGroupSql('complaint_type')} AS complaint_group,
-          ST_SetSRID(ST_MakePoint(longitude, latitude), 4326) AS geom
-        FROM requests
-        WHERE longitude IS NOT NULL
-          AND latitude IS NOT NULL
-          AND created_date IS NOT NULL
-      ),
-      snapped AS (
-        SELECT
-          rp.*,
-          nearest."OBJECTID" AS road_objectid,
-          nearest."STR_NAME" AS road_name,
-          nearest.distance_m
-        FROM request_points rp
-        JOIN LATERAL (
-          SELECT
-            r."OBJECTID",
-            r."STR_NAME",
-            ST_Distance(ST_Transform(r.geom, 4326)::geography, rp.geom::geography) AS distance_m
-          FROM transport."Roads_innercity_CCID" r
-          WHERE r.geom IS NOT NULL
-            AND ST_DWithin(ST_Transform(r.geom, 4326)::geography, rp.geom::geography, 55)
-          ORDER BY ST_Transform(r.geom, 4326)::geography <-> rp.geom::geography
-          LIMIT 1
-        ) nearest ON true
-      ),
-      segment_counts AS (
-        SELECT
-          road_objectid,
-          complaint_group,
-          count(*)::int AS complaint_count
-        FROM snapped
-        GROUP BY road_objectid, complaint_group
-      ),
-      dominant AS (
-        SELECT DISTINCT ON (road_objectid)
-          road_objectid,
-          complaint_group AS dominant_complaint_group,
-          complaint_count AS dominant_complaint_count
-        FROM segment_counts
-        ORDER BY road_objectid, complaint_count DESC, complaint_group
-      ),
-      group_rollup AS (
-        SELECT
-          road_objectid,
-          jsonb_object_agg(complaint_group, complaint_count ORDER BY complaint_group) AS complaint_group_counts
-        FROM segment_counts
-        GROUP BY road_objectid
-      ),
-      request_rollup AS (
-        SELECT
-          road_objectid,
-          count(*)::int AS request_count,
-          count(*) FILTER (WHERE completed_dt IS NULL OR created_date IS NULL)::int AS incomplete_count,
-          min(created_date) AS first_created,
-          max(created_date) AS latest_created,
-          round(avg(CASE WHEN completed_dt IS NOT NULL THEN greatest(0, completed_dt - created_date) END)::numeric, 2)::double precision AS avg_response_days,
-          percentile_cont(0.5) WITHIN GROUP (
-            ORDER BY CASE WHEN completed_dt IS NOT NULL THEN greatest(0, completed_dt - created_date) END
-          )::double precision AS median_response_days,
-          jsonb_agg(
-            jsonb_build_object(
-              'object_id', object_id,
-              'arcgis_id', arcgis_id,
-              'complaint_type', coalesce(complaint_type, 'Uncategorised'),
-              'complaint_group', complaint_group,
-              'work_center', coalesce(work_center, 'Unknown work center'),
-              'notification', notification,
-              'notification_type', notification_type,
-              'created_on_date', created_on_date,
-              'changed_on', changed_on,
-              'completed_date', completed_date,
-              'created_date', created_date,
-              'response_days', CASE WHEN completed_dt IS NULL THEN NULL ELSE greatest(0, completed_dt - created_date) END,
-              'record_status', CASE WHEN completed_dt IS NULL OR created_date IS NULL THEN 'incomplete' ELSE 'complete' END,
-              'distance_m', round(distance_m::numeric, 1)
-            )
-            ORDER BY created_date DESC, object_id DESC
-          ) AS complaints
-        FROM snapped
-        GROUP BY road_objectid
-      )
+    const timeframe = serviceRequestTimeframeMeta(req.query.timeframe)
+    const timeframeWhere = serviceRequestTimeframeWhereSql(timeframe.id)
+    const segmentsGeojson = getRoadSegmentsGeojson()
+    const [requestResult, datasetUpdatedAt] = await Promise.all([
+      pool.query(`
+      WITH requests AS (${serviceRequestBaseSql})
       SELECT
-        r."OBJECTID" AS segment_id,
-        r."SL_STR_NAME_KEY" AS street_name_key,
-        coalesce(nullif(r."STR_NAME", ''), 'Unnamed street') AS street_name,
-        r."STR_NAME_MDF" AS modified_street_name,
-        COALESCE(rr.request_count, 0)::int AS request_count,
-        COALESCE(rr.incomplete_count, 0)::int AS incomplete_count,
-        rr.first_created,
-        rr.latest_created,
-        rr.avg_response_days,
-        rr.median_response_days,
-        COALESCE(d.dominant_complaint_group, 'No requests') AS dominant_complaint_group,
-        COALESCE(d.dominant_complaint_count, 0)::int AS dominant_complaint_count,
-        COALESCE(gr.complaint_group_counts, '{}'::jsonb) AS complaint_group_counts,
-        COALESCE(rr.complaints, '[]'::jsonb) AS complaints,
-        ST_AsGeoJSON(ST_Transform(r.geom, 4326))::json AS geometry
-      FROM transport."Roads_innercity_CCID" r
-      LEFT JOIN request_rollup rr ON rr.road_objectid = r."OBJECTID"
-      LEFT JOIN dominant d ON d.road_objectid = r."OBJECTID"
-      LEFT JOIN group_rollup gr ON gr.road_objectid = r."OBJECTID"
-      WHERE r.geom IS NOT NULL
-      ORDER BY request_count DESC, street_name
-    `)
+        object_id,
+        arcgis_id,
+        coalesce(complaint_type, 'Uncategorised') AS complaint_type,
+        ${serviceRequestComplaintGroupSql('complaint_type')} AS complaint_group,
+        coalesce(work_center, 'Unknown work center') AS work_center,
+        notification,
+        notification_type,
+        longitude,
+        latitude,
+        created_on_date,
+        changed_on,
+        completed_date,
+        created_date,
+        completed_dt,
+        CASE
+          WHEN completed_dt IS NULL THEN NULL
+          ELSE greatest(0, completed_dt - created_date)
+        END AS response_days
+      FROM requests
+      WHERE longitude IS NOT NULL
+        AND latitude IS NOT NULL
+        AND created_date IS NOT NULL
+        ${timeframeWhere}
+      ORDER BY created_date DESC, object_id DESC
+    `),
+      getServiceRequestDatasetUpdatedAt()
+    ])
 
-    const totalRequests = rows.reduce((sum, row) => sum + (Number(row.request_count) || 0), 0)
-    const activeSegments = rows.filter((row) => Number(row.request_count) > 0).length
+    const rollups = buildServiceRequestRollups(requestResult.rows)
+    const totalRequests = rollups.reduce((sum, row) => sum + (Number(row.request_count) || 0), 0)
+    const activeSegments = rollups.filter((row) => Number(row.request_count) > 0).length
 
-    res.json(buildGeoFeatureCollection(rows, {
-      source: 'transport.Roads_innercity_CCID joined to planning.cape_town_cbd_service_requests',
+    res.json(buildServiceRequestSegmentFeatureCollection(segmentsGeojson, rollups, {
+      source: 'data/roads/segments.geojson joined to planning.cape_town_cbd_service_requests',
       metadata: {
         table: 'planning.cape_town_cbd_service_requests',
-        segment_source: 'transport.Roads_innercity_CCID',
+        segment_source: 'data/roads/segments.geojson',
         request_count: totalRequests,
         mapped_count: totalRequests,
         active_segment_count: activeSegments,
-        segment_count: rows.length,
-        snap_distance_m: 55
+        segment_count: segmentsGeojson.features?.length || 0,
+        snap_distance_m: SERVICE_REQUEST_SNAP_DISTANCE_M,
+        timeframe: timeframe.id,
+        timeframe_label: timeframe.label,
+        dataset_updated_at: datasetUpdatedAt
       }
     }))
   } catch (err) {
@@ -1932,8 +2085,10 @@ app.get('/api/service-requests/street-segments', async (_req, res) => {
   }
 })
 
-app.get('/api/service-requests/analytics', async (_req, res) => {
+app.get('/api/service-requests/analytics', async (req, res) => {
   try {
+    const timeframe = serviceRequestTimeframeMeta(req.query.timeframe)
+    const timeframeWhere = serviceRequestTimeframeWhereSql(timeframe.id)
     const baseCte = `WITH requests AS (${serviceRequestBaseSql})`
     const [
       summaryResult,
@@ -1944,7 +2099,8 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
       responseBandResult,
       weekdayResult,
       slowestResult,
-      openResult
+      openResult,
+      datasetUpdatedAt
     ] = await Promise.all([
       pool.query(`
         ${baseCte},
@@ -1952,6 +2108,7 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
           SELECT *, CASE WHEN completed_dt IS NULL THEN NULL ELSE greatest(0, completed_dt - created_date) END AS response_days
           FROM requests
           WHERE created_date IS NOT NULL
+            ${timeframeWhere}
         )
         SELECT
           count(*)::int AS request_count,
@@ -1978,6 +2135,7 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
             round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
           FROM requests
           WHERE created_date IS NOT NULL
+            ${timeframeWhere}
           GROUP BY created_date
         ),
         stats AS (
@@ -2003,6 +2161,7 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
           round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
         FROM requests
         WHERE created_date IS NOT NULL
+          ${timeframeWhere}
         GROUP BY date_trunc('month', created_date)
         ORDER BY month_key
       `),
@@ -2016,6 +2175,7 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
           round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
         FROM requests
         WHERE created_date IS NOT NULL
+          ${timeframeWhere}
         GROUP BY coalesce(complaint_type, 'Uncategorised'), ${serviceRequestComplaintGroupSql('complaint_type')}
         ORDER BY request_count DESC
         LIMIT 30
@@ -2029,6 +2189,7 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
           round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
         FROM requests
         WHERE created_date IS NOT NULL
+          ${timeframeWhere}
         GROUP BY coalesce(work_center, 'Unknown work center')
         ORDER BY request_count DESC
         LIMIT 24
@@ -2046,6 +2207,7 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
             END AS response_band
           FROM requests
           WHERE created_date IS NOT NULL
+            ${timeframeWhere}
         )
         SELECT response_band, count(*)::int AS request_count
         FROM labelled
@@ -2061,6 +2223,7 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
           round(avg(greatest(0, completed_dt - created_date)) FILTER (WHERE completed_dt IS NOT NULL)::numeric, 2)::double precision AS avg_response_days
         FROM requests
         WHERE created_date IS NOT NULL
+          ${timeframeWhere}
         GROUP BY extract(isodow from created_date), to_char(created_date, 'Dy')
         ORDER BY weekday
       `),
@@ -2078,6 +2241,7 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
           latitude
         FROM requests
         WHERE created_date IS NOT NULL
+          ${timeframeWhere}
           AND completed_dt IS NOT NULL
         ORDER BY response_days DESC, created_date DESC
         LIMIT 40
@@ -2095,10 +2259,12 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
           latitude
         FROM requests
         WHERE created_date IS NOT NULL
+          ${timeframeWhere}
           AND completed_dt IS NULL
         ORDER BY age_days DESC, created_date ASC
         LIMIT 40
-      `)
+      `),
+      getServiceRequestDatasetUpdatedAt()
     ])
 
     const dailyRows = dailyResult.rows
@@ -2111,6 +2277,9 @@ app.get('/api/service-requests/analytics', async (_req, res) => {
       metadata: {
         ...(summaryResult.rows[0] || {}),
         source: 'planning.cape_town_cbd_service_requests',
+        timeframe: timeframe.id,
+        timeframe_label: timeframe.label,
+        dataset_updated_at: datasetUpdatedAt,
         fetchedAt: new Date().toISOString()
       },
       daily: dailyRows,

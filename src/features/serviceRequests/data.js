@@ -16,10 +16,14 @@ async function fetchServiceRequestJson(path, errorLabel) {
   }
 }
 
-export function loadServiceRequestStreetSegments() {
-  return fetchServiceRequestJson('/api/service-requests/street-segments', 'Service request street segments load failed')
+function serviceRequestTimeframeQuery(timeframe) {
+  return timeframe && timeframe !== 'all' ? `?timeframe=${encodeURIComponent(timeframe)}` : ''
 }
 
-export function loadServiceRequestAnalytics() {
-  return fetchServiceRequestJson('/api/service-requests/analytics', 'Service request analytics load failed')
+export function loadServiceRequestStreetSegments(timeframe = 'all') {
+  return fetchServiceRequestJson(`/api/service-requests/street-segments${serviceRequestTimeframeQuery(timeframe)}`, 'Service request street segments load failed')
+}
+
+export function loadServiceRequestAnalytics(timeframe = 'all') {
+  return fetchServiceRequestJson(`/api/service-requests/analytics${serviceRequestTimeframeQuery(timeframe)}`, 'Service request analytics load failed')
 }

@@ -1150,11 +1150,32 @@
   text-transform: uppercase;
 }
 
+.service-requests-sidebar-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
 .service-requests-sidebar-header strong {
   display: block;
   margin-top: 0.18rem;
   color: #fff;
   font-size: 1rem;
+}
+
+.service-requests-sidebar-header small {
+  flex: 0 0 auto;
+  max-width: 8.5rem;
+  padding: 0.24rem 0.42rem;
+  border-radius: 999px;
+  border: 1px solid rgba(226, 232, 240, 0.12);
+  background: rgba(226, 232, 240, 0.07);
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.62rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: right;
 }
 
 .service-requests-sidebar-panel p {
@@ -1170,9 +1191,34 @@
   gap: 0.45rem;
 }
 
+.service-requests-timeframes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.service-requests-timeframes button {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.68);
+  padding: 0.42rem 0.44rem;
+  font-size: 0.7rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.service-requests-timeframes button:hover,
+.service-requests-timeframes button.active {
+  border-color: rgba(226, 232, 240, 0.32);
+  background: rgba(226, 232, 240, 0.14);
+  color: #f8fafc;
+}
+
 .service-requests-legend {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.38rem;
   padding: 0.6rem;
   border-radius: 8px;

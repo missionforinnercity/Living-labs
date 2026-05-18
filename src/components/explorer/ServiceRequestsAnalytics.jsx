@@ -42,9 +42,14 @@ const COMPLAINT_GROUP_COLORS = {
   Sewage: '#2563eb',
   Water: '#06b6d4',
   Electricity: '#f59e0b',
-  'Roads & Stormwater': '#a855f7',
+  'Stormwater & Drainage': '#0ea5e9',
+  'Roads & Pavements': '#a855f7',
+  'Traffic & Parking': '#f97316',
   'Waste & Cleansing': '#22c55e',
-  'Public Realm': '#84cc16',
+  'Parks & Trees': '#84cc16',
+  'Safety & Bylaw': '#ef4444',
+  'Property & Planning': '#ec4899',
+  'Animals & Pests': '#14b8a6',
   Other: '#94a3b8'
 }
 

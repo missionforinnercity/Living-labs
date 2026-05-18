@@ -61,9 +61,14 @@ const SERVICE_REQUEST_GROUPS = [
   { id: 'Sewage', color: '#2563eb', soft: 'rgba(37,99,235,0.12)', mid: 'rgba(37,99,235,0.46)', strong: 'rgba(37,99,235,0.86)' },
   { id: 'Water', color: '#06b6d4', soft: 'rgba(6,182,212,0.12)', mid: 'rgba(6,182,212,0.46)', strong: 'rgba(6,182,212,0.86)' },
   { id: 'Electricity', color: '#f59e0b', soft: 'rgba(245,158,11,0.12)', mid: 'rgba(245,158,11,0.48)', strong: 'rgba(245,158,11,0.9)' },
-  { id: 'Roads & Stormwater', color: '#a855f7', soft: 'rgba(168,85,247,0.12)', mid: 'rgba(168,85,247,0.48)', strong: 'rgba(168,85,247,0.9)' },
+  { id: 'Stormwater & Drainage', color: '#0ea5e9', soft: 'rgba(14,165,233,0.12)', mid: 'rgba(14,165,233,0.46)', strong: 'rgba(14,165,233,0.86)' },
+  { id: 'Roads & Pavements', color: '#a855f7', soft: 'rgba(168,85,247,0.12)', mid: 'rgba(168,85,247,0.48)', strong: 'rgba(168,85,247,0.9)' },
+  { id: 'Traffic & Parking', color: '#f97316', soft: 'rgba(249,115,22,0.12)', mid: 'rgba(249,115,22,0.48)', strong: 'rgba(249,115,22,0.9)' },
   { id: 'Waste & Cleansing', color: '#22c55e', soft: 'rgba(34,197,94,0.12)', mid: 'rgba(34,197,94,0.46)', strong: 'rgba(34,197,94,0.86)' },
-  { id: 'Public Realm', color: '#84cc16', soft: 'rgba(132,204,22,0.12)', mid: 'rgba(132,204,22,0.46)', strong: 'rgba(132,204,22,0.86)' },
+  { id: 'Parks & Trees', color: '#84cc16', soft: 'rgba(132,204,22,0.12)', mid: 'rgba(132,204,22,0.46)', strong: 'rgba(132,204,22,0.86)' },
+  { id: 'Safety & Bylaw', color: '#ef4444', soft: 'rgba(239,68,68,0.12)', mid: 'rgba(239,68,68,0.46)', strong: 'rgba(239,68,68,0.86)' },
+  { id: 'Property & Planning', color: '#ec4899', soft: 'rgba(236,72,153,0.12)', mid: 'rgba(236,72,153,0.46)', strong: 'rgba(236,72,153,0.86)' },
+  { id: 'Animals & Pests', color: '#14b8a6', soft: 'rgba(20,184,166,0.12)', mid: 'rgba(20,184,166,0.46)', strong: 'rgba(20,184,166,0.86)' },
   { id: 'Other', color: '#94a3b8', soft: 'rgba(148,163,184,0.1)', mid: 'rgba(148,163,184,0.36)', strong: 'rgba(148,163,184,0.68)' }
 ]
 
@@ -3052,13 +3057,13 @@ const ExplorerMap = ({
               paint={{
                 'line-color': 'rgba(148,163,184,0.28)',
                 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.65, 16, 1.6],
-                'line-opacity': ['case', ['>', ['coalesce', ['get', 'request_count'], 0], 0], 0.18, 0.08]
+                'line-opacity': ['case', ['>', ['coalesce', ['to-number', ['get', 'request_count']], 0], 0], 0.18, 0.08]
               }}
             />
             <Layer
               id="service-request-segments-layer"
               type="line"
-              filter={['>', ['coalesce', ['get', 'request_count'], 0], 0]}
+              filter={['>', ['coalesce', ['to-number', ['get', 'request_count']], 0], 0]}
               paint={{
                 'line-color': [
                   'match',
@@ -3067,10 +3072,19 @@ const ExplorerMap = ({
                   '#94a3b8'
                 ],
                 'line-width': [
-                  'interpolate', ['linear'], ['coalesce', ['get', 'request_count'], 0],
-                  1, ['interpolate', ['linear'], ['zoom'], 11, 2.2, 16, 5],
-                  6, ['interpolate', ['linear'], ['zoom'], 11, 4, 16, 8],
-                  18, ['interpolate', ['linear'], ['zoom'], 11, 7, 16, 13]
+                  'interpolate', ['linear'], ['zoom'],
+                  11, [
+                    'interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'request_count']], 0],
+                    1, 2.2,
+                    6, 4,
+                    18, 7
+                  ],
+                  16, [
+                    'interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'request_count']], 0],
+                    1, 5,
+                    6, 8,
+                    18, 13
+                  ]
                 ],
                 'line-opacity': 0.94
               }}
