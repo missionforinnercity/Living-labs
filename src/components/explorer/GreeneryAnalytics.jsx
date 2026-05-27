@@ -210,7 +210,7 @@ const GreeneryAnalytics = ({
           <span className="greenery-kicker">Green Access Explorer</span>
           <h2>Street-to-park access, destination quality, and gap detection</h2>
           <p>
-            Streets are coloured by quality-adjusted walk time to greenery. Click one street for a deep dive, then click a second to compare.
+            Streets are coloured by quality-adjusted walk time to greenery. Click any street to compare its access profile with the citywide baseline.
           </p>
         </div>
         <div className="greenery-hero-score">
@@ -262,7 +262,7 @@ const GreeneryAnalytics = ({
 
       <div className="greenery-stat-grid">
         <div className="greenery-stat-card">
-          <span>Mapped street segments</span>
+          <span>Mapped areas</span>
           <strong>{headline.segments.toLocaleString()}</strong>
         </div>
         <div className="greenery-stat-card">
@@ -409,7 +409,7 @@ const GreeneryAnalytics = ({
               </div>
               <div className="greenery-story-list">
                 <p>
-                  <strong>{formatPercent(100 - headline.accessGapShare)}</strong> of mapped segments are not flagged as residential access gaps, which means the shortfall is concentrated rather than universal.
+                  <strong>{formatPercent(100 - headline.accessGapShare)}</strong> of mapped areas are not flagged as residential access gaps, which means the shortfall is concentrated rather than universal.
                 </p>
                 <p>
                   The typical street reaches usable greenery in <strong>{formatMinutes(headline.avgWalk)}</strong>, but quality adjustments stretch the citywide average to <strong>{formatMinutes(headline.avgAdjusted)}</strong>.

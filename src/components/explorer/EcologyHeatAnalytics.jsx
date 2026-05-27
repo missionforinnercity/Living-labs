@@ -278,7 +278,7 @@ const EcologyHeatAnalytics = ({
         <div className="eco-legend-notes">
           <div><strong>Active layer:</strong> {activeMetric.description}.</div>
           <div><strong>Colour ramp:</strong> Each layer now uses its own clearer gradient instead of a heavy blur.</div>
-          <div><strong>Interaction:</strong> Click one section to inspect it, then click another to compare both over time.</div>
+          <div><strong>Interaction:</strong> Click any section to inspect it against the city-wide heat baseline.</div>
         </div>
       </div>
 
@@ -298,7 +298,7 @@ const EcologyHeatAnalytics = ({
       <div className="eco-selection-card">
         <div className="eco-section-head">
           <span>Selection</span>
-          <strong>{comparisonFeature ? 'Compare mode' : selectedFeature ? 'Single section' : 'None yet'}</strong>
+          <strong>{selectedFeature ? 'City comparison' : 'None yet'}</strong>
         </div>
 
         {selectedFeature ? (
@@ -307,7 +307,7 @@ const EcologyHeatAnalytics = ({
               <div className="eco-selection-panel primary">
                 <div className="eco-selection-heading">
                   <span className="eco-role-badge warm">A</span>
-                  <div className="eco-selection-label">Primary Segment</div>
+                  <div className="eco-selection-label">Selected Section</div>
                 </div>
                 <h4>{selectionLabel(selectedFeature)}</h4>
                 <p>
@@ -329,39 +329,13 @@ const EcologyHeatAnalytics = ({
                 )}
               </div>
 
-              {comparisonFeature && (
-                <div className="eco-selection-panel compare">
-                  <div className="eco-selection-heading">
-                    <span className="eco-role-badge cool">B</span>
-                    <div className="eco-selection-label">Compare Segment</div>
-                  </div>
-                  <h4>{selectionLabel(comparisonFeature)}</h4>
-                  <p>Overlay charts below to contrast heat pressure, refuge, and vegetation condition.</p>
-                  <div className="eco-pill-grid">
-                    {metricCards(comparisonFeature).map((metric) => (
-                      <div key={metric.label} className="eco-pill">
-                        <span>{metric.label}</span>
-                        <strong>{metric.value}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  {comparisonDelta && (
-                    <div className="eco-selection-delta">
-                      <span>Since {comparisonSeries[0]?.analysis_year}</span>
-                      <strong>{comparisonDelta.urbanHeat >= 0 ? '+' : ''}{comparisonDelta.urbanHeat.toFixed(1)} heat score</strong>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
-            {!comparisonFeature && (
-              <div className="eco-selection-hint">
-                Click a second section on the map to overlay its charts against {selectionLabel(selectedFeature)}.
-              </div>
-            )}
+            <div className="eco-selection-hint">
+              The bottom panel compares this section with city averages, ranks, distributions, and heat/canopy trends.
+            </div>
           </>
         ) : (
-          <p>Click a section in the heat haze to open its thermal profile and compare it against another part of the CBD.</p>
+          <p>Click a section in the heat haze to open its thermal profile against the whole-city baseline.</p>
         )}
       </div>
     </aside>

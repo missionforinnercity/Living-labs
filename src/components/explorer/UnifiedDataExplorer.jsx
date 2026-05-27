@@ -97,6 +97,50 @@ const formatMinutes = (value) => {
   return Number.isFinite(numeric) ? `${numeric.toFixed(1)} min` : '—'
 }
 
+const formatPercent = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${numeric.toFixed(0)}%` : '—'
+}
+
+const average = (values) => {
+  const finite = values.filter(Number.isFinite)
+  return finite.length ? finite.reduce((sum, value) => sum + value, 0) / finite.length : null
+}
+
+const betterThanShare = (values, selected, lowerIsBetter = false) => {
+  const finite = values.filter(Number.isFinite)
+  if (!finite.length || !Number.isFinite(selected)) return null
+  const betterCount = finite.filter((value) => (
+    lowerIsBetter ? value >= selected : value <= selected
+  )).length
+  return (betterCount / finite.length) * 100
+}
+
+const comparativeShareText = (share, positivePhrase, negativePhrase) => {
+  if (!Number.isFinite(share)) return 'Comparison unavailable'
+  if (share >= 50) return `${positivePhrase} ${formatPercent(share)} of mapped city streets`
+  return `${negativePhrase} ${formatPercent(100 - share)} of mapped city streets`
+}
+
+const escapeHtml = (value) => String(value ?? '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;')
+
+const downloadHtmlReport = (filename, content) => {
+  const blob = new Blob([content], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 const formatHeatValue = (value, suffix = '') => {
   const numeric = Number(value)
   return Number.isFinite(numeric) ? `${numeric.toFixed(1)}${suffix}` : '—'
@@ -230,7 +274,6 @@ const LAYER_CATEGORIES = [
   { id: 'missionInterventions', label: 'Mission Interventions', dashboard: 'lighting', dataKey: 'missionInterventions' },
   // Climate layers
   { id: 'heatStreets', label: 'Heat Streets', dashboard: 'climate', dataKey: 'heatStreets' },
-  { id: 'heatGrid', label: 'Heat Grid', dashboard: 'climate', dataKey: 'heatGrid' },
   { id: 'climateShade', label: 'Shade', dashboard: 'climate', dataKey: 'climateShade' },
   { id: 'estimatedWind', label: 'Est. Wind', dashboard: 'climate', dataKey: 'estimatedWind' },
   { id: 'urbanHeatConcrete', label: 'Heat Islands & Cool Islands', dashboard: 'climate', dataKey: 'ecologyHeat' },
@@ -382,7 +425,6 @@ const UnifiedDataExplorer = () => {
     missionInterventions: false,
     // Climate layers
     heatStreets: false,
-    heatGrid: false,
     climateShade: false,
     estimatedWind: false,
     // Environment / greenery layers
@@ -734,18 +776,44 @@ const UnifiedDataExplorer = () => {
       .filter(Boolean)
   }, [greeneryStreetSummaries, selectedGreeneryStreetKeys])
 
+  const greeneryCityStats = useMemo(() => {
+    const streets = Object.values(greeneryStreetSummaries)
+    if (!streets.length) return null
+    const adjustedValues = streets.map((street) => street.avgAdjustedMinutes).filter(Number.isFinite)
+    const walkValues = streets.map((street) => street.avgWalkMinutes).filter(Number.isFinite)
+    const qualityValues = streets.map((street) => street.avgParkQualityScore).filter(Number.isFinite)
+    const gapValues = streets.map((street) => street.accessGapShare).filter(Number.isFinite)
+    const buildingValues = streets.map((street) => street.avgResidentialBuildings250m).filter(Number.isFinite)
+    const underserved = streets.filter((street) => Number(street.avgAdjustedMinutes) > 15).length
+
+    return {
+      streetCount: streets.length,
+      avgAdjustedMinutes: average(adjustedValues),
+      avgWalkMinutes: average(walkValues),
+      avgParkQualityScore: average(qualityValues),
+      avgAccessGapShare: average(gapValues),
+      avgResidentialBuildings250m: average(buildingValues),
+      underservedShare: (underserved / streets.length) * 100,
+      adjustedValues,
+      walkValues,
+      qualityValues,
+      gapValues,
+      buildingValues
+    }
+  }, [greeneryStreetSummaries])
+
   const greeneryStreetComparisonData = useMemo(() => {
-    const [primary, compare] = selectedGreenerySummaries
-    if (!primary) return null
+    const [primary] = selectedGreenerySummaries
+    if (!primary || !greeneryCityStats) return []
 
     return [
-      { metric: 'Adjusted', primary: primary.avgAdjustedMinutes, compare: compare?.avgAdjustedMinutes ?? null },
-      { metric: 'Walk', primary: primary.avgWalkMinutes, compare: compare?.avgWalkMinutes ?? null },
-      { metric: 'Quality', primary: primary.avgParkQualityScore, compare: compare?.avgParkQualityScore ?? null },
-      { metric: 'Gap share', primary: primary.accessGapShare, compare: compare?.accessGapShare ?? null },
-      { metric: 'Buildings', primary: primary.avgResidentialBuildings250m, compare: compare?.avgResidentialBuildings250m ?? null }
+      { metric: 'Adjusted access', selected: primary.avgAdjustedMinutes, city: greeneryCityStats.avgAdjustedMinutes, target: 5 },
+      { metric: 'Walk time', selected: primary.avgWalkMinutes, city: greeneryCityStats.avgWalkMinutes, target: 5 },
+      { metric: 'Quality score', selected: primary.avgParkQualityScore, city: greeneryCityStats.avgParkQualityScore, target: 70 },
+      { metric: 'Access gap %', selected: primary.accessGapShare, city: greeneryCityStats.avgAccessGapShare, target: 0 },
+      { metric: 'Nearby homes', selected: primary.avgResidentialBuildings250m, city: greeneryCityStats.avgResidentialBuildings250m, target: null }
     ]
-  }, [selectedGreenerySummaries])
+  }, [greeneryCityStats, selectedGreenerySummaries])
 
   const greenerySegmentTrendData = useMemo(() => {
     const [primary, compare] = selectedGreenerySummaries
@@ -801,14 +869,7 @@ const UnifiedDataExplorer = () => {
     if (!streetKey) return
     setEnvDetailGrid(null)
     setEnvPanelMinimized(false)
-    setSelectedGreeneryStreetKeys((current) => {
-      const [primaryKey, compareKey] = current
-      if (!primaryKey) return [streetKey]
-      if (streetKey === primaryKey) return compareKey ? [primaryKey] : [primaryKey]
-      if (streetKey === compareKey) return [primaryKey]
-      if (!compareKey) return [primaryKey, streetKey]
-      return [primaryKey, streetKey]
-    })
+    setSelectedGreeneryStreetKeys([streetKey])
     setGreeneryPanelMinimized(false)
   }, [])
 
@@ -869,6 +930,33 @@ const UnifiedDataExplorer = () => {
     if (!compareSelection?.parentKey) return []
     return ecologyFeatureSeriesById[compareSelection.parentKey] || []
   }, [ecologyFeatureSeriesById, selectedEcologyFeatureKeys])
+
+  const ecologyCityTimeline = useMemo(() => {
+    return Object.entries(ecologyHeatByYear)
+      .map(([yearKey, featureCollection]) => {
+        const features = featureCollection?.features || []
+        if (!features.length) return null
+        const avgMetric = (...keys) => {
+          const values = features
+            .map((feature) => heatMetricValue(feature.properties, ...keys))
+            .filter(Number.isFinite)
+          return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
+        }
+        return {
+          analysis_year: Number(yearKey),
+          urban_heat_score: avgMetric('urban_heat_score'),
+          thermal_percentile: avgMetric('thermal_percentile'),
+          pedestrian_heat_score: avgMetric('pedestrian_heat_score'),
+          cool_island_score: avgMetric('cool_island_score'),
+          health_score: avgMetric('health_score'),
+          priority_score: avgMetric('priority_score'),
+          night_heat_retention_c: avgMetric('night_heat_retention_c', 'retained_heat_score'),
+          effective_canopy_pct: avgMetric('effective_canopy_pct')
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.analysis_year - b.analysis_year)
+  }, [ecologyHeatByYear])
 
   const ecologyCurrentFeatureLookup = useMemo(() => {
     const lookup = {}
@@ -973,14 +1061,7 @@ const UnifiedDataExplorer = () => {
   const openEcologyFeatureDetail = useCallback((featureId) => {
     const featureKey = toEcologyFeatureKey(featureId)
     if (!featureKey) return
-    setSelectedEcologyFeatureKeys((current) => {
-      const [primaryKey, compareKey] = current
-      if (!primaryKey) return [featureKey]
-      if (featureKey === primaryKey) return compareKey ? [primaryKey] : [primaryKey]
-      if (featureKey === compareKey) return [primaryKey]
-      if (!compareKey) return [primaryKey, featureKey]
-      return [primaryKey, featureKey]
-    })
+    setSelectedEcologyFeatureKeys([featureKey])
     setEcologyPanelMinimized(false)
   }, [])
 
@@ -1063,6 +1144,18 @@ const UnifiedDataExplorer = () => {
     setSelectedEcologyFeatureKeys([])
     setEcologyPanelMinimized(false)
   }, [dashboardMode, activeCategory])
+
+  useEffect(() => {
+    if (activeCategory !== 'heatGrid') return
+    setActiveCategory('urbanHeatConcrete')
+    setVisibleLayers((current) => ({
+      ...current,
+      ecologyHeat: true
+    }))
+    setLayerStack((current) => current.filter((item) => item.id !== 'heatGrid'))
+    setSelectedHeatGridFeatureKeys([])
+    setHeatGridPanelMinimized(false)
+  }, [activeCategory])
 
   useEffect(() => {
     const greeneryCategoryActive = dashboardMode === 'environment'
@@ -1851,7 +1944,7 @@ const UnifiedDataExplorer = () => {
                   windSpeedKmh={windSpeedKmh}
                   onWindSpeedKmhChange={setWindSpeedKmh}
                   selectedFeature={selectedEcologyFeature}
-                  comparisonFeature={compareEcologyFeature}
+                  comparisonFeature={null}
                 />
                 {activeCategory === 'urbanHeatConcrete' && selectedEcologyFeature && (
                   <EcologyHeatAnalytics
@@ -1862,8 +1955,8 @@ const UnifiedDataExplorer = () => {
                     onEcologyMetricChange={setEcologyMetric}
                     selectedFeature={selectedEcologyFeature}
                     selectedSeries={selectedEcologyFeatureSeries}
-                    comparisonFeature={compareEcologyFeature}
-                    comparisonSeries={compareEcologyFeatureSeries}
+                    comparisonFeature={null}
+                    comparisonSeries={[]}
                     availableYears={ecologyAvailableYears}
                   />
                 )}
@@ -2818,29 +2911,127 @@ const UnifiedDataExplorer = () => {
 
           {/* ── Greenery detail bottom panel ── */}
           {dashboardMode === 'environment' && selectedGreenerySummaries.length > 0 && activeCategory !== 'urbanHeatConcrete' && (() => {
-            const [primaryStreet, compareStreet] = selectedGreenerySummaries
+            const [primaryStreet] = selectedGreenerySummaries
             const primaryDestinations = greeneryNearestDestinations.find((entry) => entry.streetKey === primaryStreet.streetKey)?.destinations || []
-            const compareDestinations = compareStreet
-              ? (greeneryNearestDestinations.find((entry) => entry.streetKey === compareStreet.streetKey)?.destinations || [])
-              : []
-            const greeneryRadarData = primaryStreet.radarMetrics.map((metric, index) => ({
+            const greeneryRadarData = primaryStreet.radarMetrics.map((metric) => ({
               metric: metric.metric,
-              primary: metric.value,
-              compare: compareStreet?.radarMetrics?.[index]?.value ?? null
+              selected: metric.value,
+              city: metric.metric === 'Access speed'
+                ? clampRatio(100 - ((greeneryCityStats?.avgAdjustedMinutes || 0) / 18) * 100)
+                : metric.metric === 'Green quality'
+                  ? clampRatio(greeneryCityStats?.avgParkQualityScore || 0)
+                  : metric.metric === 'Gap risk'
+                    ? clampRatio(100 - (greeneryCityStats?.avgAccessGapShare || 0))
+                    : null
             }))
             const qualityKeys = ['very_high', 'high', 'medium', 'low', 'very_low', 'unknown']
             const greeneryQualityCompareData = qualityKeys.map((qualityKey) => ({
               quality: qualityKey.replace(/_/g, ' '),
-              primary: primaryStreet.qualityClasses[qualityKey] || 0,
-              compare: compareStreet?.qualityClasses?.[qualityKey] || 0,
+              selected: primaryStreet.qualityClasses[qualityKey] || 0,
               color: GREENERY_QUALITY_COLORS[qualityKey] || GREENERY_QUALITY_COLORS.unknown
             }))
+            const accessBetterThan = betterThanShare(greeneryCityStats?.adjustedValues || [], primaryStreet.avgAdjustedMinutes, true)
+            const qualityBetterThan = betterThanShare(greeneryCityStats?.qualityValues || [], primaryStreet.avgParkQualityScore, false)
+            const gapBetterThan = betterThanShare(greeneryCityStats?.gapValues || [], primaryStreet.accessGapShare, true)
+            const adjustedTargetGap = Number.isFinite(primaryStreet.avgAdjustedMinutes) ? primaryStreet.avgAdjustedMinutes - 5 : null
+            const qualityTargetGap = Number.isFinite(primaryStreet.avgParkQualityScore) ? primaryStreet.avgParkQualityScore - 70 : null
+            const accessStandingText = comparativeShareText(accessBetterThan, 'faster access than', 'slower access than')
+            const qualityStandingText = comparativeShareText(qualityBetterThan, 'higher green destination quality than', 'lower green destination quality than')
+            const gapStandingText = Number(primaryStreet.accessGapShare) === 0
+              ? 'No mapped residential access gap was detected for this area.'
+              : comparativeShareText(gapBetterThan, 'lower access-gap share than', 'higher access-gap share than')
+            const targetText = Number.isFinite(adjustedTargetGap)
+              ? `${formatMinutes(Math.abs(adjustedTargetGap))} ${adjustedTargetGap <= 0 ? 'inside the 5 minute target' : 'slower than the 5 minute target'}`
+              : 'Target comparison unavailable'
+            const reportChartRows = greeneryStreetComparisonData.map((row) => {
+              const values = [row.selected, row.city, row.target].filter(Number.isFinite)
+              const max = Math.max(...values, 1)
+              const formatter = row.metric.includes('%') ? formatPercent : formatHeatValue
+              const bar = (value, cls) => Number.isFinite(value)
+                ? `<span class="bar ${cls}" style="width:${Math.max(4, Math.min(100, (value / max) * 100))}%"></span>`
+                : ''
+              return `<div class="chart-row">
+                <strong>${escapeHtml(row.metric)}</strong>
+                <div>${bar(row.selected, 'selected')}<small>This area ${formatter(row.selected)}</small></div>
+                <div>${bar(row.city, 'city')}<small>City average ${formatter(row.city)}</small></div>
+                ${Number.isFinite(row.target) ? `<div>${bar(row.target, 'target')}<small>Target ${formatter(row.target)}</small></div>` : ''}
+              </div>`
+            }).join('')
+            const reportRows = greeneryStreetComparisonData.map((row) => (
+              `<tr><td>${escapeHtml(row.metric)}</td><td>${escapeHtml(row.metric.includes('%') ? formatPercent(row.selected) : formatHeatValue(row.selected))}</td><td>${escapeHtml(row.metric.includes('%') ? formatPercent(row.city) : formatHeatValue(row.city))}</td><td>${Number.isFinite(row.target) ? escapeHtml(row.metric.includes('%') ? formatPercent(row.target) : formatHeatValue(row.target)) : 'Context only'}</td></tr>`
+            )).join('')
+            const greeneryReport = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Greenery Access Report - ${escapeHtml(primaryStreet.displayName)}</title>
+  <style>
+    body { font-family: Inter, Arial, sans-serif; margin: 36px; color: #172033; line-height: 1.45; background: #fff; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin: 28px 0 10px; font-size: 18px; }
+    .meta, .note { color: #56657a; }
+    .plain-list { margin: 18px 0 22px; padding-left: 20px; }
+    .plain-list li { margin: 8px 0; }
+    .score-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+    .score { padding: 14px; border: 1px solid #d7dde7; border-radius: 10px; background: #f8fafc; }
+    .score span { display: block; color: #56657a; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    .score strong { display: block; margin-top: 6px; font-size: 22px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid #d7dde7; text-align: left; }
+    th { background: #f1f5f9; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #475569; }
+    td:not(:first-child), th:not(:first-child) { text-align: right; }
+    .chart-row { margin: 14px 0; padding: 12px; border: 1px solid #d7dde7; border-radius: 10px; background: #f8fafc; }
+    .chart-row strong { display: block; margin-bottom: 8px; }
+    .chart-row div { display: grid; grid-template-columns: 1fr 150px; align-items: center; gap: 10px; margin: 6px 0; }
+    .bar { display: block; height: 12px; border-radius: 999px; }
+    .selected { background: #f97316; }
+    .city { background: #38bdf8; }
+    .target { background: #22c55e; }
+    footer { margin-top: 36px; color: #64748b; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Greenery Access Report</h1>
+  <div class="meta">${escapeHtml(primaryStreet.displayName)} | compared with ${greeneryCityStats?.streetCount || 0} mapped streets</div>
+  <ul class="plain-list">
+    <li>This area has ${escapeHtml(accessStandingText)}.</li>
+    <li>Its adjusted access time is ${escapeHtml(targetText)}.</li>
+    <li>It has ${escapeHtml(qualityStandingText)}.</li>
+    <li>${escapeHtml(gapStandingText)}</li>
+  </ul>
+  <div class="score-grid">
+    <div class="score"><span>Adjusted access</span><strong>${formatMinutes(primaryStreet.avgAdjustedMinutes)}</strong></div>
+    <div class="score"><span>City average</span><strong>${formatMinutes(greeneryCityStats?.avgAdjustedMinutes)}</strong></div>
+    <div class="score"><span>Quality</span><strong>${formatHeatValue(primaryStreet.avgParkQualityScore)}/100</strong></div>
+    <div class="score"><span>Access gap</span><strong>${formatPercent(primaryStreet.accessGapShare)}</strong></div>
+  </div>
+  <h2>Comparison Chart</h2>
+  ${reportChartRows}
+  <h2>What Access Gap Means</h2>
+  <p class="note">Access gap is the share of mapped residential street areas flagged as having weak access to useful greenery. A city average of ${formatPercent(greeneryCityStats?.avgAccessGapShare)} means the access-gap flag is rare in this dataset, not that greenery access is perfect everywhere. It is separate from adjusted walking time, which is why an area can have a slow access time but still show a 0% access-gap share.</p>
+  <h2>Comparison Table</h2>
+  <table>
+    <thead><tr><th>Measure</th><th>This area</th><th>City average</th><th>Target or meaning</th></tr></thead>
+    <tbody>${reportRows}</tbody>
+  </table>
+  <h2>Nearest Green Destinations</h2>
+  <ul class="plain-list">
+    ${primaryDestinations.slice(0, 5).map((destination) => `<li>${escapeHtml(destination.name)} - ${escapeHtml(String(destination.type).replace(/_/g, ' '))}, ${destination.distanceM != null ? `${Math.round(destination.distanceM)} m away` : 'distance unavailable'}, quality ${Number.isFinite(destination.qualityScore) ? Math.round(destination.qualityScore) + '/100' : 'unrated'}</li>`).join('')}
+  </ul>
+  <p class="note">The 5 minute target is a dashboard planning benchmark for easy access to usable greenery. Quality-adjusted time includes both walking time and destination quality.</p>
+  <footer>Generated by Mission Urban Lab.</footer>
+</body>
+</html>`
+            const handleDownloadGreeneryReport = () => {
+              const safeName = String(primaryStreet.displayName || 'greenery-area').replace(/[^a-z0-9_-]+/gi, '-')
+              downloadHtmlReport(`greenery-access-report-${safeName}.html`, greeneryReport)
+            }
 
             return (
               <div
                 ref={greeneryDetailPanelRef}
                 className={`bottom-panel greenery-bottom-panel ${greeneryPanelMinimized ? 'greenery-minimized' : ''}`}
-                style={{ marginRight: effectiveSidebarWidth + 32 }}
+                style={{ right: effectiveSidebarWidth + 32 }}
               >
                 <div className="panel-header greenery-panel-header">
                   <div className="greenery-panel-headline">
@@ -2850,23 +3041,12 @@ const UnifiedDataExplorer = () => {
                     <div>
                       <h3>{primaryStreet.displayName} — Greenery Access Detail</h3>
                       <div className="greenery-panel-subtitle">
-                        {primaryStreet.segmentCount} mapped segments · adjusted access {formatMinutes(primaryStreet.avgAdjustedMinutes)}
-                      </div>
-                      <div className="ecology-comparison-key">
-                        <div className="ecology-comparison-key-item">
-                          <span className="ecology-role-badge warm">A</span>
-                          <span>{primaryStreet.displayName}</span>
-                        </div>
-                        {compareStreet && (
-                          <div className="ecology-comparison-key-item">
-                            <span className="ecology-role-badge cool">B</span>
-                            <span>{compareStreet.displayName}</span>
-                          </div>
-                        )}
+                        Faster access than {formatPercent(accessBetterThan)} of mapped city streets · adjusted access {formatMinutes(primaryStreet.avgAdjustedMinutes)}
                       </div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <button onClick={handleDownloadGreeneryReport} className="ecology-download-btn" title="Download greenery access report">Download report</button>
                     <button
                       onClick={() => setGreeneryPanelMinimized((current) => !current)}
                       className="close-btn"
@@ -2883,20 +3063,20 @@ const UnifiedDataExplorer = () => {
                   <div className="charts-container greenery-charts-container">
                     <div className="env-detail-summary-row ecology-summary-row greenery-summary-row">
                       <div className="env-detail-stat">
-                        <span className="env-detail-stat-label">Primary adjusted</span>
+                        <span className="env-detail-stat-label">Adjusted access</span>
                         <strong>{formatMinutes(primaryStreet.avgAdjustedMinutes)}</strong>
                       </div>
                       <div className="env-detail-stat">
-                        <span className="env-detail-stat-label">Primary quality</span>
+                        <span className="env-detail-stat-label">City average</span>
+                        <strong>{formatMinutes(greeneryCityStats?.avgAdjustedMinutes)}</strong>
+                      </div>
+                      <div className="env-detail-stat">
+                        <span className="env-detail-stat-label">Quality</span>
                         <strong>{Math.round(primaryStreet.avgParkQualityScore || 0)}/100</strong>
                       </div>
                       <div className="env-detail-stat">
                         <span className="env-detail-stat-label">Gap share</span>
                         <strong>{primaryStreet.accessGapShare.toFixed(0)}%</strong>
-                      </div>
-                      <div className="env-detail-stat">
-                        <span className="env-detail-stat-label">Compare street</span>
-                        <strong>{compareStreet ? compareStreet.displayName : 'Click another street'}</strong>
                       </div>
                     </div>
 
@@ -2904,49 +3084,37 @@ const UnifiedDataExplorer = () => {
                       <div className="greenery-detail-column">
                         <div className="ecology-chart-card">
                           <div className="ecology-chart-head">
-                            <span>Street Comparison</span>
-                            <strong>Average access metrics</strong>
+                            <span>City Comparison</span>
+                            <strong>This area, city average, target</strong>
                           </div>
                           <ResponsiveContainer width="100%" height={240}>
-                            <BarChart data={greeneryStreetComparisonData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                            <BarChart data={greeneryStreetComparisonData} layout="vertical" margin={{ top: 8, right: 14, left: 34, bottom: 0 }}>
                               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                              <XAxis dataKey="metric" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                              <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                              <XAxis type="number" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+                              <YAxis type="category" dataKey="metric" stroke="#94a3b8" tick={{ fontSize: 11 }} width={104} />
                               <Tooltip
                                 contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
-                                formatter={(value, name) => {
-                                  const label = name === 'primary' ? primaryStreet.displayName : compareStreet?.displayName || 'Compare'
-                                  return [Number(value).toFixed(1), label]
-                                }}
+                                formatter={(value, name) => [Number(value).toFixed(1), name === 'selected' ? 'This area' : name === 'city' ? 'City average' : 'Target']}
                               />
                               <Legend wrapperStyle={{ fontSize: 11 }} />
-                              <Bar dataKey="primary" fill="#22c55e" radius={[8, 8, 0, 0]} name={primaryStreet.displayName} />
-                              {compareStreet && <Bar dataKey="compare" fill="#38bdf8" radius={[8, 8, 0, 0]} name={compareStreet.displayName} />}
+                              <Bar dataKey="selected" fill="#f97316" radius={[0, 8, 8, 0]} name="This area" />
+                              <Bar dataKey="city" fill="#38bdf8" radius={[0, 8, 8, 0]} name="City average" />
+                              <Bar dataKey="target" fill="#94a3b8" radius={[0, 8, 8, 0]} name="Target" />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
 
                         <div className="ecology-chart-card">
                           <div className="ecology-chart-head">
-                            <span>Segment Profile</span>
-                            <strong>Adjusted access time by segment</strong>
+                            <span>Access Standing</span>
+                            <strong>How this area ranks</strong>
                           </div>
-                          <ResponsiveContainer width="100%" height={240}>
-                            <LineChart data={greenerySegmentTrendData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                              <XAxis dataKey="segment" stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                              <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} />
-                              <Tooltip
-                                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
-                                formatter={(value, name) => {
-                                  const label = name === 'primaryAdjusted' ? primaryStreet.displayName : compareStreet?.displayName || 'Compare'
-                                  return [value != null ? `${Number(value).toFixed(1)} min` : '—', label]
-                                }}
-                              />
-                              <Line type="monotone" dataKey="primaryAdjusted" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 2 }} connectNulls />
-                              {compareStreet && <Line type="monotone" dataKey="compareAdjusted" stroke="#38bdf8" strokeWidth={2.5} dot={{ r: 2 }} connectNulls />}
-                            </LineChart>
-                          </ResponsiveContainer>
+                          <div className="greenery-standing-grid">
+                            <div><span>Access</span><strong>{formatPercent(accessBetterThan)}</strong><small>{accessBetterThan >= 50 ? 'faster access than mapped city streets' : 'slower than most mapped city streets'}</small></div>
+                            <div><span>Quality</span><strong>{formatPercent(qualityBetterThan)}</strong><small>higher destination quality than city streets</small></div>
+                            <div><span>Gap flag</span><strong>{formatPercent(primaryStreet.accessGapShare)}</strong><small>share of this area flagged as residential access gap</small></div>
+                            <div><span>5 min target</span><strong>{Number.isFinite(adjustedTargetGap) ? formatMinutes(Math.abs(adjustedTargetGap)) : '—'}</strong><small>{Number.isFinite(adjustedTargetGap) ? (adjustedTargetGap <= 0 ? 'inside target' : 'slower than target') : 'target comparison unavailable'}</small></div>
+                          </div>
                         </div>
                       </div>
 
@@ -2961,8 +3129,8 @@ const UnifiedDataExplorer = () => {
                               <PolarGrid stroke="rgba(255,255,255,0.12)" />
                               <PolarAngleAxis dataKey="metric" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
                               <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} />
-                              <Radar dataKey="primary" stroke="#22c55e" fill="#22c55e" fillOpacity={0.32} />
-                              {compareStreet && <Radar dataKey="compare" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.18} />}
+                              <Radar dataKey="selected" stroke="#f97316" fill="#f97316" fillOpacity={0.28} name="This area" />
+                              <Radar dataKey="city" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.14} name="City average" />
                             </RadarChart>
                           </ResponsiveContainer>
                         </div>
@@ -2979,10 +3147,9 @@ const UnifiedDataExplorer = () => {
                               <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} allowDecimals={false} />
                               <Tooltip
                                 contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
-                                formatter={(value, name) => [Number(value), name === 'primary' ? primaryStreet.displayName : compareStreet?.displayName || 'Compare']}
+                                formatter={(value) => [Number(value), 'This area']}
                               />
-                              <Bar dataKey="primary" fill="#22c55e" radius={[8, 8, 0, 0]} />
-                              {compareStreet && <Bar dataKey="compare" fill="#38bdf8" radius={[8, 8, 0, 0]} />}
+                              <Bar dataKey="selected" fill="#94a3b8" radius={[8, 8, 0, 0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -3010,27 +3177,9 @@ const UnifiedDataExplorer = () => {
                       </div>
 
                       <div className="ecology-rank-card">
-                        <span>Nearest Green Destinations</span>
-                        <strong>{compareStreet ? compareStreet.displayName : 'Comparison slot'}</strong>
-                        <div className="greenery-destination-list">
-                          {(compareStreet ? compareDestinations : []).map((destination) => (
-                            <div key={`${compareStreet.streetKey}-${destination.name}`} className="greenery-destination-item">
-                              <div>
-                                <strong>{destination.name}</strong>
-                                <small>{String(destination.type).replace(/_/g, ' ')}</small>
-                              </div>
-                              <div className="greenery-destination-metrics">
-                                <span style={{ color: destination.color }}>{destination.qualityScore ? `${Math.round(destination.qualityScore)}/100` : '—'}</span>
-                                <small>{destination.distanceM != null ? `${Math.round(destination.distanceM)} m` : '—'}</small>
-                              </div>
-                            </div>
-                          ))}
-                          {!compareStreet && (
-                            <div className="greenery-destination-empty">
-                              Click a second street to compare destination reach, quality mix, and segment performance.
-                            </div>
-                          )}
-                        </div>
+                        <span>City Context</span>
+                        <strong>{greeneryCityStats?.streetCount?.toLocaleString() || '—'} mapped streets</strong>
+                        <p>The city average quality-adjusted access time is {formatMinutes(greeneryCityStats?.avgAdjustedMinutes)}. The city average access-gap flag is {formatPercent(greeneryCityStats?.avgAccessGapShare)}, meaning this flag is rare and separate from walking-time performance.</p>
                       </div>
                     </div>
                   </div>
@@ -3297,8 +3446,7 @@ const UnifiedDataExplorer = () => {
               <EcologyHeatDetailPanel
                 featureSeries={selectedEcologyFeatureSeries}
                 currentFeature={selectedEcologyFeature}
-                compareFeature={compareEcologyFeature}
-                compareSeries={compareEcologyFeatureSeries}
+                cityTimeline={ecologyCityTimeline}
                 currentYearData={ecologyCurrentData}
                 selectedYear={ecologyYear}
                 sidebarWidth={effectiveSidebarWidth}

@@ -3,15 +3,15 @@
   flex-direction: column;
   gap: 14px;
   padding: 14px;
-  color: #e5efe7;
+  color: #e2e8f0;
 }
 
 .greenery-empty {
   padding: 24px 18px;
-  border-radius: 18px;
-  background: rgba(10, 24, 18, 0.55);
-  border: 1px solid rgba(52, 211, 153, 0.16);
-  color: #d1fae5;
+  border-radius: 14px;
+  background: rgba(71, 85, 105, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
 }
 
 .greenery-hero {
@@ -19,13 +19,12 @@
   grid-template-columns: 1fr;
   gap: 14px;
   padding: 18px;
-  border-radius: 22px;
+  border-radius: 16px;
   background:
-    radial-gradient(circle at top right, rgba(34, 197, 94, 0.18), transparent 28%),
-    radial-gradient(circle at bottom left, rgba(132, 204, 22, 0.18), transparent 38%),
-    linear-gradient(155deg, rgba(7, 24, 18, 0.92), rgba(18, 52, 36, 0.82));
-  border: 1px solid rgba(52, 211, 153, 0.18);
-  box-shadow: 0 20px 48px rgba(4, 12, 9, 0.24);
+    linear-gradient(155deg, rgba(148, 163, 184, 0.18), rgba(71, 85, 105, 0.18)),
+    rgba(15, 23, 42, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.2);
 }
 
 .greenery-kicker {
@@ -35,19 +34,19 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #86efac;
+  color: #94a3b8;
 }
 
 .greenery-hero h2 {
   margin: 0 0 8px;
   font-size: 1.18rem;
   line-height: 1.25;
-  color: #f0fdf4;
+  color: #f8fafc;
 }
 
 .greenery-hero p {
   margin: 0;
-  color: #b7d3bf;
+  color: #cbd5e1;
   line-height: 1.55;
   font-size: 0.92rem;
 }
@@ -55,9 +54,9 @@
 .greenery-hero-score {
   min-width: 0;
   padding: 16px 14px;
-  border-radius: 18px;
-  background: rgba(240, 253, 244, 0.06);
-  border: 1px solid rgba(240, 253, 244, 0.1);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -68,12 +67,12 @@
 .greenery-hero-score span {
   font-size: 1.75rem;
   font-weight: 800;
-  color: #dcfce7;
+  color: #f8fafc;
 }
 
 .greenery-hero-score small {
   margin-top: 6px;
-  color: #9cc6a8;
+  color: #94a3b8;
   line-height: 1.4;
 }
 
@@ -100,19 +99,19 @@
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
-  color: #dcfce7;
+  color: #e2e8f0;
   font-size: 0.84rem;
   font-weight: 600;
 }
 
 .greenery-toggle input {
-  accent-color: #22c55e;
+  accent-color: #94a3b8;
 }
 
 .greenery-insights-btn {
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  background: rgba(34, 197, 94, 0.12);
-  color: #dcfce7;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
   border-radius: 14px;
   padding: 10px 14px;
   font-weight: 700;
@@ -120,7 +119,7 @@
 }
 
 .greenery-insights-btn:hover {
-  background: rgba(34, 197, 94, 0.18);
+  background: rgba(148, 163, 184, 0.18);
 }
 
 .greenery-mode-switch {
@@ -135,7 +134,7 @@
 .greenery-mode-btn {
   border: none;
   background: transparent;
-  color: #bfd0c4;
+  color: #cbd5e1;
   padding: 9px 12px;
   border-radius: 10px;
   font-weight: 700;
@@ -143,8 +142,8 @@
 }
 
 .greenery-mode-btn.active {
-  background: rgba(34, 197, 94, 0.16);
-  color: #ecfdf5;
+  background: rgba(148, 163, 184, 0.2);
+  color: #f8fafc;
 }
 
 .greenery-stat-grid,
@@ -164,7 +163,7 @@
 .greenery-panel {
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  background: linear-gradient(165deg, rgba(14, 26, 23, 0.88), rgba(16, 32, 26, 0.74));
+  background: rgba(71, 85, 105, 0.22);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
@@ -176,7 +175,7 @@
 .greenery-stat-card span,
 .greenery-insight-strip span {
   display: block;
-  color: #97af9f;
+  color: #94a3b8;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -188,7 +187,7 @@
 .greenery-insight-strip strong {
   display: block;
   margin-top: 8px;
-  color: #f0fdf4;
+  color: #f8fafc;
   font-size: 1.05rem;
   line-height: 1.15;
   overflow-wrap: anywhere;
@@ -200,7 +199,7 @@
 
 .greenery-insight-strip > div {
   padding: 13px 14px;
-  background: linear-gradient(165deg, rgba(18, 41, 31, 0.85), rgba(10, 24, 18, 0.7));
+  background: rgba(100, 116, 139, 0.16);
 }
 
 .greenery-chart-grid {
@@ -229,7 +228,7 @@
 }
 
 .greenery-panel-head span {
-  color: #86efac;
+  color: #94a3b8;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -265,7 +264,7 @@
 
 .greenery-legend-item small {
   flex: 1;
-  color: #bfd0c4;
+  color: #cbd5e1;
   text-transform: capitalize;
 }
 
@@ -285,12 +284,12 @@
   padding: 12px 13px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
-  color: #d3e6d7;
+  color: #cbd5e1;
   line-height: 1.55;
 }
 
 .greenery-story-list strong {
-  color: #f0fdf4;
+  color: #f8fafc;
 }
 
 .greenery-definitions {
@@ -303,18 +302,18 @@
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  background: linear-gradient(165deg, rgba(18, 33, 27, 0.92), rgba(14, 24, 20, 0.78));
+  background: rgba(71, 85, 105, 0.22);
 }
 
 .greenery-definition-card strong {
   display: block;
-  color: #dcfce7;
+  color: #f8fafc;
   margin-bottom: 6px;
 }
 
 .greenery-definition-card p {
   margin: 0;
-  color: #b7d3bf;
+  color: #cbd5e1;
   line-height: 1.5;
   font-size: 0.86rem;
 }
@@ -328,7 +327,7 @@
 }
 
 .greenery-ranking-card--warning {
-  background: linear-gradient(165deg, rgba(43, 22, 9, 0.9), rgba(34, 24, 12, 0.76));
+  background: rgba(100, 116, 139, 0.18);
 }
 
 .greenery-ranking-row {
@@ -345,18 +344,18 @@
 
 .greenery-ranking-row strong {
   display: block;
-  color: #f0fdf4;
+  color: #f8fafc;
 }
 
 .greenery-ranking-row small {
   display: block;
   margin-top: 4px;
-  color: #9fb5a5;
+  color: #94a3b8;
 }
 
 .greenery-ranking-row span {
   white-space: nowrap;
-  color: #dcfce7;
+  color: #e2e8f0;
   font-weight: 700;
 }
 

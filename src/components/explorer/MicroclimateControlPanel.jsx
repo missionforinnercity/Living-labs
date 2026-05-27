@@ -2,7 +2,6 @@ import React, { useMemo } from 'react'
 
 const CLIMATE_LAYERS = [
   { id: 'urbanHeatConcrete', label: 'Heat Zones', detail: 'Adaptive zone ranking' },
-  { id: 'heatGrid', label: 'Heat Grid', detail: 'Adaptive cell ranking' },
   { id: 'climateShade', label: 'Shade', detail: 'DB time slice' },
   { id: 'estimatedWind', label: 'Wind', detail: 'DB wind scenario' },
   { id: 'heatStreets', label: 'Heat Streets', detail: 'Pedestrian exposure' },

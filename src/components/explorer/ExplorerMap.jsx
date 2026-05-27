@@ -3982,22 +3982,16 @@ const ExplorerMap = ({
           <div className="ecology-map-kicker">{ecologyMetricConfig.label}</div>
           <strong>
             {selectedEcologyPrimaryKey
-              ? `Tracking #${selectedEcologyPrimaryKey}${selectedEcologyCompareKey ? ` vs #${selectedEcologyCompareKey}` : ''}`
+              ? `Tracking #${selectedEcologyPrimaryKey}`
               : `${ecologyHeatPolygonData?.features?.length || 0} mapped sections`}
           </strong>
-          <p>{ecologyMetricConfig.description}. Click once to inspect a section, then click another one to compare.</p>
+          <p>{ecologyMetricConfig.description}. Click any section to compare it with the city baseline.</p>
           {(selectedEcologyPrimaryKey || selectedEcologyCompareKey) && (
             <div className="ecology-map-compare-key">
               {selectedEcologyPrimaryKey && (
                 <div className="ecology-map-compare-item">
                   <span className="ecology-map-compare-badge warm">A</span>
-                  <span>Primary segment</span>
-                </div>
-              )}
-              {selectedEcologyCompareKey && (
-                <div className="ecology-map-compare-item">
-                  <span className="ecology-map-compare-badge cool">B</span>
-                  <span>Compare segment</span>
+                  <span>Selected section</span>
                 </div>
               )}
             </div>

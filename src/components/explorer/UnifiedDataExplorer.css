@@ -1552,7 +1552,7 @@
 .ecology-detail-callout {
   padding: 12px 14px;
   border-radius: 10px;
-  background: rgba(249, 115, 22, 0.08);
+  background: rgba(255, 247, 237, 0.1);
   border: 1px solid rgba(249, 115, 22, 0.18);
   color: #e2e8f0;
   line-height: 1.5;
@@ -1560,6 +1560,74 @@
 
 .ecology-detail-callout p {
   margin: 0;
+}
+
+.ecology-comfort-panel {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(71, 85, 105, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ecology-comfort-panel p {
+  margin: -2px 0 12px;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ecology-comfort-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ecology-comfort-card {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ecology-comfort-card.good {
+  border-color: rgba(34, 197, 94, 0.22);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.ecology-comfort-card.watch {
+  border-color: rgba(250, 204, 21, 0.22);
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.ecology-comfort-card.hot {
+  border-color: rgba(249, 115, 22, 0.26);
+  background: rgba(249, 115, 22, 0.09);
+}
+
+.ecology-comfort-card span {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.ecology-comfort-card strong {
+  display: block;
+  margin-top: 5px;
+  color: #f8fafc;
+  font-size: 18px;
+}
+
+.ecology-comfort-card small,
+.ecology-comfort-card em {
+  display: block;
+  margin-top: 4px;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.35;
 }
 
 .ecology-driver-grid {
@@ -1574,7 +1642,7 @@
   gap: 4px;
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(71, 85, 105, 0.28);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -1592,11 +1660,27 @@
 }
 
 .ecology-bottom-panel {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  right: 392px;
+  height: min(680px, 72vh);
+  z-index: 116;
+  overflow: hidden;
   background:
     radial-gradient(circle at top right, rgba(249, 115, 22, 0.12), transparent 32%),
     radial-gradient(circle at bottom left, rgba(74, 216, 255, 0.1), transparent 36%),
-    rgba(11, 18, 30, 0.92);
+    rgba(30, 41, 59, 0.9);
+  backdrop-filter: blur(34px) saturate(1.05);
+  -webkit-backdrop-filter: blur(34px) saturate(1.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 -18px 42px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
+.ecology-bottom-panel.env-minimized {
+  height: 92px;
 }
 
 .heat-grid-bottom-panel {
@@ -1678,10 +1762,30 @@
   color: #94a3b8;
 }
 
+.ecology-download-btn {
+  height: 2rem;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.12);
+  color: #dcfce7;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.ecology-download-btn:hover {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.42);
+}
+
 .ecology-charts-container {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 1rem 1.15rem 1.2rem;
 }
 
 .ecology-comparison-key {
@@ -1732,6 +1836,10 @@
   gap: 14px;
 }
 
+.ecology-detail-layout--wide {
+  align-items: start;
+}
+
 .ecology-detail-column {
   display: flex;
   flex-direction: column;
@@ -1748,8 +1856,12 @@
 .ecology-rank-card {
   padding: 12px 14px;
   border-radius: 14px;
-  background: rgba(15, 23, 42, 0.48);
+  background: rgba(71, 85, 105, 0.28);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ecology-chart-card--large {
+  min-height: 352px;
 }
 
 .ecology-chart-head,
@@ -1779,18 +1891,34 @@
   color: #f8fafc;
 }
 
+.ecology-driver-card small {
+  display: block;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .greenery-bottom-panel {
-  height: min(560px, 62vh);
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  right: 392px;
+  height: min(620px, 68vh);
   transition: height 0.25s ease;
   background:
-    radial-gradient(circle at top right, rgba(34, 197, 94, 0.16), transparent 28%),
-    radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.1), transparent 34%),
-    rgba(6, 18, 14, 0.94);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+    linear-gradient(155deg, rgba(148, 163, 184, 0.17), rgba(71, 85, 105, 0.22)),
+    rgba(30, 41, 59, 0.9);
+  backdrop-filter: blur(34px) saturate(1.05);
+  -webkit-backdrop-filter: blur(34px) saturate(1.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 -18px 42px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  z-index: 116;
+  overflow: hidden;
 }
 
 .greenery-bottom-panel.greenery-minimized {
-  height: auto;
+  height: 92px;
 }
 
 .greenery-bottom-panel.greenery-minimized .greenery-charts-container {
@@ -1814,9 +1942,9 @@
   display: grid;
   place-items: center;
   border-radius: 22px;
-  background: linear-gradient(145deg, rgba(21, 128, 61, 0.32), rgba(20, 83, 45, 0.48));
-  border: 1px solid rgba(34, 197, 94, 0.28);
-  color: #f0fdf4;
+  background: linear-gradient(145deg, rgba(148, 163, 184, 0.22), rgba(71, 85, 105, 0.34));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
   font-size: 1.7rem;
   font-weight: 800;
   box-shadow: 0 16px 32px rgba(6, 78, 59, 0.2);
@@ -1832,6 +1960,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 1rem 1.15rem 1.2rem;
 }
 
 .greenery-summary-row {
@@ -1903,10 +2032,47 @@
   line-height: 1.5;
 }
 
+.greenery-standing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.greenery-standing-grid div {
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.greenery-standing-grid span {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.greenery-standing-grid strong {
+  display: block;
+  margin-top: 5px;
+  color: #f8fafc;
+  font-size: 1.15rem;
+}
+
+.greenery-standing-grid small {
+  display: block;
+  margin-top: 4px;
+  color: #cbd5e1;
+  line-height: 1.35;
+}
+
 @media (max-width: 1200px) {
   .greenery-summary-row,
   .greenery-detail-layout,
-  .greenery-destination-grid {
+  .greenery-destination-grid,
+  .greenery-standing-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -2195,7 +2361,8 @@
   .ecology-detail-layout,
   .ecology-rank-grid,
   .ecology-compare-grid,
-  .ecology-primary-grid {
+  .ecology-primary-grid,
+  .ecology-comfort-grid {
     grid-template-columns: 1fr;
   }
 }

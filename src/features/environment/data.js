@@ -123,7 +123,7 @@ function enrichRelativeHeatData(featureCollection, defaultMetric = 'predicted_ls
 
   return {
     ...featureCollection,
-    features: featureCollection.features.map((feature) => {
+    features: featureCollection.features.map((feature, index) => {
       const relativeProperties = {}
 
       HEAT_RELATIVE_METRICS.forEach(([metricId, keys]) => {
@@ -143,12 +143,14 @@ function enrichRelativeHeatData(featureCollection, defaultMetric = 'predicted_ls
         relativeProperties.retained_heat_score_relative_percentile
       ].find(Number.isFinite)
       const featureId = feature?.properties?.feature_id ?? feature?.properties?.ogc_fid ?? feature?.id
+      const stableFeatureId = featureId != null ? String(featureId) : `heat-grid-${index}`
       return {
         ...feature,
+        id: stableFeatureId,
         properties: {
           ...feature.properties,
           ...relativeProperties,
-          feature_id_key: featureId != null ? String(featureId) : null,
+          feature_id_key: stableFeatureId,
           heat_grid_color_value: fallbackPercentile != null ? Number(fallbackPercentile.toFixed(2)) : 50,
           heat_relative_percentile: defaultPercentile,
           heat_relative_band: relativeHeatBand(defaultPercentile)
@@ -263,10 +265,6 @@ export async function loadExplorerGreeneryData() {
 
 export async function loadExplorerTemperatureData() {
   return enrichHeatStreetData(await fetchJson('/api/climate/heat-streets', 'Heat streets data load failed'))
-}
-
-export async function loadExplorerHeatGridData() {
-  return enrichRelativeHeatData(await fetchJson('/api/climate/heat-grid', 'Climate heat grid load failed'), 'predicted_lst_c_fusion')
 }
 
 export async function loadExplorerEstimatedWindData(windDirection) {

@@ -3,7 +3,6 @@ import {
   loadExplorerAirQualityData,
   loadExplorerGreeneryData,
   loadExplorerEstimatedWindData,
-  loadExplorerHeatGridData,
   loadExplorerShadeData,
   loadExplorerTemperatureData
 } from './data'
@@ -34,22 +33,18 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
   useEffect(() => {
     const loadClimateExplorerState = async () => {
       try {
-        const [heatStreets, heatGrid] = await Promise.all([
-          loadExplorerTemperatureData(),
-          loadExplorerHeatGridData()
-        ])
+        const heatStreets = await loadExplorerTemperatureData()
         setTemperatureData(heatStreets)
-        setHeatGridData(heatGrid)
+        setHeatGridData(null)
         console.log('Loaded climate DB layers:', {
-          heatStreets: heatStreets.features?.length,
-          heatGrid: heatGrid.features?.length
+          heatStreets: heatStreets.features?.length
         })
       } catch (error) {
         console.error('Error loading climate data:', error)
       }
     }
 
-    const hasLockedClimateLayer = ['heatStreets', 'heatGrid', 'estimatedWind'].some((id) => lockedLayers.has(id))
+    const hasLockedClimateLayer = ['heatStreets', 'estimatedWind'].some((id) => lockedLayers.has(id))
     if (dashboardMode === 'climate' || hasLockedClimateLayer) {
       loadClimateExplorerState()
     }
