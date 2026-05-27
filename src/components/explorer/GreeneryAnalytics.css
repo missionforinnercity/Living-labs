@@ -84,6 +84,47 @@
   flex-wrap: wrap;
 }
 
+.greenery-access-legend {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.greenery-access-legend-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.greenery-access-legend-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px 10px;
+}
+
+.greenery-access-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: #e2e8f0;
+}
+
+.greenery-access-legend-swatch {
+  width: 16px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  flex: 0 0 auto;
+}
+
 .greenery-toggle-group {
   display: flex;
   align-items: center;

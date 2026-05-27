@@ -21,6 +21,25 @@ const ACCESS_BANDS = [
   { key: 'poor', label: '12+ min', max: Infinity, color: '#f59e0b' }
 ]
 
+const ACCESS_LEGEND_MINUTES = [
+  { label: '0-2 min', color: '#14532d' },
+  { label: '2-5 min', color: '#166534' },
+  { label: '5-8 min', color: '#22c55e' },
+  { label: '8-12 min', color: '#84cc16' },
+  { label: '12-15 min', color: '#facc15' },
+  { label: '15-20 min', color: '#f59e0b' },
+  { label: '20+ min', color: '#ea580c' }
+]
+
+const ACCESS_LEGEND_PERCENTILE = [
+  { label: '0-10th', color: '#14532d' },
+  { label: '10-25th', color: '#166534' },
+  { label: '25-50th', color: '#22c55e' },
+  { label: '50-75th', color: '#84cc16' },
+  { label: '75-90th', color: '#d9f99d' },
+  { label: '90-100th', color: '#f59e0b' }
+]
+
 const QUALITY_COLORS = {
   very_high: '#14532d',
   high: '#22c55e',
@@ -202,6 +221,9 @@ const GreeneryAnalytics = ({
   }
 
   const { headline, accessBands, qualityMix, destinationMix, topStreets, underservedStreets } = analytics
+  const accessLegend = greeneryMapMode === 'minutes'
+    ? ACCESS_LEGEND_MINUTES
+    : ACCESS_LEGEND_PERCENTILE
 
   return (
     <aside className="greenery-analytics">
@@ -258,6 +280,20 @@ const GreeneryAnalytics = ({
         >
           {insightsExpanded ? 'Close Extra Insights' : 'Open Extra Insights'}
         </button>
+      </div>
+
+      <div className="greenery-access-legend">
+        <div className="greenery-access-legend-title">
+          {greeneryMapMode === 'minutes' ? 'Map colors: access time' : 'Map colors: relative rank'}
+        </div>
+        <div className="greenery-access-legend-items">
+          {accessLegend.map((item) => (
+            <div key={item.label} className="greenery-access-legend-item">
+              <span className="greenery-access-legend-swatch" style={{ backgroundColor: item.color }} />
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="greenery-stat-grid">
