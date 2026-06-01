@@ -475,6 +475,9 @@ const ExplorerMap = ({
   sentimentSegments,
   sentimentPerspective = 'public',
   serviceRequests,
+  airbnbListings,
+  hospitalityMapMode = 'points',
+  hospitalityZoneMetric = 'revenue',
   eventsData,
   eventsMonth,
   ratingFilter = null   // null = all, array of floor values e.g. [4,5]
@@ -804,6 +807,126 @@ const ExplorerMap = ({
 
     return turf.featureCollection(cells)
   }, [envCurrentData, histAvgByLocation])
+
+  const airbnbZoneData = useMemo(() => {
+    const features = airbnbListings?.features || []
+    if (!features.length) return null
+
+    const buckets = {}
+    features.forEach((feature) => {
+      const [lng, lat] = feature.geometry?.coordinates || []
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return
+      const cell = latLngToCell(lat, lng, 9)
+      if (!buckets[cell]) {
+        buckets[cell] = {
+          cell,
+          count: 0,
+          revenue: 0,
+          adrValues: [],
+          occupancyValues: [],
+          bedroomValues: [],
+          ratingValues: []
+        }
+      }
+      const bucket = buckets[cell]
+      const props = feature.properties || {}
+      const revenue = Number(props.est_revenue_l365d)
+      const adr = Number(props.price_zar)
+      const occupancy = Number(props.est_occupancy_l365d)
+      const bedrooms = Number(props.bedrooms)
+      const rating = Number(props.score_rating)
+      bucket.count += 1
+      if (Number.isFinite(revenue)) bucket.revenue += revenue
+      if (Number.isFinite(adr)) bucket.adrValues.push(adr)
+      if (Number.isFinite(occupancy)) bucket.occupancyValues.push(occupancy)
+      if (Number.isFinite(bedrooms)) bucket.bedroomValues.push(bedrooms)
+      if (Number.isFinite(rating)) bucket.ratingValues.push(rating)
+    })
+
+    const averageValue = (values) => (
+      values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
+    )
+    const rows = Object.values(buckets)
+      .filter((bucket) => bucket.count >= 2)
+      .map((bucket) => {
+        const avgAdr = averageValue(bucket.adrValues)
+        const avgOccupancy = averageValue(bucket.occupancyValues)
+        const avgBedrooms = averageValue(bucket.bedroomValues)
+        const avgRating = averageValue(bucket.ratingValues)
+        const valueScore = hospitalityZoneMetric === 'adr'
+          ? avgAdr
+          : hospitalityZoneMetric === 'occupancy'
+            ? avgOccupancy
+            : hospitalityZoneMetric === 'rating'
+              ? avgRating
+              : bucket.revenue
+        return {
+          ...bucket,
+          avgAdr,
+          avgOccupancy,
+          avgBedrooms,
+          avgRating,
+          valueScore: Number.isFinite(valueScore) ? valueScore : null
+        }
+      })
+      .filter((bucket) => Number.isFinite(bucket.valueScore))
+
+    if (!rows.length) return null
+    const sortedScores = rows.map((bucket) => bucket.valueScore).sort((a, b) => a - b)
+    const scoreAt = (ratio) => sortedScores[Math.min(sortedScores.length - 1, Math.max(0, Math.floor((sortedScores.length - 1) * ratio)))]
+    const bottom10Cut = scoreAt(0.1)
+    const bottom25Cut = scoreAt(0.25)
+    const bottom40Cut = scoreAt(0.4)
+    const top40Cut = scoreAt(0.6)
+    const top25Cut = scoreAt(0.75)
+    const top10Cut = scoreAt(0.9)
+    const minScore = sortedScores[0]
+    const maxScore = sortedScores[sortedScores.length - 1]
+    const scoreRange = Math.max(maxScore - minScore, 1)
+
+    return turf.featureCollection(rows.map((bucket) => {
+      const boundary = cellToBoundary(bucket.cell).map(([lat, lng]) => [lng, lat])
+      boundary.push(boundary[0])
+      const relativeScore = (bucket.valueScore - minScore) / scoreRange
+      const sortedIndex = sortedScores.findIndex((value) => value >= bucket.valueScore)
+      const percentile = sortedScores.length > 1 ? sortedIndex / (sortedScores.length - 1) : 0.5
+      const performance = bucket.valueScore >= top25Cut ? 'high' : bucket.valueScore <= bottom25Cut ? 'low' : 'mid'
+      const zoneBand = bucket.valueScore >= top10Cut
+        ? 'top_10'
+        : bucket.valueScore >= top25Cut
+          ? 'top_25'
+          : bucket.valueScore >= top40Cut
+            ? 'upper_mid'
+            : bucket.valueScore <= bottom10Cut
+              ? 'bottom_10'
+              : bucket.valueScore <= bottom25Cut
+                ? 'bottom_25'
+                : bucket.valueScore <= bottom40Cut
+                  ? 'lower_mid'
+                  : 'middle'
+      return turf.polygon([boundary], {
+        cell: bucket.cell,
+        listing_count: bucket.count,
+        annual_revenue: Math.round(bucket.revenue),
+        avg_adr: bucket.avgAdr == null ? null : Math.round(bucket.avgAdr),
+        avg_occupancy: bucket.avgOccupancy,
+        avg_bedrooms: bucket.avgBedrooms,
+        avg_rating: bucket.avgRating,
+        value_score: bucket.valueScore,
+        relative_score: relativeScore,
+        percentile,
+        performance,
+        zone_band: zoneBand,
+        zone_metric: hospitalityZoneMetric
+      })
+    }), {
+      bottom10Cut,
+      bottom25Cut,
+      top25Cut,
+      top10Cut,
+      metric: hospitalityZoneMetric
+    })
+  }, [airbnbListings, hospitalityZoneMetric])
 
   // Debug logging for mission interventions
   useEffect(() => {
@@ -1136,6 +1259,16 @@ const ExplorerMap = ({
         return
       }
 
+      if (feature.source === 'airbnb-listings' || feature.source === 'airbnb-zones') {
+        setSelectedFeature(feature)
+        setPopupInfo({
+          longitude: event.lngLat.lng,
+          latitude: event.lngLat.lat,
+          feature
+        })
+        return
+      }
+
       setSelectedFeature(feature)
       setPopupInfo({
         longitude: event.lngLat.lng,
@@ -1296,7 +1429,11 @@ const ExplorerMap = ({
           'traffic-layer',
           'sentiment-streets-layer',
           'service-request-segments-layer',
-          'events-points-layer'
+          'events-points-layer',
+          'airbnb-listings-layer',
+          'airbnb-zones-fill',
+          'airbnb-zones-high-outline',
+          'airbnb-zones-low-outline'
         ]}
         onClick={handleMapClick}
       >
@@ -3091,6 +3228,113 @@ const ExplorerMap = ({
             />
           </Source>
         )}
+
+        {/* Hospitality Layers */}
+        {(shouldRenderCategory('airbnbListings') || (shouldRenderCategory('airbnbZones') && hospitalityMapMode === 'zones')) && airbnbListings && (
+          <Source id="airbnb-listings" type="geojson" data={airbnbListings}>
+            <Layer
+              id="airbnb-listings-layer"
+              type="circle"
+              paint={{
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  11, [
+                    'interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'est_revenue_l365d']], 0],
+                    0, 2.5,
+                    250000, 4,
+                    800000, 7
+                  ],
+                  16, [
+                    'interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'est_revenue_l365d']], 0],
+                    0, 4,
+                    250000, 7,
+                    800000, 12
+                  ]
+                ],
+                'circle-color': [
+                  'match',
+                  ['coalesce', ['get', 'room_type'], 'Unknown'],
+                  'Entire home/apt', '#8be7f2',
+                  'Private room', '#a7f3d0',
+                  'Hotel room', '#fbbf24',
+                  'Shared room', '#f472b6',
+                  '#cbd5e1'
+                ],
+                'circle-opacity': hospitalityMapMode === 'zones' ? 0.46 : 0.78,
+                'circle-stroke-width': 0.8,
+                'circle-stroke-color': 'rgba(255,255,255,0.78)'
+              }}
+            />
+          </Source>
+        )}
+
+        {shouldRenderCategory('airbnbZones') && airbnbZoneData && (
+          <Source id="airbnb-zones" type="geojson" data={airbnbZoneData}>
+            <Layer
+              id="airbnb-zones-fill"
+              type="fill"
+              paint={{
+                'fill-color': [
+                  'match',
+                  ['coalesce', ['get', 'zone_band'], 'middle'],
+                  'bottom_10', '#b91c1c',
+                  'bottom_25', '#ef4444',
+                  'lower_mid', '#fb923c',
+                  'middle', '#facc15',
+                  'upper_mid', '#a3e635',
+                  'top_25', '#22c55e',
+                  'top_10', '#047857',
+                  '#64748b'
+                ],
+                'fill-opacity': [
+                  'interpolate', ['linear'], ['zoom'],
+                  11, ['case', ['==', ['get', 'zone_band'], 'middle'], 0.42, 0.58],
+                  16, ['case', ['==', ['get', 'zone_band'], 'middle'], 0.52, 0.72]
+                ]
+              }}
+            />
+            <Layer
+              id="airbnb-zones-outline"
+              type="line"
+              paint={{
+                'line-color': 'rgba(255,255,255,0.34)',
+                'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.55, 16, 1.15],
+                'line-opacity': 0.65
+              }}
+            />
+            <Layer
+              id="airbnb-zones-high-outline"
+              type="line"
+              filter={['in', ['get', 'zone_band'], ['literal', ['top_10', 'top_25']]]}
+              paint={{
+                'line-color': [
+                  'match',
+                  ['get', 'zone_band'],
+                  'top_10', '#bbf7d0',
+                  '#22c55e'
+                ],
+                'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.6, 16, 3.2],
+                'line-opacity': 0.95
+              }}
+            />
+            <Layer
+              id="airbnb-zones-low-outline"
+              type="line"
+              filter={['in', ['get', 'zone_band'], ['literal', ['bottom_10', 'bottom_25']]]}
+              paint={{
+                'line-color': [
+                  'match',
+                  ['get', 'zone_band'],
+                  'bottom_10', '#fecaca',
+                  '#fb7185'
+                ],
+                'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.6, 16, 3.2],
+                'line-dasharray': [2, 1.2],
+                'line-opacity': 0.95
+              }}
+            />
+          </Source>
+        )}
         
         {/* 3D Buildings — composite tileset from dark-v11 */}
         {(() => {
@@ -3194,6 +3438,59 @@ const ExplorerMap = ({
             closeOnClick={false}
           >
             <div className="map-popup">
+              {dashboardMode === 'hospitality' && popupInfo.feature.source === 'airbnb-listings' && (() => {
+                const p = popupInfo.feature.properties || {}
+                return (
+                  <>
+                    <h3>{p.listing_name || 'Airbnb listing'}</h3>
+                    <p><strong>Host:</strong> {p.host_name || `host #${p.host_id}`}</p>
+                    <p><strong>Room:</strong> {p.room_type || 'Unknown'} · {p.property_type || 'Unknown'}</p>
+                    <p><strong>ADR:</strong> {formatRandCompact(p.price_zar)}</p>
+                    <p><strong>Est. revenue:</strong> {formatRandCompact(p.est_revenue_l365d)}</p>
+                    {Number.isFinite(Number(p.est_occupancy_l365d)) && (
+                      <p><strong>Occupancy:</strong> {(Number(p.est_occupancy_l365d) * 100).toFixed(1)}%</p>
+                    )}
+                    <p><strong>Bedrooms:</strong> {p.bedrooms ?? '-'} · <strong>Accommodates:</strong> {p.accommodates ?? '-'}</p>
+                    {p.score_rating && <p><strong>Rating:</strong> {Number(p.score_rating).toFixed(2)}</p>}
+                  </>
+                )
+              })()}
+
+              {dashboardMode === 'hospitality' && popupInfo.feature.source === 'airbnb-zones' && (() => {
+                const p = popupInfo.feature.properties || {}
+                const bandLabel = {
+                  top_10: 'Top 10% zone',
+                  top_25: 'Top 25% zone',
+                  upper_mid: 'Upper-middle zone',
+                  middle: 'Middle zone',
+                  lower_mid: 'Lower-middle zone',
+                  bottom_25: 'Bottom 25% zone',
+                  bottom_10: 'Bottom 10% zone'
+                }[p.zone_band] || 'Airbnb zone'
+                const metricLabel = p.zone_metric === 'rating'
+                  ? 'Rating score'
+                  : p.zone_metric === 'adr'
+                    ? 'ADR score'
+                    : p.zone_metric === 'occupancy'
+                      ? 'Occupancy score'
+                      : 'Revenue score'
+                return (
+                  <>
+                    <h3>{bandLabel}</h3>
+                    <p><strong>Listings:</strong> {Number(p.listing_count || 0).toLocaleString()}</p>
+                    <p><strong>Annual revenue:</strong> {formatRandCompact(p.annual_revenue)}</p>
+                    <p><strong>Avg ADR:</strong> {formatRandCompact(p.avg_adr)}</p>
+                    {Number.isFinite(Number(p.avg_occupancy)) && (
+                      <p><strong>Avg occupancy:</strong> {(Number(p.avg_occupancy) * 100).toFixed(1)}%</p>
+                    )}
+                    {Number.isFinite(Number(p.avg_rating)) && (
+                      <p><strong>Avg rating:</strong> {Number(p.avg_rating).toFixed(2)}</p>
+                    )}
+                    <p><strong>{metricLabel}:</strong> P{(Number(p.percentile || 0) * 100).toFixed(0)}</p>
+                  </>
+                )
+              })()}
+
               {dashboardMode === 'business' && (
                 <>
                   {/* Business Liveliness Mode */}

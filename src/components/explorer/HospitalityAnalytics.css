@@ -1,0 +1,337 @@
+.hospitality-analytics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  color: rgba(248, 250, 252, 0.9);
+}
+
+.hospitality-hero,
+.hospitality-section,
+.hospitality-stats-grid > div,
+.hospitality-error,
+.hospitality-loading {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset;
+}
+
+.hospitality-hero {
+  padding: 1rem;
+  border-radius: 14px;
+}
+
+.hospitality-hero span,
+.hospitality-section-head span,
+.hospitality-stats-grid span,
+.hospitality-mix > span,
+.hospitality-mini-stats span {
+  display: block;
+  color: rgba(125, 211, 252, 0.78);
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.hospitality-hero h2 {
+  margin: 0.25rem 0 0;
+  color: #f8fafc;
+  font-size: 1.45rem;
+  letter-spacing: 0;
+}
+
+.hospitality-hero p {
+  margin: 0.2rem 0 0;
+  color: rgba(203, 213, 225, 0.64);
+  font-size: 0.72rem;
+}
+
+.hospitality-segmented,
+.hospitality-map-modes,
+.hospitality-zone-metrics {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.hospitality-segmented {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hospitality-map-modes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hospitality-zone-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 0.5rem;
+}
+
+.hospitality-segmented button,
+.hospitality-map-modes button,
+.hospitality-zone-metrics button {
+  min-height: 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(226, 232, 240, 0.72);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.hospitality-segmented button.active,
+.hospitality-map-modes button.active,
+.hospitality-zone-metrics button.active {
+  border-color: rgba(125, 211, 252, 0.54);
+  background: rgba(14, 165, 233, 0.16);
+  color: #e0f2fe;
+}
+
+.hospitality-zone-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.38rem 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.hospitality-zone-legend div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: rgba(226, 232, 240, 0.7);
+  font-size: 0.64rem;
+}
+
+.hospitality-zone-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  flex: none;
+}
+
+.hospitality-section {
+  padding: 0.85rem;
+  border-radius: 14px;
+}
+
+.hospitality-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.hospitality-section-head strong {
+  color: #f8fafc;
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.hospitality-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.hospitality-stats-grid > div {
+  min-height: 76px;
+  padding: 0.72rem;
+  border-radius: 12px;
+}
+
+.hospitality-stats-grid strong {
+  display: block;
+  margin-top: 0.35rem;
+  color: #f8fafc;
+  font-size: 1.12rem;
+  line-height: 1.05;
+}
+
+.hospitality-month-bars {
+  height: 118px;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.28rem;
+  align-items: end;
+}
+
+.hospitality-month {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.32rem;
+  color: rgba(203, 213, 225, 0.58);
+  font-size: 0.58rem;
+  text-align: center;
+}
+
+.hospitality-month-bar {
+  min-height: 6px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.78), rgba(148, 163, 184, 0.16));
+}
+
+.hospitality-month.peak .hospitality-month-bar {
+  background: linear-gradient(180deg, #67e8f9, rgba(14, 165, 233, 0.18));
+}
+
+.hospitality-month.low .hospitality-month-bar {
+  background: linear-gradient(180deg, #fbbf24, rgba(245, 158, 11, 0.18));
+}
+
+.hospitality-season-cards,
+.hospitality-mini-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.hospitality-season-cards > div,
+.hospitality-mini-stats > div {
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.hospitality-season-cards span {
+  display: block;
+  color: #67e8f9;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hospitality-season-cards strong,
+.hospitality-mini-stats strong {
+  display: block;
+  color: #f8fafc;
+  margin-top: 0.12rem;
+}
+
+.hospitality-season-cards small {
+  color: rgba(203, 213, 225, 0.6);
+}
+
+.hospitality-mix {
+  margin-bottom: 0.7rem;
+}
+
+.hospitality-mix > div {
+  display: flex;
+  height: 28px;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.hospitality-mix i {
+  min-width: 18px;
+  padding: 0 0.35rem;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid rgba(0, 0, 0, 0.45);
+  background: #94e4ef;
+  color: rgba(5, 10, 18, 0.82);
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.hospitality-mix i:nth-child(2n) {
+  background: #bbf7d0;
+}
+
+.hospitality-mix i:nth-child(3n) {
+  background: #fcd34d;
+}
+
+.hospitality-mix i:nth-child(4n) {
+  background: #f472b6;
+}
+
+.hospitality-bars,
+.hospitality-hosts {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.hospitality-bar-row,
+.hospitality-host-row {
+  display: grid;
+  align-items: center;
+  gap: 0.45rem;
+  color: rgba(226, 232, 240, 0.74);
+  font-size: 0.68rem;
+}
+
+.hospitality-bar-row {
+  grid-template-columns: minmax(88px, 1fr) 1.5fr 38px;
+}
+
+.hospitality-host-row {
+  grid-template-columns: 18px minmax(88px, 1fr) 1.4fr 54px;
+}
+
+.hospitality-bar-row div,
+.hospitality-host-row div {
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.hospitality-bar-row i,
+.hospitality-host-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(125, 211, 252, 0.66);
+}
+
+.hospitality-host-row strong {
+  min-width: 0;
+  color: rgba(248, 250, 252, 0.86);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hospitality-host-row em {
+  color: rgba(203, 213, 225, 0.72);
+  font-style: normal;
+  text-align: right;
+}
+
+.hospitality-mini-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hospitality-method p,
+.hospitality-error,
+.hospitality-loading {
+  color: rgba(203, 213, 225, 0.68);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.hospitality-error,
+.hospitality-loading {
+  padding: 0.75rem;
+  border-radius: 12px;
+}
+
+.hospitality-error {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.28);
+}

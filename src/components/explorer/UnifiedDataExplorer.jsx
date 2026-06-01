@@ -30,6 +30,7 @@ import { useExplorerEnvironmentData } from '../../features/environment/useExplor
 import { useExplorerTrafficData } from '../../features/traffic/useExplorerTrafficData'
 import { useExplorerSentimentData } from '../../features/sentiment/useExplorerSentimentData'
 import { useExplorerServiceRequestsData } from '../../features/serviceRequests/useExplorerServiceRequestsData'
+import { useExplorerHospitalityData } from '../../features/hospitality/useExplorerHospitalityData'
 import './UnifiedDataExplorer.css'
 
 const ExplorerMap = lazy(() => import('./ExplorerMap'))
@@ -43,6 +44,7 @@ const EcologyHeatDetailPanel = lazy(() => import('./EcologyHeatDetailPanel'))
 const DateAvailabilityCalendar = lazy(() => import('./DateAvailabilityCalendar'))
 const SentimentAnalytics = lazy(() => import('./SentimentAnalytics'))
 const ServiceRequestsAnalytics = lazy(() => import('./ServiceRequestsAnalytics'))
+const HospitalityAnalytics = lazy(() => import('./HospitalityAnalytics'))
 
 const toEcologyFeatureKey = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -249,7 +251,8 @@ const DASHBOARD_MODES = [
   { id: 'climate', label: 'Climate' },
   { id: 'environment', label: 'Environment' },
   { id: 'traffic', label: 'Traffic' },
-  { id: 'sentiment', label: 'Sentiment' }
+  { id: 'sentiment', label: 'Sentiment' },
+  { id: 'hospitality', label: 'Hospitality' }
 ]
 
 // All available layer categories - these are what users click to view
@@ -285,7 +288,10 @@ const LAYER_CATEGORIES = [
   { id: 'trafficFlow', label: 'Traffic Flow', dashboard: 'traffic', dataKey: 'trafficSegments' },
   // Sentiment layers
   { id: 'streetSentiment', label: 'Street Sentiment', dashboard: 'sentiment', dataKey: 'sentimentSegments' },
-  { id: 'serviceRequests', label: 'Service Requests', dashboard: 'sentiment', dataKey: 'serviceRequests' }
+  { id: 'serviceRequests', label: 'Service Requests', dashboard: 'sentiment', dataKey: 'serviceRequests' },
+  // Hospitality layers
+  { id: 'airbnbListings', label: 'Airbnb Listings', dashboard: 'hospitality', dataKey: 'airbnbListings' },
+  { id: 'airbnbZones', label: 'Value Zones', dashboard: 'hospitality', dataKey: 'airbnbZones' }
 ]
 
 const getExplorerUrlState = () => {
@@ -372,6 +378,11 @@ const UnifiedDataExplorer = () => {
   const [sentimentPanelExpanded, setSentimentPanelExpanded] = useState(false)
   const [selectedServiceRequestSegment, setSelectedServiceRequestSegment] = useState(null)
   const [serviceRequestTimeframe, setServiceRequestTimeframe] = useState('all')
+
+  // Hospitality dashboard state
+  const [hospitalityScope, setHospitalityScope] = useState('cbd')
+  const [hospitalityMapMode, setHospitalityMapMode] = useState('points')
+  const [hospitalityZoneMetric, setHospitalityZoneMetric] = useState('revenue')
   
   // Climate heat street state
   const [selectedSegment, setSelectedSegment] = useState(null)
@@ -437,7 +448,10 @@ const UnifiedDataExplorer = () => {
     trafficSegments: false,
     // Sentiment layers
     sentimentSegments: false,
-    serviceRequests: false
+    serviceRequests: false,
+    // Hospitality layers
+    airbnbListings: false,
+    airbnbZones: false
   })
   
   // Active layer stack - shows what's currently on the map
@@ -520,6 +534,13 @@ const UnifiedDataExplorer = () => {
     serviceRequestsLoading,
     serviceRequestsError
   } = useExplorerServiceRequestsData({ dashboardMode, lockedLayers, timeframe: serviceRequestTimeframe })
+
+  const {
+    airbnbListings,
+    airbnbAnalytics,
+    hospitalityLoading,
+    hospitalityError
+  } = useExplorerHospitalityData({ dashboardMode, lockedLayers, scope: hospitalityScope })
 
   const filteredEventsData = useMemo(() => {
     if (!eventsData?.features) return eventsData
@@ -1269,6 +1290,8 @@ const UnifiedDataExplorer = () => {
       }
     } else if (category.dashboard === 'climate') {
       if (categoryId === 'airQuality') setEnvIndex('uaqi')
+    } else if (category.dashboard === 'hospitality') {
+      setHospitalityMapMode(categoryId === 'airbnbZones' ? 'zones' : 'points')
     }
     
     // Switch to the appropriate dashboard
@@ -1279,6 +1302,11 @@ const UnifiedDataExplorer = () => {
     if (modeId === 'sentiment') {
       setSentimentPerspective('public')
       selectCategory('streetSentiment')
+      return
+    }
+
+    if (modeId === 'hospitality') {
+      selectCategory(hospitalityMapMode === 'zones' ? 'airbnbZones' : 'airbnbListings')
       return
     }
 
@@ -1995,6 +2023,26 @@ const UnifiedDataExplorer = () => {
             />
           )}
 
+          {dashboardMode === 'hospitality' && (
+            <Suspense fallback={<div className="app-panel-loading">Loading hospitality analytics...</div>}>
+              <HospitalityAnalytics
+                analytics={airbnbAnalytics}
+                listingsData={airbnbListings}
+                loading={hospitalityLoading}
+                error={hospitalityError}
+                scope={hospitalityScope}
+                onScopeChange={setHospitalityScope}
+                mapMode={hospitalityMapMode}
+                onMapModeChange={(mode) => {
+                  setHospitalityMapMode(mode)
+                  selectCategory(mode === 'zones' ? 'airbnbZones' : 'airbnbListings')
+                }}
+                zoneMetric={hospitalityZoneMetric}
+                onZoneMetricChange={setHospitalityZoneMetric}
+              />
+            </Suspense>
+          )}
+
           {dashboardMode === 'sentiment' && activeCategory === 'streetSentiment' && (
             <div className="sentiment-lens-panel">
               <div className="sentiment-lens-header">
@@ -2243,6 +2291,9 @@ const UnifiedDataExplorer = () => {
               sentimentSegments={sentimentSegments}
               sentimentPerspective={sentimentPerspective}
               serviceRequests={serviceRequests}
+              airbnbListings={airbnbListings}
+              hospitalityMapMode={hospitalityMapMode}
+              hospitalityZoneMetric={hospitalityZoneMetric}
               onServiceRequestSegmentClick={(segment) => {
                 setSelectedServiceRequestSegment(segment)
                 setSentimentPanelOpen(false)

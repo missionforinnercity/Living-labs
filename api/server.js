@@ -274,6 +274,67 @@ function buildEventsFeatureCollection(rows) {
   }
 }
 
+function getHospitalityScopeFilter(scope, alias = 'l') {
+  if (scope === 'ccid') return `COALESCE(${alias}.in_ccid, false) = true`
+  if (scope === 'all') return 'true'
+  return `COALESCE(${alias}.in_cbd, false) = true`
+}
+
+function buildAirbnbListingsFeatureCollection(rows, metadata = {}) {
+  return {
+    type: 'FeatureCollection',
+    features: rows
+      .filter((row) => row.geometry)
+      .map((row) => ({
+        type: 'Feature',
+        properties: {
+          listing_id: row.listing_id,
+          host_id: row.host_id,
+          host_name: row.host_name || 'Unknown host',
+          listing_name: row.listing_name || 'Airbnb listing',
+          room_type: row.room_type || 'Unknown',
+          property_type: row.property_type || 'Unknown',
+          bedrooms: row.bedrooms == null ? null : Number(row.bedrooms),
+          beds: row.beds == null ? null : Number(row.beds),
+          accommodates: row.accommodates == null ? null : Number(row.accommodates),
+          price_zar: row.price_zar == null ? null : Number(row.price_zar),
+          sqm_est: row.sqm_est == null ? null : Number(row.sqm_est),
+          neighbourhood: row.neighbourhood || 'Cape Town CBD',
+          min_nights: row.min_nights == null ? null : Number(row.min_nights),
+          instant_bookable: Boolean(row.instant_bookable),
+          est_revenue_l365d: row.est_revenue_l365d == null ? null : Number(row.est_revenue_l365d),
+          est_occupancy_l365d: row.est_occupancy_l365d == null ? null : Number(row.est_occupancy_l365d),
+          score_rating: row.score_rating == null ? null : Number(row.score_rating),
+          reviews_ltm: row.reviews_ltm == null ? null : Number(row.reviews_ltm),
+          in_ccid: Boolean(row.in_ccid),
+          in_cbd: Boolean(row.in_cbd)
+        },
+        geometry: row.geometry
+      })),
+    metadata: {
+      totalRows: rows.length,
+      totalFeatures: rows.filter((row) => row.geometry).length,
+      fetchedAt: new Date().toISOString(),
+      source: 'hospitality.airbnb_listings',
+      ...metadata
+    }
+  }
+}
+
+function normalizeMixRows(rows) {
+  return rows.map((row) => ({
+    label: row.label || 'Unknown',
+    count: Number(row.count || 0),
+    share: row.share == null ? null : Number(row.share)
+  }))
+}
+
+function buildHospitalityScopeLabel(scope) {
+  if (scope === 'ccid') return 'CCID'
+  if (scope === 'all') return 'Cape Town'
+  return 'CBD'
+}
+
 function buildGeoFeatureCollection(rows, {
   geometryField = 'geometry',
   source = null,
@@ -1121,6 +1182,278 @@ app.get('/api/planning/events', async (_req, res) => {
     res.json(buildEventsFeatureCollection(rows))
   } catch (err) {
     console.error('[API] /planning/events error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/hospitality/airbnb-listings', async (req, res) => {
+  try {
+    const scope = ['cbd', 'ccid', 'all'].includes(req.query.scope) ? req.query.scope : 'cbd'
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 12000, 25000))
+    const whereScope = getHospitalityScopeFilter(scope, 'l')
+    const { rows } = await pool.query(`
+      SELECT
+        l.listing_id,
+        l.host_id,
+        l.host_name,
+        l.listing_name,
+        l.room_type,
+        l.property_type,
+        l.bedrooms,
+        l.beds,
+        l.accommodates,
+        l.price_zar,
+        l.sqm_est,
+        l.in_ccid,
+        l.in_cbd,
+        l.neighbourhood,
+        l.min_nights,
+        l.instant_bookable,
+        l.est_revenue_l365d,
+        l.est_occupancy_l365d,
+        l.score_rating,
+        l.reviews_ltm,
+        ST_AsGeoJSON(l.geom)::json AS geometry
+      FROM hospitality.airbnb_listings l
+      WHERE l.geom IS NOT NULL
+        AND ${whereScope}
+      ORDER BY l.est_revenue_l365d DESC NULLS LAST, l.price_zar DESC NULLS LAST
+      LIMIT $1
+    `, [limit])
+
+    res.json(buildAirbnbListingsFeatureCollection(rows, {
+      scope,
+      scopeLabel: buildHospitalityScopeLabel(scope)
+    }))
+  } catch (err) {
+    console.error('[API] /hospitality/airbnb-listings error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/hospitality/airbnb-analytics', async (req, res) => {
+  try {
+    const scope = ['cbd', 'ccid', 'all'].includes(req.query.scope) ? req.query.scope : 'cbd'
+    const whereScope = getHospitalityScopeFilter(scope, 'l')
+    const statsSql = `
+      WITH scoped AS (
+        SELECT *
+        FROM hospitality.airbnb_listings l
+        WHERE l.geom IS NOT NULL
+          AND ${whereScope}
+      )
+      SELECT
+        count(*)::int AS active_units,
+        count(DISTINCT host_id)::int AS host_count,
+        sum(COALESCE(sqm_est, 0))::bigint AS total_floor_area,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY price_zar) FILTER (WHERE price_zar IS NOT NULL)::numeric AS median_adr,
+        avg(price_zar)::numeric AS avg_adr,
+        avg(est_occupancy_l365d)::numeric AS avg_occupancy,
+        sum(COALESCE(est_revenue_l365d, 0))::bigint AS annual_gross,
+        sum(COALESCE(est_revenue_l365d, 0) * (1 - COALESCE((SELECT opex_ratio FROM hospitality.airbnb_meta ORDER BY snapshot_date DESC LIMIT 1), 0.4)))::bigint AS annual_noi,
+        avg(bedrooms)::numeric AS avg_bedrooms,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY sqm_est) FILTER (WHERE sqm_est IS NOT NULL)::numeric AS median_unit_size,
+        avg(score_rating)::numeric AS avg_rating,
+        avg(reviews_ltm)::numeric AS avg_reviews_ltm
+      FROM scoped
+    `
+    const [
+      statsResult,
+      metaResult,
+      monthlyResult,
+      hostResult,
+      roomResult,
+      bedroomResult,
+      propertyResult,
+      neighbourhoodResult
+    ] = await Promise.all([
+      pool.query(statsSql),
+      pool.query(`
+        SELECT snapshot_date, source, licence, generated_at, ccid_units, cbd_units, city_units, opex_ratio, ingested_at
+        FROM hospitality.airbnb_meta
+        ORDER BY snapshot_date DESC
+        LIMIT 1
+      `),
+      pool.query(`
+        SELECT month, days, booked, occupancy
+        FROM hospitality.airbnb_market_monthly
+        WHERE scope = $1
+        ORDER BY COALESCE(
+          array_position(ARRAY['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], initcap(left(month, 3))),
+          13
+        )
+      `, [scope === 'all' ? 'city' : scope]),
+      pool.query(`
+        WITH scoped_hosts AS (
+          SELECT
+            h.*,
+            count(l.listing_id)::int AS scoped_count,
+            sum(COALESCE(l.est_revenue_l365d, 0))::bigint AS scoped_annual_gross,
+            sum(COALESCE(l.est_revenue_l365d, 0) * (1 - COALESCE((SELECT opex_ratio FROM hospitality.airbnb_meta ORDER BY snapshot_date DESC LIMIT 1), 0.4)))::bigint AS scoped_annual_noi
+          FROM hospitality.airbnb_hosts h
+          JOIN hospitality.airbnb_listings l ON l.host_id = h.host_id
+          WHERE l.geom IS NOT NULL
+            AND ${whereScope}
+          GROUP BY h.host_id, h.host_name, h.is_superhost, h.count, h.active_count, h.total_sqm_estimated,
+            h.avg_sqm, h.median_adr, h.avg_bedrooms, h.annual_occupancy, h.annual_gross, h.annual_noi,
+            h.avg_rating, h.host_response_rate, h.host_acceptance_rate, h.host_response_time, h.room_mix, h.bedroom_mix
+        )
+        SELECT
+          host_id,
+          host_name,
+          is_superhost,
+          scoped_count AS active_count,
+          total_sqm_estimated,
+          avg_sqm,
+          median_adr,
+          avg_bedrooms,
+          annual_occupancy,
+          scoped_annual_gross AS annual_gross,
+          scoped_annual_noi AS annual_noi,
+          avg_rating,
+          host_response_rate,
+          host_acceptance_rate,
+          host_response_time
+        FROM scoped_hosts
+        ORDER BY scoped_annual_gross DESC NULLS LAST, scoped_count DESC
+        LIMIT 12
+      `),
+      pool.query(`
+        WITH scoped AS (
+          SELECT COALESCE(NULLIF(room_type, ''), 'Unknown') AS label
+          FROM hospitality.airbnb_listings l
+          WHERE l.geom IS NOT NULL AND ${whereScope}
+        ), totals AS (SELECT count(*)::numeric AS total FROM scoped)
+        SELECT label, count(*)::int AS count, count(*)::numeric / NULLIF((SELECT total FROM totals), 0) AS share
+        FROM scoped
+        GROUP BY label
+        ORDER BY count DESC, label
+      `),
+      pool.query(`
+        WITH scoped AS (
+          SELECT COALESCE(bedrooms::text, 'Studio') AS label
+          FROM hospitality.airbnb_listings l
+          WHERE l.geom IS NOT NULL AND ${whereScope}
+        ), totals AS (SELECT count(*)::numeric AS total FROM scoped)
+        SELECT label, count(*)::int AS count, count(*)::numeric / NULLIF((SELECT total FROM totals), 0) AS share
+        FROM scoped
+        GROUP BY label
+        ORDER BY CASE WHEN label ~ '^[0-9]+$' THEN label::int ELSE 0 END, label
+      `),
+      pool.query(`
+        WITH scoped AS (
+          SELECT COALESCE(NULLIF(property_type, ''), 'Unknown') AS label
+          FROM hospitality.airbnb_listings l
+          WHERE l.geom IS NOT NULL AND ${whereScope}
+        ), totals AS (SELECT count(*)::numeric AS total FROM scoped)
+        SELECT label, count(*)::int AS count, count(*)::numeric / NULLIF((SELECT total FROM totals), 0) AS share
+        FROM scoped
+        GROUP BY label
+        ORDER BY count DESC, label
+        LIMIT 10
+      `),
+      pool.query(`
+        WITH scoped AS (
+          SELECT
+            COALESCE(NULLIF(neighbourhood, ''), 'Unknown') AS label,
+            price_zar,
+            est_revenue_l365d,
+            est_occupancy_l365d
+          FROM hospitality.airbnb_listings l
+          WHERE l.geom IS NOT NULL AND ${whereScope}
+        )
+        SELECT
+          label,
+          count(*)::int AS count,
+          avg(price_zar)::numeric AS avg_adr,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY price_zar) FILTER (WHERE price_zar IS NOT NULL)::numeric AS median_adr,
+          sum(COALESCE(est_revenue_l365d, 0))::bigint AS annual_gross,
+          avg(est_occupancy_l365d)::numeric AS avg_occupancy
+        FROM scoped
+        GROUP BY label
+        ORDER BY annual_gross DESC NULLS LAST, count DESC
+        LIMIT 12
+      `)
+    ])
+
+    const stats = statsResult.rows[0] || {}
+    const monthly = monthlyResult.rows.map((row) => ({
+      month: row.month,
+      days: Number(row.days || 0),
+      booked: Number(row.booked || 0),
+      occupancy: row.occupancy == null ? null : Number(row.occupancy)
+    }))
+    const occupancies = monthly.map((row) => row.occupancy).filter(Number.isFinite)
+    const peakMonth = monthly.reduce((best, row) => (
+      Number.isFinite(row.occupancy) && (!best || row.occupancy > best.occupancy) ? row : best
+    ), null)
+    const lowMonth = monthly.reduce((best, row) => (
+      Number.isFinite(row.occupancy) && (!best || row.occupancy < best.occupancy) ? row : best
+    ), null)
+
+    res.json({
+      metadata: {
+        scope,
+        scopeLabel: buildHospitalityScopeLabel(scope),
+        snapshot_date: metaResult.rows[0]?.snapshot_date || null,
+        source: metaResult.rows[0]?.source || 'hospitality.airbnb_*',
+        licence: metaResult.rows[0]?.licence || null,
+        generated_at: metaResult.rows[0]?.generated_at || null,
+        opex_ratio: metaResult.rows[0]?.opex_ratio == null ? null : Number(metaResult.rows[0].opex_ratio)
+      },
+      stats: {
+        active_units: Number(stats.active_units || 0),
+        host_count: Number(stats.host_count || 0),
+        total_floor_area: Number(stats.total_floor_area || 0),
+        median_adr: stats.median_adr == null ? null : Number(stats.median_adr),
+        avg_adr: stats.avg_adr == null ? null : Number(stats.avg_adr),
+        avg_occupancy: stats.avg_occupancy == null ? null : Number(stats.avg_occupancy),
+        annual_gross: Number(stats.annual_gross || 0),
+        annual_noi: Number(stats.annual_noi || 0),
+        avg_bedrooms: stats.avg_bedrooms == null ? null : Number(stats.avg_bedrooms),
+        median_unit_size: stats.median_unit_size == null ? null : Number(stats.median_unit_size),
+        avg_rating: stats.avg_rating == null ? null : Number(stats.avg_rating),
+        avg_reviews_ltm: stats.avg_reviews_ltm == null ? null : Number(stats.avg_reviews_ltm)
+      },
+      seasonality: {
+        monthly,
+        annualMean: occupancies.length ? occupancies.reduce((sum, value) => sum + value, 0) / occupancies.length : null,
+        peakMonth,
+        lowMonth
+      },
+      inventory: {
+        roomTypes: normalizeMixRows(roomResult.rows),
+        bedrooms: normalizeMixRows(bedroomResult.rows),
+        propertyTypes: normalizeMixRows(propertyResult.rows)
+      },
+      hosts: hostResult.rows.map((row) => ({
+        host_id: row.host_id,
+        host_name: row.host_name || `host #${row.host_id}`,
+        is_superhost: Boolean(row.is_superhost),
+        active_count: Number(row.active_count || 0),
+        total_sqm_estimated: Number(row.total_sqm_estimated || 0),
+        avg_sqm: row.avg_sqm == null ? null : Number(row.avg_sqm),
+        median_adr: row.median_adr == null ? null : Number(row.median_adr),
+        avg_bedrooms: row.avg_bedrooms == null ? null : Number(row.avg_bedrooms),
+        annual_occupancy: row.annual_occupancy == null ? null : Number(row.annual_occupancy),
+        annual_gross: Number(row.annual_gross || 0),
+        annual_noi: Number(row.annual_noi || 0),
+        avg_rating: row.avg_rating == null ? null : Number(row.avg_rating),
+        host_response_rate: row.host_response_rate == null ? null : Number(row.host_response_rate),
+        host_acceptance_rate: row.host_acceptance_rate == null ? null : Number(row.host_acceptance_rate),
+        host_response_time: row.host_response_time || null
+      })),
+      neighbourhoods: neighbourhoodResult.rows.map((row) => ({
+        label: row.label,
+        count: Number(row.count || 0),
+        avg_adr: row.avg_adr == null ? null : Number(row.avg_adr),
+        median_adr: row.median_adr == null ? null : Number(row.median_adr),
+        annual_gross: Number(row.annual_gross || 0),
+        avg_occupancy: row.avg_occupancy == null ? null : Number(row.avg_occupancy)
+      }))
+    })
+  } catch (err) {
+    console.error('[API] /hospitality/airbnb-analytics error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })
