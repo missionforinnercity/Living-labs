@@ -1872,6 +1872,9 @@ app.get('/api/sentiment/analytics', async (req, res) => {
       pool.query(`
         WITH sentiment_rows AS (${sentimentSql})
         SELECT
+          ogc_fid,
+          comment_id,
+          source_table,
           month_key,
           street_name,
           place_name,
@@ -2015,6 +2018,9 @@ app.get('/api/sentiment/analytics', async (req, res) => {
           SELECT
             'positive' AS type,
             month_key,
+            ogc_fid,
+            comment_id,
+            source_table,
             street_name,
             place_name,
             topic,
@@ -2035,6 +2041,9 @@ app.get('/api/sentiment/analytics', async (req, res) => {
           SELECT
             'negative' AS type,
             month_key,
+            ogc_fid,
+            comment_id,
+            source_table,
             street_name,
             place_name,
             topic,
@@ -2148,6 +2157,9 @@ app.get('/api/sentiment/analytics', async (req, res) => {
         scored_comments AS (
           SELECT
             month_key,
+            ogc_fid,
+            comment_id,
+            source_table,
             street_name,
             place_name,
             topic,
@@ -2173,6 +2185,9 @@ app.get('/api/sentiment/analytics', async (req, res) => {
         )
         SELECT
           month_key,
+          ogc_fid,
+          comment_id,
+          source_table,
           street_name,
           place_name,
           topic,

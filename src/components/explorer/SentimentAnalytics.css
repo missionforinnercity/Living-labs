@@ -656,6 +656,40 @@
   font-size: 0.76rem;
 }
 
+.sentiment-comment-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin: -0.25rem 0 0.75rem;
+  color: #94a3b8;
+  font-size: 0.76rem;
+}
+
+.sentiment-comment-pagination button {
+  min-width: 82px;
+  height: 34px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.sentiment-comment-pagination button:hover:not(:disabled) {
+  background: rgba(255,255,255,0.085);
+}
+
+.sentiment-comment-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.sentiment-comment-pagination span {
+  min-width: 54px;
+  text-align: center;
+}
+
 .sentiment-analytics--bottom .sentiment-street-table {
   grid-template-columns: repeat(2, minmax(320px, 1fr));
   column-gap: 1.25rem;
@@ -794,5 +828,13 @@
   .sentiment-overview-grid,
   .sentiment-anomaly-list {
     grid-template-columns: 1fr;
+  }
+
+  .sentiment-comment-pagination {
+    justify-content: stretch;
+  }
+
+  .sentiment-comment-pagination button {
+    flex: 1;
   }
 }

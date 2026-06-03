@@ -21,6 +21,8 @@ const SENTIMENT_COLORS = {
   negative: '#ef4444'
 }
 
+const DETAIL_COMMENTS_PER_PAGE = 8
+
 const formatScore = (value) => {
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric.toFixed(2) : '-'
@@ -53,6 +55,12 @@ const fairScore = (street) => Number(street?.sentiment_index ?? street?.avg_sent
 const commentSourceKey = (comment) => comment?.source || 'unknown'
 
 const isMapReview = (comment) => /google|map/i.test(String(comment?.source || ''))
+
+const commentRecordLabel = (comment) => {
+  if (comment?.comment_id) return `comment_id ${comment.comment_id}`
+  if (comment?.source_table) return comment.source_table
+  return ''
+}
 
 const balancedCommentSample = (comments, limit = 8) => {
   const bySource = new Map()
@@ -93,6 +101,7 @@ const SentimentAnalytics = ({
   const [detailStreet, setDetailStreet] = useState('')
   const [commentCategoryFilter, setCommentCategoryFilter] = useState('all')
   const [commentSourceFilter, setCommentSourceFilter] = useState('all')
+  const [detailCommentPage, setDetailCommentPage] = useState(1)
 
   const months = analytics?.months || []
   const streets = analytics?.streets || []
@@ -181,14 +190,26 @@ const SentimentAnalytics = ({
     })
   }, [commentCategoryFilter, commentSourceFilter, detailComments])
   const filteredDetailComments = useMemo(() => {
-    if (commentSourceFilter !== 'all') return matchingDetailComments.slice(0, 8)
-    return balancedCommentSample(matchingDetailComments, 8)
+    if (commentSourceFilter !== 'all') return matchingDetailComments
+    return balancedCommentSample(matchingDetailComments, matchingDetailComments.length)
   }, [commentSourceFilter, matchingDetailComments])
+  const detailCommentPageCount = Math.max(1, Math.ceil(filteredDetailComments.length / DETAIL_COMMENTS_PER_PAGE))
+  const detailCommentPageStart = (detailCommentPage - 1) * DETAIL_COMMENTS_PER_PAGE
+  const pagedDetailComments = filteredDetailComments.slice(detailCommentPageStart, detailCommentPageStart + DETAIL_COMMENTS_PER_PAGE)
 
   useEffect(() => {
     setCommentCategoryFilter('all')
     setCommentSourceFilter('all')
+    setDetailCommentPage(1)
   }, [selectedDetailStreet])
+
+  useEffect(() => {
+    setDetailCommentPage(1)
+  }, [commentCategoryFilter, commentSourceFilter])
+
+  useEffect(() => {
+    setDetailCommentPage((page) => Math.min(page, detailCommentPageCount))
+  }, [detailCommentPageCount])
   const negativeComments = Number(distribution.find((item) => item.label === 'Negative')?.comment_count || 0)
   const positiveComments = Number(distribution.find((item) => item.label === 'Positive')?.comment_count || 0)
   const neutralComments = Number(distribution.find((item) => item.label === 'Neutral')?.comment_count || 0)
@@ -652,14 +673,33 @@ const SentimentAnalytics = ({
                     )}
                   </div>
                   <div className="sentiment-filter-summary">
-                    Showing {compact(filteredDetailComments.length)} of {compact(matchingDetailComments.length)} matching comments
+                    Showing {filteredDetailComments.length ? `${compact(detailCommentPageStart + 1)}-${compact(Math.min(detailCommentPageStart + DETAIL_COMMENTS_PER_PAGE, filteredDetailComments.length))}` : '0'} of {compact(matchingDetailComments.length)} matching comments
                     {commentCategoryFilter !== 'all' && ` · ${commentCategoryFilter}`}
                     {commentSourceFilter !== 'all' && ` · ${String(commentSourceFilter).replace(/_/g, ' ')}`}
-                    {matchingDetailComments.length > filteredDetailComments.length && ' · top 8 shown'}
+                    {filteredDetailComments.length > DETAIL_COMMENTS_PER_PAGE && ` · page ${compact(detailCommentPage)} of ${compact(detailCommentPageCount)}`}
                   </div>
+                  {filteredDetailComments.length > DETAIL_COMMENTS_PER_PAGE && (
+                    <div className="sentiment-comment-pagination" aria-label="Comment pages">
+                      <button
+                        type="button"
+                        onClick={() => setDetailCommentPage((page) => Math.max(1, page - 1))}
+                        disabled={detailCommentPage <= 1}
+                      >
+                        Previous
+                      </button>
+                      <span>{compact(detailCommentPage)} / {compact(detailCommentPageCount)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setDetailCommentPage((page) => Math.min(detailCommentPageCount, page + 1))}
+                        disabled={detailCommentPage >= detailCommentPageCount}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
                   <div className="sentiment-comment-list">
-                    {filteredDetailComments.map((comment, index) => (
-                      <CommentCard key={`${comment.month_key}-${comment.street_name}-${index}`} comment={comment} />
+                    {pagedDetailComments.map((comment, index) => (
+                      <CommentCard key={`${comment.comment_id || comment.month_key}-${comment.street_name}-${detailCommentPageStart + index}`} comment={comment} />
                     ))}
                     {!detailComments.length && <div className="sentiment-empty">No comments available for this street in the current extract.</div>}
                     {detailComments.length > 0 && !filteredDetailComments.length && <div className="sentiment-empty">No comments match this category/source combination.</div>}
@@ -818,6 +858,7 @@ const CommentCard = ({ comment }) => (
       {comment.source && <span>{String(comment.source).replace(/_/g, ' ')}</span>}
       {isMapReview(comment) && comment.place_name && <span className="sentiment-place-tag">{comment.place_name}</span>}
       {comment.comment_date && <span>{comment.comment_date}</span>}
+      {commentRecordLabel(comment) && <span>{commentRecordLabel(comment)}</span>}
       {comment.stars !== null && comment.stars !== undefined && <span>{Number(comment.stars).toFixed(0)} stars</span>}
       {comment.url && <a href={comment.url} target="_blank" rel="noreferrer">Open source</a>}
     </div>
