@@ -541,6 +541,74 @@ function buildLandParcelFeatureCollection(rows) {
   }
 }
 
+function buildOpenSpacesFeatureCollection(rows) {
+  const features = rows
+    .filter((row) => row.geometry)
+    .map((row) => {
+      const areaM2 = Number(row.area_m2)
+      const cityOwnedPct = Number(row.zoning_city_owned_pct)
+      const category = row.category || 'open_space'
+      const zoningPrimary = row.zoning_primary || 'Unzoned / unknown'
+
+      return {
+        type: 'Feature',
+        properties: {
+          square_id: row.ogc_fid,
+          name: row.name || 'Open space',
+          category,
+          category_label: String(category).replace(/[=_]/g, ' '),
+          source: row.source || null,
+          detail_level: row.detail_level || null,
+          area_m2: Number.isFinite(areaM2) ? areaM2 : null,
+          osm_type: row.osm_type || null,
+          osm_id: row.osm_id || null,
+          osm_tags: row.osm_tags || null,
+          notes: row.notes || null,
+          zoning_primary: zoningPrimary,
+          zoning_group: getParcelZoningGroup(zoningPrimary),
+          zoning_mix: row.zoning_mix || [],
+          zoning_match_count: row.zoning_match_count || 0,
+          zoning_coverage_pct: row.zoning_coverage_pct ?? null,
+          zoning_owner_mix: row.zoning_owner_mix || [],
+          zoning_city_owned_area_m2: row.zoning_city_owned_area_m2 ?? null,
+          zoning_city_owned_pct: Number.isFinite(cityOwnedPct) ? cityOwnedPct : null,
+          is_city_owned: Number.isFinite(cityOwnedPct) && cityOwnedPct >= 50,
+          overlap_with_existing: row.overlap_with_existing ?? null,
+          within_boundary: row.within_boundary ?? null
+        },
+        geometry: row.geometry
+      }
+    })
+
+  const categories = {}
+  const zoningGroups = {}
+  let cityOwnedCount = 0
+  let totalAreaM2 = 0
+
+  features.forEach((feature) => {
+    const props = feature.properties
+    categories[props.category_label] = (categories[props.category_label] || 0) + 1
+    zoningGroups[props.zoning_group] = (zoningGroups[props.zoning_group] || 0) + 1
+    if (props.is_city_owned) cityOwnedCount += 1
+    if (Number.isFinite(props.area_m2)) totalAreaM2 += props.area_m2
+  })
+
+  return {
+    type: 'FeatureCollection',
+    features,
+    metadata: {
+      totalRows: rows.length,
+      totalFeatures: features.length,
+      cityOwnedCount,
+      totalAreaM2,
+      categories,
+      zoningGroups,
+      fetchedAt: new Date().toISOString(),
+      source: 'cadastre.squares'
+    }
+  }
+}
+
 const CLIMATE_TABLES = {
   heat_grid: {
     source: 'climate.heat_grid',
@@ -1507,6 +1575,47 @@ app.get('/api/cadastre/landparcels', async (req, res) => {
   }
 })
 
+app.get('/api/cadastre/squares', async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 12000, 20000))
+    const { rows } = await pool.query(`
+      SELECT
+        ogc_fid,
+        name,
+        category,
+        source,
+        detail_level,
+        area_m2,
+        osm_type,
+        osm_id,
+        osm_tags,
+        overlap_with_existing,
+        within_boundary,
+        notes,
+        zoning_primary,
+        zoning_mix,
+        zoning_match_count,
+        zoning_coverage_pct,
+        zoning_owner_mix,
+        zoning_city_owned_area_m2,
+        zoning_city_owned_pct,
+        ST_AsGeoJSON(ST_SimplifyPreserveTopology(wkb_geometry, 0.00001))::json AS geometry
+      FROM cadastre.squares
+      WHERE wkb_geometry IS NOT NULL
+      ORDER BY
+        COALESCE(zoning_city_owned_pct, 0) DESC,
+        area_m2 DESC NULLS LAST,
+        ogc_fid
+      LIMIT $1
+    `, [limit])
+
+    res.json(buildOpenSpacesFeatureCollection(rows))
+  } catch (err) {
+    console.error('[API] /cadastre/squares error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 async function getSentimentTables() {
   const { rows } = await pool.query(`
     SELECT table_name
@@ -1762,6 +1871,7 @@ app.get('/api/sentiment/analytics', async (req, res) => {
       streetMonthlyResult,
       streetSourceResult,
       streetThemeResult,
+      streetBusinessResult,
       streetCommentResult
     ] = await Promise.all([
       pool.query(`
@@ -2153,6 +2263,27 @@ app.get('/api/sentiment/analytics', async (req, res) => {
         LIMIT 800
       `),
       pool.query(`
+        WITH sentiment_rows AS (${sentimentSql})
+        SELECT
+          street_name,
+          place_name,
+          count(*)::int AS comment_count,
+          count(*) FILTER (WHERE score <= -0.25)::int AS negative_count,
+          count(*) FILTER (WHERE score >= 0.25)::int AS positive_count,
+          round(avg(score)::numeric, 4)::double precision AS avg_sentiment,
+          round(avg(stars)::numeric, 2)::double precision AS avg_stars,
+          min(url) FILTER (WHERE url IS NOT NULL) AS url
+        FROM sentiment_rows
+        WHERE street_name IS NOT NULL
+          AND place_name IS NOT NULL
+          AND score IS NOT NULL
+          AND lower(coalesce(source, '')) LIKE '%google%'
+        GROUP BY street_name, place_name
+        HAVING count(*) >= 1
+        ORDER BY street_name, negative_count DESC, positive_count DESC, comment_count DESC
+        LIMIT 1200
+      `),
+      pool.query(`
         WITH sentiment_rows AS (${sentimentSql}),
         scored_comments AS (
           SELECT
@@ -2229,6 +2360,7 @@ app.get('/api/sentiment/analytics', async (req, res) => {
       streetMonthly: streetMonthlyResult.rows,
       streetSources: streetSourceResult.rows,
       streetThemes: streetThemeResult.rows,
+      streetBusinesses: streetBusinessResult.rows,
       streetComments: streetCommentResult.rows
     })
   } catch (err) {

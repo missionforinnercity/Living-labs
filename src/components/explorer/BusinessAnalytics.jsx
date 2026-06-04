@@ -16,9 +16,11 @@ const BusinessAnalytics = ({
   surveyData,
   propertiesData,
   landParcelsData,
+  openSpacesData,
   parcelFilters,
   onParcelFiltersChange,
   parcelInsights,
+  openSpaceInsights,
   parcelColorMode = 'zoning',
   onParcelColorModeChange,
   opinionSource,
@@ -34,6 +36,8 @@ const BusinessAnalytics = ({
   onEventsMonthChange,
   eventsScope = 'cbd',
   onEventsScopeChange,
+  analyticsTitle = 'Business Analytics',
+  analyticsSubtitle = 'Explore business patterns and insights',
   renderEventsInline = true,
   hideLayerControls = false
 }) => {
@@ -237,8 +241,8 @@ const BusinessAnalytics = ({
   return (
     <div className="business-analytics">
       <div className="analytics-header">
-        <h2>Business Analytics</h2>
-        <p className="header-subtitle">Explore business patterns and insights</p>
+        <h2>{analyticsTitle}</h2>
+        <p className="header-subtitle">{analyticsSubtitle}</p>
       </div>
       
       {/* Mode Selector with Radio Buttons - hidden when using category selector */}
@@ -302,16 +306,6 @@ const BusinessAnalytics = ({
             onChange={() => onModeChange('property')}
           />
           <span>Property Sales</span>
-        </label>
-
-        <label className="mode-radio">
-          <input
-            type="radio"
-            name="businessMode"
-            checked={businessMode === 'parcels'}
-            onChange={() => onModeChange('parcels')}
-          />
-          <span>Land Parcels</span>
         </label>
 
         <label className="mode-radio">
@@ -885,7 +879,7 @@ const BusinessAnalytics = ({
           <div className="control-section parcel-command-panel">
             <div className="control-header">LAND PARCEL FILTERS</div>
             <p className="mode-description">
-              Combine filters to find implementation opportunities such as city-owned open space, business-zoned sites, or high-value mixed-use parcels.
+              Combine cadastral parcels with mapped open spaces such as parking lots, grass patches, public walkways, and open parking areas.
             </p>
 
             <input
@@ -1016,6 +1010,14 @@ const BusinessAnalytics = ({
             <div className="stat-card">
               <div className="stat-value">{(((parcelInsights?.summary?.totalAreaM2 || 0) / 10000).toFixed(1))}</div>
               <div className="stat-label">Hectares</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{(openSpacesData?.features?.length || 0).toLocaleString()}</div>
+              <div className="stat-label">Open Spaces</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{(((openSpaceInsights?.summary?.totalAreaM2 || 0) / 10000).toFixed(1))}</div>
+              <div className="stat-label">Open ha</div>
             </div>
           </div>
 

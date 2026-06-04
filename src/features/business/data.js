@@ -63,12 +63,16 @@ async function loadLandParcelsData() {
   return fetchJson('/api/cadastre/landparcels', 'Land parcel cadastre load failed')
 }
 
+async function loadOpenSpacesData() {
+  return fetchJson('/api/cadastre/squares', 'Open spaces cadastre load failed')
+}
+
 export async function loadExplorerBusinessBoundary() {
   return loadCCIDBoundary()
 }
 
 export async function loadExplorerBusinessData() {
-  const [businesses, stalls, properties, survey, eventsData, landParcels] = await Promise.all([
+  const [businesses, stalls, properties, survey, eventsData, landParcels, openSpaces] = await Promise.all([
     fetchJson('/data/business/POI_enriched_20260120_185944.geojson', 'Business POI load failed'),
     fetchJson('/data/business/streetStalls.geojson', 'Street stalls load failed'),
     fetchJson('/data/business/properties_consolidated.geojson', 'Property load failed'),
@@ -77,6 +81,10 @@ export async function loadExplorerBusinessData() {
     loadLandParcelsData().catch((error) => {
       console.error(error)
       return { type: 'FeatureCollection', features: [], metadata: { error: error.message, source: 'cadastre.landparcels_gv' } }
+    }),
+    loadOpenSpacesData().catch((error) => {
+      console.error(error)
+      return { type: 'FeatureCollection', features: [], metadata: { error: error.message, source: 'cadastre.squares' } }
     })
   ])
 
@@ -86,6 +94,7 @@ export async function loadExplorerBusinessData() {
     properties: enrichProperties(properties),
     survey,
     eventsData,
-    landParcels
+    landParcels,
+    openSpaces
   }
 }

@@ -795,6 +795,94 @@
   letter-spacing: 0.06em;
 }
 
+.sentiment-business-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 0.65rem;
+}
+
+.sentiment-business-panel {
+  min-height: 0;
+  padding: 0.65rem;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+}
+
+.sentiment-business-panel h4 {
+  margin: 0 0 0.55rem;
+  color: #f8fafc;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.sentiment-business-list {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.sentiment-business-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3rem 0.55rem;
+  padding: 0.48rem 0.55rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 7px;
+  background: rgba(15,23,42,0.42);
+}
+
+.sentiment-business-row-main {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.sentiment-business-row-main strong {
+  color: #f8fafc;
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sentiment-business-row-main span,
+.sentiment-business-row-score small {
+  color: #94a3b8;
+  font-size: 0.66rem;
+}
+
+.sentiment-business-row-score {
+  display: grid;
+  gap: 0.1rem;
+  text-align: right;
+}
+
+.sentiment-business-row-score strong {
+  font-size: 0.78rem;
+}
+
+.sentiment-business-meter {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.08);
+}
+
+.sentiment-business-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.sentiment-business-row a {
+  grid-column: 1 / -1;
+  color: #bae6fd;
+  font-size: 0.66rem;
+  text-decoration: none;
+}
+
 .sentiment-extreme-panel .sentiment-comment-card {
   margin-top: 0.4rem;
 }
@@ -826,6 +914,7 @@
   .sentiment-workflow-grid,
   .sentiment-comment-filters,
   .sentiment-overview-grid,
+  .sentiment-business-grid,
   .sentiment-anomaly-list {
     grid-template-columns: 1fr;
   }

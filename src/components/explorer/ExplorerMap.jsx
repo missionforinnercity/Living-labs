@@ -57,6 +57,18 @@ const PARCEL_VALUE_CHANGE_COLOR_EXPRESSION = [
   'No comparison', '#64748b',
   '#64748b'
 ]
+const OPEN_SPACE_COLOR_EXPRESSION = [
+  'match',
+  ['coalesce', ['get', 'zoning_group'], 'Open Space'],
+  'Open Space', '#22c55e',
+  'Transport', '#38bdf8',
+  'Business', '#f97316',
+  'Community', '#84cc16',
+  'Residential', '#60a5fa',
+  'Mixed Use', '#a78bfa',
+  'Unknown', '#94a3b8',
+  '#14b8a6'
+]
 const SERVICE_REQUEST_GROUPS = [
   { id: 'Sewage', color: '#2563eb', soft: 'rgba(37,99,235,0.12)', mid: 'rgba(37,99,235,0.46)', strong: 'rgba(37,99,235,0.86)' },
   { id: 'Water', color: '#06b6d4', soft: 'rgba(6,182,212,0.12)', mid: 'rgba(6,182,212,0.46)', strong: 'rgba(6,182,212,0.86)' },
@@ -421,6 +433,7 @@ const ExplorerMap = ({
   surveyData,
   propertiesData,
   landParcelsData,
+  openSpacesData,
   parcelColorMode = 'zoning',
   networkData,
   pedestrianData,
@@ -1402,6 +1415,7 @@ const ExplorerMap = ({
           'stalls-opinions-layer',
           'properties-sales-layer',
           'land-parcels-fill',
+          'open-spaces-fill',
           'network-layer',
           'pedestrian-layer',
           'cycling-layer',
@@ -1947,6 +1961,43 @@ const ExplorerMap = ({
                       0.45
                     ],
                     'line-opacity': 0.78
+                  }}
+                />
+              </Source>
+            )}
+
+            {shouldRenderCategory('openSpaces') && openSpacesData && (
+              <Source id="open-spaces" type="geojson" data={openSpacesData}>
+                <Layer
+                  id="open-spaces-fill"
+                  type="fill"
+                  paint={{
+                    'fill-color': OPEN_SPACE_COLOR_EXPRESSION,
+                    'fill-opacity': [
+                      'case',
+                      ['boolean', ['get', 'is_city_owned'], false],
+                      0.78,
+                      0.58
+                    ]
+                  }}
+                />
+                <Layer
+                  id="open-spaces-outline"
+                  type="line"
+                  paint={{
+                    'line-color': [
+                      'case',
+                      ['boolean', ['get', 'is_city_owned'], false],
+                      '#f0fdf4',
+                      '#064e3b'
+                    ],
+                    'line-width': [
+                      'case',
+                      ['boolean', ['get', 'is_city_owned'], false],
+                      1.8,
+                      0.85
+                    ],
+                    'line-opacity': 0.86
                   }}
                 />
               </Source>
@@ -3491,7 +3542,7 @@ const ExplorerMap = ({
                 )
               })()}
 
-              {dashboardMode === 'business' && (
+              {(dashboardMode === 'business' || dashboardMode === 'landParcels') && (
                 <>
                   {/* Business Liveliness Mode */}
                   {businessMode === 'liveliness' && (
@@ -3680,7 +3731,26 @@ const ExplorerMap = ({
                     </>
                   )}
 
-                  {businessMode === 'parcels' && (
+                  {popupInfo.feature.source === 'open-spaces' && (() => {
+                    const props = popupInfo.feature.properties || {}
+                    return (
+                      <>
+                        <h3>{props.name || 'Open Space'}</h3>
+                        <p><strong>Category:</strong> {props.category_label || props.category || 'Open space'}</p>
+                        <p><strong>Zoning:</strong> {props.zoning_primary || 'Unknown'}</p>
+                        <p><strong>Group:</strong> {props.zoning_group || 'Unknown'}</p>
+                        {props.area_m2 && (
+                          <p><strong>Area:</strong> {Number(props.area_m2).toLocaleString(undefined, { maximumFractionDigits: 0 })} m2</p>
+                        )}
+                        {Number.isFinite(Number(props.zoning_city_owned_pct)) && (
+                          <p><strong>City-owned overlap:</strong> {Number(props.zoning_city_owned_pct).toFixed(1)}%</p>
+                        )}
+                        {props.notes && <p><strong>Notes:</strong> {props.notes}</p>}
+                      </>
+                    )
+                  })()}
+
+                  {businessMode === 'parcels' && popupInfo.feature.source !== 'open-spaces' && (
                     <>
                       <h3>{popupInfo.feature.properties.address || popupInfo.feature.properties.prty_nmbr || 'Land Parcel'}</h3>
                       <p><strong>Zoning:</strong> {popupInfo.feature.properties.zoning}</p>

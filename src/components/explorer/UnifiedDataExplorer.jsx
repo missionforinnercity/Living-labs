@@ -252,6 +252,7 @@ const DASHBOARD_MODES = [
   { id: 'environment', label: 'Environment' },
   { id: 'traffic', label: 'Traffic' },
   { id: 'sentiment', label: 'Sentiment' },
+  { id: 'landParcels', label: 'Land Parcels' },
   { id: 'hospitality', label: 'Hospitality' }
 ]
 
@@ -264,8 +265,10 @@ const LAYER_CATEGORIES = [
   { id: 'amenities', label: 'Amenities', dashboard: 'business', dataKey: 'businesses' },
   { id: 'businessCategories', label: 'Business Categories', dashboard: 'business', dataKey: 'businesses' },
   { id: 'propertySales', label: 'Property Sales', dashboard: 'business', dataKey: 'properties' },
-  { id: 'landParcels', label: 'Land Parcels', dashboard: 'business', dataKey: 'landParcels' },
   { id: 'cityEvents', label: 'City Events', dashboard: 'business', dataKey: 'eventsData' },
+  // Land parcel layers
+  { id: 'landParcels', label: 'Land Parcels', dashboard: 'landParcels', dataKey: 'landParcels' },
+  { id: 'openSpaces', label: 'Open Spaces', dashboard: 'landParcels', dataKey: 'openSpaces' },
   // Walkability layers
   { id: 'activeMobility', label: 'Walking, Running & Cycling', dashboard: 'walkability', dataKey: 'activeMobility' },
   { id: 'roadSteepness', label: 'Road Steepness', dashboard: 'walkability', dataKey: 'roadSteepness' },
@@ -424,6 +427,7 @@ const UnifiedDataExplorer = () => {
     streetStalls: false,
     properties: false,
     landParcels: false,
+    openSpaces: false,
     eventsData: false,
     // Walkability layers
     network: false,
@@ -468,6 +472,7 @@ const UnifiedDataExplorer = () => {
     streetStallsData,
     propertiesData,
     landParcelsData,
+    openSpacesData,
     surveyData,
     eventsData,
     ccidBoundary
@@ -697,6 +702,46 @@ const UnifiedDataExplorer = () => {
       opportunityList
     }
   }, [filteredLandParcelsData, landParcelsData])
+
+  const openSpaceInsights = useMemo(() => {
+    const features = openSpacesData?.features || []
+    const summary = features.reduce((acc, feature) => {
+      const props = feature.properties || {}
+      const category = props.category_label || props.category || 'Open space'
+      const areaM2 = Number(props.area_m2)
+      acc.count += 1
+      acc.totalAreaM2 += Number.isFinite(areaM2) ? areaM2 : 0
+      acc.cityOwned += props.is_city_owned ? 1 : 0
+      acc.byCategory[category] = acc.byCategory[category] || {
+        name: category,
+        count: 0,
+        areaM2: 0,
+        color: PARCEL_ZONING_COLORS[props.zoning_group] || PARCEL_ZONING_COLORS['Open Space']
+      }
+      acc.byCategory[category].count += 1
+      acc.byCategory[category].areaM2 += Number.isFinite(areaM2) ? areaM2 : 0
+      return acc
+    }, {
+      count: 0,
+      totalAreaM2: 0,
+      cityOwned: 0,
+      byCategory: {}
+    })
+
+    const categoryChart = Object.values(summary.byCategory)
+      .sort((a, b) => b.areaM2 - a.areaM2 || b.count - a.count)
+      .slice(0, 8)
+
+    const largestSpaces = [...features]
+      .sort((a, b) => (Number(b.properties?.area_m2) || 0) - (Number(a.properties?.area_m2) || 0))
+      .slice(0, 8)
+
+    return {
+      summary,
+      categoryChart,
+      largestSpaces
+    }
+  }, [openSpacesData])
 
   const envHistoryDates = useMemo(() => {
     if (!envHistoryData?.rows) return []
@@ -1272,12 +1317,13 @@ const UnifiedDataExplorer = () => {
         amenities: 'amenities',
         businessCategories: 'categories',
         propertySales: 'property',
-        landParcels: 'parcels',
         cityEvents: 'events'
       }
       if (modeMap[categoryId]) {
         setBusinessMode(modeMap[categoryId])
       }
+    } else if (category.dashboard === 'landParcels') {
+      setBusinessMode('parcels')
     } else if (category.dashboard === 'walkability') {
       const modeMap = {
         activeMobility: 'activity',
@@ -1307,6 +1353,11 @@ const UnifiedDataExplorer = () => {
 
     if (modeId === 'hospitality') {
       selectCategory(hospitalityMapMode === 'zones' ? 'airbnbZones' : 'airbnbListings')
+      return
+    }
+
+    if (modeId === 'landParcels') {
+      selectCategory('landParcels')
       return
     }
 
@@ -1545,6 +1596,7 @@ const UnifiedDataExplorer = () => {
         streetStallsData,
         propertiesData,
         landParcelsData: filteredLandParcelsData,
+        openSpacesData,
         eventsData: filteredEventsData,
         pedestrianData,
         cyclingData,
@@ -1565,7 +1617,7 @@ const UnifiedDataExplorer = () => {
     } finally {
       setIsExporting(false)
     }
-  }, [map, layerStack, businessesData, streetStallsData, propertiesData, filteredLandParcelsData, filteredEventsData, pedestrianData, cyclingData, networkData, transitData, roadSteepnessData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
+  }, [map, layerStack, businessesData, streetStallsData, propertiesData, filteredLandParcelsData, openSpacesData, filteredEventsData, pedestrianData, cyclingData, networkData, transitData, roadSteepnessData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
 
   // Resize drag handlers
   const startSidebarDrag = useCallback((e) => {
@@ -1787,7 +1839,6 @@ const UnifiedDataExplorer = () => {
                     amenities: 'amenities',
                     categories: 'businessCategories',
                     property: 'propertySales',
-                    parcels: 'landParcels',
                     events: 'cityEvents'
                   }
                   if (categoryMap[mode]) {
@@ -1822,6 +1873,45 @@ const UnifiedDataExplorer = () => {
                 eventsScope={eventsScope}
                 onEventsScopeChange={setEventsScope}
                 renderEventsInline={businessMode !== 'events'}
+                hideLayerControls={true}
+              />
+            )}
+
+            {dashboardMode === 'landParcels' && (
+              <BusinessAnalytics
+                businessMode="parcels"
+                onModeChange={() => selectCategory('landParcels')}
+                dayOfWeek={dayOfWeek}
+                hour={hour}
+                onDayChange={setDayOfWeek}
+                onHourChange={setHour}
+                businessesData={businessesData}
+                streetStallsData={streetStallsData}
+                propertiesData={propertiesData}
+                landParcelsData={filteredLandParcelsData}
+                openSpacesData={openSpacesData}
+                parcelFilters={parcelFilters}
+                onParcelFiltersChange={setParcelFilters}
+                parcelInsights={parcelInsights}
+                openSpaceInsights={openSpaceInsights}
+                parcelColorMode={parcelColorMode}
+                onParcelColorModeChange={setParcelColorMode}
+                surveyData={surveyData}
+                opinionSource={opinionSource}
+                onOpinionSourceChange={setOpinionSource}
+                amenitiesFilters={amenitiesFilters}
+                onAmenitiesFiltersChange={setAmenitiesFilters}
+                categoriesFilters={categoriesFilters}
+                onCategoriesFiltersChange={setCategoriesFilters}
+                expandedGroups={expandedGroups}
+                onExpandedGroupsChange={setExpandedGroups}
+                eventsData={filteredEventsData}
+                eventsMonth={eventsMonth}
+                onEventsMonthChange={setEventsMonth}
+                eventsScope={eventsScope}
+                onEventsScopeChange={setEventsScope}
+                analyticsTitle="Land Parcels"
+                analyticsSubtitle="Cadastre, ownership, valuation, and mapped open-space opportunities"
                 hideLayerControls={true}
               />
             )}
@@ -2238,6 +2328,7 @@ const UnifiedDataExplorer = () => {
               surveyData={surveyData}
               propertiesData={propertiesData}
               landParcelsData={filteredLandParcelsData}
+              openSpacesData={openSpacesData}
               parcelColorMode={parcelColorMode}
               networkData={networkData}
               pedestrianData={pedestrianData}
@@ -2466,7 +2557,7 @@ const UnifiedDataExplorer = () => {
             </div>
           )}
 
-          {dashboardMode === 'business' && activeCategory === 'landParcels' && (
+          {dashboardMode === 'landParcels' && (activeCategory === 'landParcels' || activeCategory === 'openSpaces') && (
             <div
               className={`bottom-panel parcel-insights-panel ${parcelPanelMinimized ? 'parcel-insights-panel--minimized' : ''}`}
               style={{ right: `${effectiveSidebarWidth + 32}px` }}
@@ -2475,7 +2566,7 @@ const UnifiedDataExplorer = () => {
                 <h3>Parcel Planning Intelligence</h3>
                 <div className="panel-header-actions">
                   <div className="parcel-panel-meta">
-                    {(parcelInsights.summary.count || 0).toLocaleString()} parcels in current filter
+                    {(parcelInsights.summary.count || 0).toLocaleString()} parcels · {(openSpaceInsights.summary.count || 0).toLocaleString()} open spaces
                   </div>
                   <button
                     onClick={() => setParcelPanelMinimized(value => !value)}
@@ -2504,6 +2595,14 @@ const UnifiedDataExplorer = () => {
                     <div className="route-history-chip">
                       <span>Avg Value</span>
                       <strong>{formatRandCompact(parcelInsights.summary.valuedCount ? parcelInsights.summary.totalMarketValue / parcelInsights.summary.valuedCount : null)}</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>Open Spaces</span>
+                      <strong>{openSpaceInsights.summary.count.toLocaleString()}</strong>
+                    </div>
+                    <div className="route-history-chip">
+                      <span>Open Space Area</span>
+                      <strong>{(openSpaceInsights.summary.totalAreaM2 / 10000).toFixed(1)} ha</strong>
                     </div>
                   </div>
                   <div className="charts-container parcel-charts">
@@ -2546,6 +2645,36 @@ const UnifiedDataExplorer = () => {
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
+                    </div>
+                    <div className="chart-panel parcel-opportunity-panel">
+                      <h4>Open Space Types</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={openSpaceInsights.categoryChart}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                          <XAxis dataKey="name" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 10 }} />
+                          <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                          <Tooltip formatter={(value, name) => name === 'areaM2' ? `${Number(value).toLocaleString()} m2` : value} />
+                          <Bar dataKey="areaM2" name="Area m2" radius={[4, 4, 0, 0]}>
+                            {openSpaceInsights.categoryChart.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="chart-panel parcel-opportunity-panel">
+                      <h4>Largest Open Spaces</h4>
+                      <div className="parcel-opportunity-list">
+                        {openSpaceInsights.largestSpaces.length ? openSpaceInsights.largestSpaces.map((feature) => {
+                          const props = feature.properties || {}
+                          return (
+                            <div key={props.square_id} className="parcel-opportunity-row">
+                              <span>{props.name || props.category_label || `Open space ${props.square_id}`}</span>
+                              <strong>{props.category_label || 'open space'} · {(Number(props.area_m2 || 0) / 10000).toFixed(2)} ha</strong>
+                            </div>
+                          )
+                        }) : (
+                          <div className="parcel-empty-state">No open spaces available from cadastre.squares.</div>
+                        )}
+                      </div>
                     </div>
                     <div className="chart-panel parcel-opportunity-panel">
                       <h4>Public Land Watchlist</h4>

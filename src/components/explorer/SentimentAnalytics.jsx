@@ -120,6 +120,7 @@ const SentimentAnalytics = ({
   const streetMonthly = analytics?.streetMonthly || []
   const streetSources = analytics?.streetSources || []
   const streetThemes = analytics?.streetThemes || []
+  const streetBusinesses = analytics?.streetBusinesses || []
   const streetComments = analytics?.streetComments || []
 
   const streetOptions = useMemo(() => streets.slice(0, 40), [streets])
@@ -163,6 +164,19 @@ const SentimentAnalytics = ({
   const detailMonthly = useMemo(() => streetMonthly.filter((row) => row.street_name === selectedDetailStreet), [selectedDetailStreet, streetMonthly])
   const detailSources = useMemo(() => streetSources.filter((row) => row.street_name === selectedDetailStreet).slice(0, 10), [selectedDetailStreet, streetSources])
   const detailThemes = useMemo(() => streetThemes.filter((row) => row.street_name === selectedDetailStreet).slice(0, 12), [selectedDetailStreet, streetThemes])
+  const detailBusinesses = useMemo(() => streetBusinesses.filter((row) => row.street_name === selectedDetailStreet), [selectedDetailStreet, streetBusinesses])
+  const complaintBusinesses = useMemo(() => (
+    [...detailBusinesses]
+      .filter((business) => Number(business.negative_count || 0) > 0)
+      .sort((a, b) => Number(b.negative_count || 0) - Number(a.negative_count || 0) || Number(a.avg_sentiment || 0) - Number(b.avg_sentiment || 0))
+      .slice(0, 8)
+  ), [detailBusinesses])
+  const positiveBusinesses = useMemo(() => (
+    [...detailBusinesses]
+      .filter((business) => Number(business.positive_count || 0) > 0)
+      .sort((a, b) => Number(b.positive_count || 0) - Number(a.positive_count || 0) || Number(b.avg_sentiment || 0) - Number(a.avg_sentiment || 0))
+      .slice(0, 8)
+  ), [detailBusinesses])
   const detailComments = useMemo(() => streetComments.filter((row) => row.street_name === selectedDetailStreet), [selectedDetailStreet, streetComments])
   const detailCategoryOptions = useMemo(() => {
     const byCategory = new Map()
@@ -640,6 +654,36 @@ const SentimentAnalytics = ({
                     </div>
                   </div>
 
+                  <div className="subsection-header"><h4>Business Sentiment</h4></div>
+                  <div className="sentiment-business-grid">
+                    <div className="sentiment-business-panel">
+                      <h4>Most Complaints</h4>
+                      <div className="sentiment-business-list">
+                        {complaintBusinesses.map((business) => (
+                          <BusinessSentimentRow
+                            key={`complaint-${business.street_name}-${business.place_name}`}
+                            business={business}
+                            mode="negative"
+                          />
+                        ))}
+                      </div>
+                      {!complaintBusinesses.length && <div className="sentiment-empty">No complaint-heavy businesses found for this street.</div>}
+                    </div>
+                    <div className="sentiment-business-panel">
+                      <h4>Doing Well</h4>
+                      <div className="sentiment-business-list">
+                        {positiveBusinesses.map((business) => (
+                          <BusinessSentimentRow
+                            key={`positive-${business.street_name}-${business.place_name}`}
+                            business={business}
+                            mode="positive"
+                          />
+                        ))}
+                      </div>
+                      {!positiveBusinesses.length && <div className="sentiment-empty">No positive business leaders found for this street.</div>}
+                    </div>
+                  </div>
+
                   <div className="subsection-header"><h4>Drill Into Comments</h4></div>
                   <div className="sentiment-comment-filters">
                     <label>
@@ -841,6 +885,31 @@ const SentimentAnalytics = ({
         </>
       )}
     </div>
+  )
+}
+
+const BusinessSentimentRow = ({ business, mode }) => {
+  const isPositive = mode === 'positive'
+  const signalCount = Number((isPositive ? business.positive_count : business.negative_count) || 0)
+  const totalCount = Math.max(1, Number(business.comment_count || 0))
+  const signalShare = Math.round((signalCount / totalCount) * 100)
+  const color = isPositive ? SENTIMENT_COLORS.positive : SENTIMENT_COLORS.negative
+
+  return (
+    <article className="sentiment-business-row">
+      <div className="sentiment-business-row-main">
+        <strong>{business.place_name}</strong>
+        <span>{compact(signalCount)} {isPositive ? 'positive' : 'complaints'} · {compact(business.comment_count)} total</span>
+      </div>
+      <div className="sentiment-business-row-score">
+        <strong style={{ color }}>{formatScore(business.avg_sentiment)}</strong>
+        {business.avg_stars !== null && business.avg_stars !== undefined && <small>{Number(business.avg_stars).toFixed(1)} stars</small>}
+      </div>
+      <div className="sentiment-business-meter" aria-hidden="true">
+        <i style={{ width: `${Math.max(6, signalShare)}%`, background: color }} />
+      </div>
+      {business.url && <a href={business.url} target="_blank" rel="noreferrer">Open source</a>}
+    </article>
   )
 }
 
