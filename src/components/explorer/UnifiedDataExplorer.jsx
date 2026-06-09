@@ -46,6 +46,8 @@ const SentimentAnalytics = lazy(() => import('./SentimentAnalytics'))
 const ServiceRequestsAnalytics = lazy(() => import('./ServiceRequestsAnalytics'))
 const HospitalityAnalytics = lazy(() => import('./HospitalityAnalytics'))
 
+const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY
+
 const toEcologyFeatureKey = (value) => {
   if (value === null || value === undefined || value === '') return null
   return String(value)
@@ -244,6 +246,238 @@ const formatRandCompact = (value) => {
   return `${sign}R${Math.round(absolute)}`
 }
 
+const titleCase = (value) => String(value || '')
+  .replace(/[_-]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase()
+  .replace(/\b\w/g, (match) => match.toUpperCase())
+
+const isMachineOpenSpaceName = (value) => {
+  const text = String(value || '').trim()
+  return !text || /^osm\s/i.test(text) || /\bway\/\d+/i.test(text) || /\bamenity=/i.test(text)
+}
+
+const openSpaceCategoryLabel = (props = {}) => {
+  const raw = props.category_label || props.category || props.zoning_group || props.zoning_primary || 'Open space'
+  return titleCase(raw)
+}
+
+const openSpaceDisplayName = (feature, fallbackIndex = null) => {
+  const props = feature?.properties || {}
+  if (!isMachineOpenSpaceName(props.name)) return titleCase(props.name)
+  const category = openSpaceCategoryLabel(props)
+  const areaM2 = Number(props.area_m2)
+  const areaLabel = Number.isFinite(areaM2) && areaM2 > 0 ? `${(areaM2 / 10000).toFixed(2)} ha` : null
+  const id = props.square_id || props.fid || props.ogc_fid || fallbackIndex
+  return [category, areaLabel, id ? `Site ${id}` : null].filter(Boolean).join(' · ')
+}
+
+const getOpenSpaceFeatureKey = (feature, fallbackIndex = null) => {
+  const props = feature?.properties || {}
+  return String(props.square_id || props.fid || props.ogc_fid || fallbackIndex || openSpaceDisplayName(feature, fallbackIndex))
+}
+
+const featureAreaM2 = (feature) => {
+  const propArea = Number(feature?.properties?.area_m2)
+  if (Number.isFinite(propArea) && propArea > 0) return propArea
+  try {
+    const area = turf.area(feature)
+    return Number.isFinite(area) && area > 0 ? area : null
+  } catch {
+    return null
+  }
+}
+
+const bboxesOverlap = (a, b) => (
+  a?.[0] <= b?.[2] && a?.[2] >= b?.[0] && a?.[1] <= b?.[3] && a?.[3] >= b?.[1]
+)
+
+const metricNumber = (properties, keys) => {
+  for (const key of keys) {
+    const value = Number(properties?.[key])
+    if (Number.isFinite(value)) return value
+  }
+  return null
+}
+
+const mean = (values) => {
+  const finite = values.filter(Number.isFinite)
+  return finite.length ? finite.reduce((sum, value) => sum + value, 0) / finite.length : null
+}
+
+const percentileFromSorted = (value, sortedValues) => {
+  if (!Number.isFinite(value) || !sortedValues.length) return null
+  if (sortedValues.length === 1) return 50
+  const min = sortedValues[0]
+  const max = sortedValues[sortedValues.length - 1]
+  if (min === max) return 50
+  let index = sortedValues.findIndex((entry) => entry >= value)
+  if (index < 0) index = sortedValues.length - 1
+  return (index / (sortedValues.length - 1)) * 100
+}
+
+const weightedAverage = (rows) => {
+  const validRows = rows.filter((row) => Number.isFinite(row.value) && Number.isFinite(row.weight) && row.weight > 0)
+  const totalWeight = validRows.reduce((sum, row) => sum + row.weight, 0)
+  if (!totalWeight) return null
+  return validRows.reduce((sum, row) => sum + row.value * row.weight, 0) / totalWeight
+}
+
+const safeCentroid = (feature) => {
+  try {
+    return turf.centroid(feature)
+  } catch {
+    return null
+  }
+}
+
+const featureCentroidCoordinates = (feature) => {
+  const centroid = safeCentroid(feature)
+  const coords = centroid?.geometry?.coordinates
+  return Array.isArray(coords) && coords.length >= 2
+    ? { lng: coords[0], lat: coords[1] }
+    : null
+}
+
+const lineDistanceKm = (point, feature) => {
+  if (!point || !feature) return null
+  try {
+    return turf.pointToLineDistance(point, feature, { units: 'kilometers' })
+  } catch {
+    try {
+      return turf.distance(point, turf.centroid(feature), { units: 'kilometers' })
+    } catch {
+      return null
+    }
+  }
+}
+
+const heatValueFromProperties = (properties = {}) => metricNumber(properties, [
+  'hot_street_score',
+  'temp_percentile',
+  'pedestrian_heat_percentile',
+  'mean_pedestrian_heat_score',
+  'pedestrian_heat_score',
+  'mean_urban_heat_score',
+  'urban_heat_score',
+  'surface_temp',
+  'mean_heat_model_lst_c',
+  'predicted_lst_c_fusion',
+  'mean_lst_c'
+])
+
+const canopyCoveragePctForFeature = (feature, treeCanopyData) => {
+  if (!feature?.geometry) return null
+  const areaM2 = featureAreaM2(feature)
+  if (!Number.isFinite(areaM2) || areaM2 <= 0) return null
+  const selectedBbox = turf.bbox(feature)
+  let canopyAreaM2 = 0
+  let hasOverlap = false
+
+  ;(treeCanopyData?.features || []).forEach((candidate) => {
+    try {
+      if (!bboxesOverlap(selectedBbox, turf.bbox(candidate))) return
+      if (!turf.booleanIntersects(feature, candidate)) return
+      const overlap = turf.intersect(feature, candidate)
+      if (overlap) {
+        canopyAreaM2 += turf.area(overlap)
+        hasOverlap = true
+      }
+    } catch {
+      // Ignore malformed micro-polygons.
+    }
+  })
+
+  if (!hasOverlap) return null
+  return Math.min(100, (canopyAreaM2 / areaM2) * 100)
+}
+
+const nearbyHeatRowsForFeature = (feature, temperatureData) => {
+  const centroid = safeCentroid(feature)
+  if (!centroid) return []
+  return (temperatureData?.features || [])
+    .map((candidate) => {
+      const distance = lineDistanceKm(centroid, candidate)
+      if (!Number.isFinite(distance) || distance > 0.18) return null
+      const heat = heatValueFromProperties(candidate.properties)
+      return Number.isFinite(heat) ? { value: heat, distance } : null
+    })
+    .filter(Boolean)
+}
+
+const nearbyMobilityTripsForFeature = (feature, pedestrianData, cyclingData) => {
+  const centroid = safeCentroid(feature)
+  if (!centroid) return 0
+  return [...(pedestrianData?.features || []), ...(cyclingData?.features || [])]
+    .map((candidate) => {
+      const distance = lineDistanceKm(centroid, candidate)
+      if (!Number.isFinite(distance) || distance > 0.12) return null
+      const trips = Number(candidate.properties?.total_trip_count || 0)
+      return Number.isFinite(trips) && trips > 0 ? trips : null
+    })
+    .filter(Number.isFinite)
+    .reduce((sum, value) => sum + value, 0)
+}
+
+const buildOpenSpaceOpportunityScore = (feature, {
+  treeCanopyData,
+  temperatureData,
+  pedestrianData,
+  cyclingData,
+  openSpacesData,
+  heatDistribution,
+  canopyDistribution,
+  mobilityDistribution
+}) => {
+  if (!feature?.geometry) return null
+
+  const areaM2 = featureAreaM2(feature)
+  const comparisonFeatures = openSpacesData?.features?.length ? openSpacesData.features : [feature]
+
+  const canopyCoveragePct = canopyCoveragePctForFeature(feature, treeCanopyData)
+  const nearbyHeat = nearbyHeatRowsForFeature(feature, temperatureData)
+  const heatValue = mean(nearbyHeat.map((row) => row.value))
+  const heatScore = nearbyHeat.length
+    ? weightedAverage(nearbyHeat.map((row) => ({
+      value: percentileFromSorted(row.value, heatDistribution),
+      weight: 1 / Math.max(row.distance, 0.01)
+    })))
+    : null
+  const mobilityTrips = nearbyMobilityTripsForFeature(feature, pedestrianData, cyclingData)
+  const canopyPercentile = percentileFromSorted(canopyCoveragePct, canopyDistribution)
+  const canopyGapScore = Number.isFinite(canopyPercentile) ? 100 - canopyPercentile : null
+  const mobilityScore = percentileFromSorted(mobilityTrips, mobilityDistribution) ?? 0
+  const weightedScores = [
+    { score: canopyGapScore, weight: 0.38 },
+    { score: heatScore, weight: 0.34 },
+    { score: mobilityScore, weight: 0.28 }
+  ].filter((item) => Number.isFinite(item.score))
+  const totalWeight = weightedScores.reduce((sum, item) => sum + item.weight, 0)
+  const interventionScore = totalWeight
+    ? weightedScores.reduce((sum, item) => sum + item.score * item.weight, 0) / totalWeight
+    : null
+
+  return {
+    name: openSpaceDisplayName(feature),
+    areaM2,
+    canopyCoveragePct,
+    heatValue,
+    mobilityTrips,
+    interventionScore,
+    metrics: [
+      { id: 'canopy', label: 'Tree Canopy Gap', value: canopyGapScore, display: Number.isFinite(canopyCoveragePct) ? `${canopyCoveragePct.toFixed(1)}% canopy · P${Number.isFinite(canopyPercentile) ? canopyPercentile.toFixed(0) : '—'}` : 'No canopy overlap', tone: '#22c55e' },
+      { id: 'heat', label: 'Heat Exposure', value: heatScore, display: Number.isFinite(heatScore) ? `P${heatScore.toFixed(0)} · ${heatValue.toFixed(1)} raw` : 'No nearby heat segment', tone: '#f97316' },
+      { id: 'mobility', label: 'Active Mobility Demand', value: mobilityScore, display: `P${Number.isFinite(mobilityScore) ? mobilityScore.toFixed(0) : '—'} · ${Math.round(mobilityTrips).toLocaleString()} nearby trips`, tone: '#a78bfa' }
+    ],
+    evidence: {
+      canopyFeatures: canopyDistribution.length,
+      heatFeatures: nearbyHeat.length,
+      mobilityFeatures: mobilityDistribution.length
+    }
+  }
+}
+
 const DASHBOARD_MODES = [
   { id: 'business', label: 'Business Analytics' },
   { id: 'walkability', label: 'Active Mobility' },
@@ -331,7 +565,13 @@ const UnifiedDataExplorer = () => {
   const [eventsPanelHeight, setEventsPanelHeight] = useState(520)
   const eventsPanelDrag = useRef({ active: false, startY: 0, startHeight: 520 })
   const [parcelPanelMinimized, setParcelPanelMinimized] = useState(false)
+  const [selectedOpenSpaceFeature, setSelectedOpenSpaceFeature] = useState(null)
   const [parcelColorMode, setParcelColorMode] = useState('zoning')
+  const [openSpaceColorMode, setOpenSpaceColorMode] = useState('zoning')
+  const [openSpaceScoringEnabled, setOpenSpaceScoringEnabled] = useState(false)
+  const [openSpaceScoringStatus, setOpenSpaceScoringStatus] = useState('idle')
+  const [openSpaceScoringProgress, setOpenSpaceScoringProgress] = useState(0)
+  const [openSpacePriorityResults, setOpenSpacePriorityResults] = useState([])
   const [parcelFilters, setParcelFilters] = useState({
     cityOwnedOnly: false,
     zoningGroups: [],
@@ -476,7 +716,7 @@ const UnifiedDataExplorer = () => {
     surveyData,
     eventsData,
     ccidBoundary
-  } = useExplorerBusinessData({ dashboardMode, lockedLayers })
+  } = useExplorerBusinessData({ dashboardMode, activeCategory, lockedLayers })
 
   const {
     networkData,
@@ -493,7 +733,9 @@ const UnifiedDataExplorer = () => {
     effectiveSelectedMonth
   } = useExplorerWalkabilityData({
     dashboardMode,
+    activeCategory,
     lockedLayers,
+    enableOpenSpaceScoring: dashboardMode === 'landParcels' && activeCategory === 'openSpaces' && openSpaceScoringEnabled,
     selectedMonth: selectedWalkabilityMonth,
     selectedRouteSegment,
     compareRouteSegment
@@ -504,7 +746,7 @@ const UnifiedDataExplorer = () => {
     streetLights,
     missionInterventions,
     lightingThresholds
-  } = useExplorerLightingData({ dashboardMode, lockedLayers })
+  } = useExplorerLightingData({ dashboardMode, activeCategory, lockedLayers })
 
   const {
     temperatureData,
@@ -517,9 +759,18 @@ const UnifiedDataExplorer = () => {
     ecologyHeatByYear,
     envCurrentData,
     envHistoryData
-  } = useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, season, timeOfDay, windDirection, windSpeedKmh })
+  } = useExplorerEnvironmentData({
+    dashboardMode,
+    activeCategory,
+    lockedLayers,
+    enableOpenSpaceScoring: dashboardMode === 'landParcels' && activeCategory === 'openSpaces' && openSpaceScoringEnabled,
+    season,
+    timeOfDay,
+    windDirection,
+    windSpeedKmh
+  })
 
-  const { trafficData } = useExplorerTrafficData({ dashboardMode, lockedLayers })
+  const { trafficData } = useExplorerTrafficData({ dashboardMode, activeCategory, lockedLayers })
 
   const {
     sentimentSegments,
@@ -528,6 +779,7 @@ const UnifiedDataExplorer = () => {
     sentimentError
   } = useExplorerSentimentData({
     dashboardMode,
+    activeCategory,
     lockedLayers,
     selectedMonth: selectedSentimentMonth,
     sourceMode: sentimentPerspective
@@ -538,14 +790,14 @@ const UnifiedDataExplorer = () => {
     serviceRequestAnalytics,
     serviceRequestsLoading,
     serviceRequestsError
-  } = useExplorerServiceRequestsData({ dashboardMode, lockedLayers, timeframe: serviceRequestTimeframe })
+  } = useExplorerServiceRequestsData({ dashboardMode, activeCategory, lockedLayers, timeframe: serviceRequestTimeframe })
 
   const {
     airbnbListings,
     airbnbAnalytics,
     hospitalityLoading,
     hospitalityError
-  } = useExplorerHospitalityData({ dashboardMode, lockedLayers, scope: hospitalityScope })
+  } = useExplorerHospitalityData({ dashboardMode, activeCategory, lockedLayers, scope: hospitalityScope })
 
   const filteredEventsData = useMemo(() => {
     if (!eventsData?.features) return eventsData
@@ -741,6 +993,166 @@ const UnifiedDataExplorer = () => {
       categoryChart,
       largestSpaces
     }
+  }, [openSpacesData])
+
+  const openSpaceScoringRequested = dashboardMode === 'landParcels' && activeCategory === 'openSpaces' && openSpaceScoringEnabled
+
+  useEffect(() => {
+    if (!openSpaceScoringRequested) return
+    if (!openSpacesData?.features?.length) return
+
+    if (!temperatureData || !treeCanopyData || !pedestrianData || !cyclingData) {
+      setOpenSpaceScoringStatus('loading')
+      setOpenSpaceScoringProgress(5)
+      return
+    }
+
+    let cancelled = false
+    const features = openSpacesData.features
+    const heatDistribution = (temperatureData.features || [])
+      .map((candidate) => heatValueFromProperties(candidate.properties))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)
+
+    setOpenSpaceScoringStatus('calculating')
+    setOpenSpaceScoringProgress(10)
+
+    const scheduleNext = typeof window !== 'undefined' && window.requestAnimationFrame
+      ? window.requestAnimationFrame.bind(window)
+      : (callback) => setTimeout(callback, 0)
+
+    const prelimRows = []
+    const chunkSize = 10
+
+    const computeChunk = (startIndex) => {
+      if (cancelled) return
+
+      const endIndex = Math.min(startIndex + chunkSize, features.length)
+      for (let index = startIndex; index < endIndex; index += 1) {
+        const feature = features[index]
+        prelimRows.push({
+          key: getOpenSpaceFeatureKey(feature, index),
+          feature,
+          index,
+          canopyCoveragePct: canopyCoveragePctForFeature(feature, treeCanopyData),
+          mobilityTrips: nearbyMobilityTripsForFeature(feature, pedestrianData, cyclingData)
+        })
+      }
+
+      setOpenSpaceScoringProgress(Math.round((endIndex / features.length) * 65))
+
+      if (endIndex < features.length) {
+        scheduleNext(() => computeChunk(endIndex))
+        return
+      }
+
+      const canopyDistribution = prelimRows
+        .map((row) => row.canopyCoveragePct)
+        .filter(Number.isFinite)
+        .sort((a, b) => a - b)
+      const mobilityDistribution = prelimRows
+        .map((row) => row.mobilityTrips)
+        .filter(Number.isFinite)
+        .sort((a, b) => a - b)
+
+      const scored = prelimRows
+        .map((row) => {
+          const score = buildOpenSpaceOpportunityScore(row.feature, {
+            treeCanopyData,
+            temperatureData,
+            pedestrianData,
+            cyclingData,
+            openSpacesData,
+            heatDistribution,
+            canopyDistribution,
+            mobilityDistribution
+          })
+
+          return score ? { ...row, score } : null
+        })
+        .filter(Boolean)
+
+      if (cancelled) return
+      setOpenSpacePriorityResults(scored)
+      setOpenSpaceScoringStatus('ready')
+      setOpenSpaceScoringProgress(100)
+    }
+
+    computeChunk(0)
+
+    return () => {
+      cancelled = true
+    }
+  }, [cyclingData, dashboardMode, openSpaceScoringRequested, openSpacesData, pedestrianData, temperatureData, treeCanopyData])
+
+  const openSpacePriorityScoreMap = useMemo(() => (
+    new Map(openSpacePriorityResults.map((item) => [item.key, item.score]))
+  ), [openSpacePriorityResults])
+
+  const effectiveOpenSpaceColorMode = openSpaceColorMode === 'priority' && openSpaceScoringStatus === 'ready'
+    ? 'priority'
+    : 'zoning'
+
+  const openSpacesPriorityData = useMemo(() => {
+    if (effectiveOpenSpaceColorMode !== 'priority' || !openSpacesData?.features?.length || !openSpacePriorityScoreMap.size) return null
+
+    return {
+      ...openSpacesData,
+      features: openSpacesData.features.map((feature, index) => {
+        const score = openSpacePriorityScoreMap.get(getOpenSpaceFeatureKey(feature, index))
+        if (!score) return feature
+
+        return {
+          ...feature,
+          properties: {
+            ...feature.properties,
+            priority_score: score.interventionScore,
+            priority_score_relative_percentile: score.interventionScore
+          }
+        }
+      })
+    }
+  }, [effectiveOpenSpaceColorMode, openSpacePriorityScoreMap, openSpacesData])
+
+  const priorityOpenSpaces = useMemo(() => {
+    if (dashboardMode !== 'landParcels' || activeCategory !== 'openSpaces') return []
+
+    return [...openSpacePriorityResults]
+      .sort((a, b) => {
+        const scoreDelta = (Number(b.score?.interventionScore) || -1) - (Number(a.score?.interventionScore) || -1)
+        if (scoreDelta !== 0) return scoreDelta
+        return (Number(b.score?.areaM2) || 0) - (Number(a.score?.areaM2) || 0)
+      })
+      .slice(0, 8)
+  }, [activeCategory, dashboardMode, openSpacePriorityResults])
+
+  const selectedOpenSpaceScore = useMemo(() => {
+    if (!selectedOpenSpaceFeature) return null
+    return openSpacePriorityScoreMap.get(getOpenSpaceFeatureKey(selectedOpenSpaceFeature)) || null
+  }, [openSpacePriorityScoreMap, selectedOpenSpaceFeature])
+
+  const selectedOpenSpaceDetails = useMemo(() => {
+    if (!selectedOpenSpaceFeature) return null
+    const props = selectedOpenSpaceFeature.properties || {}
+    const areaM2 = selectedOpenSpaceScore?.areaM2 ?? featureAreaM2(selectedOpenSpaceFeature)
+    return {
+      name: selectedOpenSpaceScore?.name || openSpaceDisplayName(selectedOpenSpaceFeature),
+      category: openSpaceCategoryLabel(props),
+      zoning: props.zoning_primary || props.zoning || 'Unknown',
+      group: props.zoning_group || 'Unknown',
+      areaM2,
+      id: props.square_id || props.fid || props.ogc_fid || 'Unnumbered',
+      notes: props.notes || '',
+      streetView: featureCentroidCoordinates(selectedOpenSpaceFeature)
+    }
+  }, [selectedOpenSpaceFeature, selectedOpenSpaceScore])
+
+  useEffect(() => {
+    setOpenSpacePriorityResults([])
+    setOpenSpaceScoringEnabled(false)
+    setOpenSpaceScoringStatus('idle')
+    setOpenSpaceScoringProgress(0)
+    setOpenSpaceColorMode('zoning')
   }, [openSpacesData])
 
   const envHistoryDates = useMemo(() => {
@@ -1120,7 +1532,10 @@ const UnifiedDataExplorer = () => {
       score(primary, 'Pedestrian', (feature) => heatMetricValue(feature, 'pedestrian_heat_score') ?? heatMetricValue(feature, 'pedestrian_heat_score_relative_percentile') ?? 0),
       score(primary, 'Priority', (feature) => heatMetricValue(feature, 'priority_score') ?? heatMetricValue(feature, 'priority_score_relative_percentile') ?? 0),
       score(primary, 'Retention', (feature) => heatMetricValue(feature, 'retained_heat_score_relative_percentile') ?? heatMetricValue(feature, 'night_heat_retention_c', 'retained_heat_score') ?? 0),
-      score(primary, 'Canopy gap', (feature) => 100 - (heatMetricValue(feature, 'effective_canopy_pct') ?? 0))
+      score(primary, 'Canopy gap', (feature) => {
+        const canopyPct = heatMetricValue(feature, 'effective_canopy_pct')
+        return Number.isFinite(canopyPct) ? 100 - canopyPct : null
+      })
     ]
   }, [selectedHeatGridFeatures])
 
@@ -1321,6 +1736,9 @@ const UnifiedDataExplorer = () => {
       }
       if (modeMap[categoryId]) {
         setBusinessMode(modeMap[categoryId])
+      }
+      if (categoryId === 'vendorOpinions') {
+        setOpinionSource('informal')
       }
     } else if (category.dashboard === 'landParcels') {
       setBusinessMode('parcels')
@@ -1858,6 +2276,8 @@ const UnifiedDataExplorer = () => {
                 parcelInsights={parcelInsights}
                 parcelColorMode={parcelColorMode}
                 onParcelColorModeChange={setParcelColorMode}
+                openSpaceColorMode={effectiveOpenSpaceColorMode}
+                onOpenSpaceColorModeChange={setOpenSpaceColorMode}
                 surveyData={surveyData}
                 opinionSource={opinionSource}
                 onOpinionSourceChange={setOpinionSource}
@@ -2329,7 +2749,9 @@ const UnifiedDataExplorer = () => {
               propertiesData={propertiesData}
               landParcelsData={filteredLandParcelsData}
               openSpacesData={openSpacesData}
+              openSpacesPriorityData={openSpacesPriorityData}
               parcelColorMode={parcelColorMode}
+              openSpaceColorMode={effectiveOpenSpaceColorMode}
               networkData={networkData}
               pedestrianData={pedestrianData}
               cyclingData={cyclingData}
@@ -2364,6 +2786,11 @@ const UnifiedDataExplorer = () => {
               onGreeneryStreetSelect={openGreeneryStreetDetail}
               onEcologyFeatureSelect={openEcologyFeatureDetail}
               onHeatGridFeatureSelect={openHeatGridFeatureDetail}
+              selectedOpenSpaceFeature={selectedOpenSpaceFeature}
+              onOpenSpaceSelect={(feature) => {
+                setSelectedOpenSpaceFeature(feature)
+                setParcelPanelMinimized(false)
+              }}
               visibleLayers={visibleLayers}
               layerStack={layerStack}
               activeCategory={activeCategory}
@@ -2563,11 +2990,39 @@ const UnifiedDataExplorer = () => {
               style={{ right: `${effectiveSidebarWidth + 32}px` }}
             >
               <div className="panel-header">
-                <h3>Parcel Planning Intelligence</h3>
+                <h3>{activeCategory === 'openSpaces' ? 'Open Space Intervention Fit' : 'Parcel Planning Intelligence'}</h3>
                 <div className="panel-header-actions">
                   <div className="parcel-panel-meta">
-                    {(parcelInsights.summary.count || 0).toLocaleString()} parcels · {(openSpaceInsights.summary.count || 0).toLocaleString()} open spaces
+                    {activeCategory === 'openSpaces' && selectedOpenSpaceScore
+                      ? `${selectedOpenSpaceScore.name} · intervention score ${Number.isFinite(selectedOpenSpaceScore.interventionScore) ? selectedOpenSpaceScore.interventionScore.toFixed(0) : '—'}`
+                      : activeCategory === 'openSpaces'
+                        ? `${(openSpaceInsights.summary.count || 0).toLocaleString()} open spaces · ${(openSpaceInsights.summary.totalAreaM2 / 10000).toFixed(1)} ha`
+                        : `${(parcelInsights.summary.count || 0).toLocaleString()} parcels · ${(openSpaceInsights.summary.count || 0).toLocaleString()} open spaces`}
                   </div>
+                  {activeCategory === 'openSpaces' && (
+                    <button
+                      type="button"
+                      className="service-requests-open-panel"
+                      disabled={openSpaceScoringStatus === 'loading' || openSpaceScoringStatus === 'calculating'}
+                      onClick={() => {
+                        setOpenSpacePriorityResults([])
+                        setOpenSpaceScoringProgress(0)
+                        setOpenSpaceScoringStatus('idle')
+                        setOpenSpaceScoringEnabled(false)
+                        window.setTimeout(() => {
+                          setOpenSpaceScoringEnabled(true)
+                        }, 0)
+                      }}
+                    >
+                      {openSpaceScoringStatus === 'ready'
+                        ? 'Recalculate KPIs'
+                        : openSpaceScoringStatus === 'loading'
+                          ? 'Loading KPI Layers...'
+                          : openSpaceScoringStatus === 'calculating'
+                            ? `Calculating ${openSpaceScoringProgress}%`
+                            : 'Calculate KPI Scores'}
+                    </button>
+                  )}
                   <button
                     onClick={() => setParcelPanelMinimized(value => !value)}
                     className="close-btn"
@@ -2577,35 +3032,265 @@ const UnifiedDataExplorer = () => {
                   </button>
                 </div>
               </div>
+              {activeCategory === 'openSpaces' && openSpaceScoringEnabled && openSpaceScoringStatus !== 'idle' && openSpaceScoringStatus !== 'ready' && (
+                <div className="parcel-progress-block">
+                  <div className="parcel-panel-note">
+                    {openSpaceScoringStatus === 'loading'
+                      ? 'Loading canopy, heat, and active-mobility support layers for scoring.'
+                      : 'Computing open-space KPI scores in batches so the dashboard stays responsive.'}
+                  </div>
+                  <div className="parcel-progress-bar" aria-hidden="true">
+                    <span style={{ width: `${Math.max(6, openSpaceScoringProgress)}%` }} />
+                  </div>
+                </div>
+              )}
               {!parcelPanelMinimized && (
                 <>
                   <div className="parcel-kpi-row">
-                    <div className="route-history-chip">
-                      <span>Total Market Value</span>
-                      <strong>{formatRandCompact(parcelInsights.summary.totalMarketValue)}</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>City Owned</span>
-                      <strong>{parcelInsights.summary.cityOwned.toLocaleString()}</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>Land Area</span>
-                      <strong>{(parcelInsights.summary.totalAreaM2 / 10000).toFixed(1)} ha</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>Avg Value</span>
-                      <strong>{formatRandCompact(parcelInsights.summary.valuedCount ? parcelInsights.summary.totalMarketValue / parcelInsights.summary.valuedCount : null)}</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>Open Spaces</span>
-                      <strong>{openSpaceInsights.summary.count.toLocaleString()}</strong>
-                    </div>
-                    <div className="route-history-chip">
-                      <span>Open Space Area</span>
-                      <strong>{(openSpaceInsights.summary.totalAreaM2 / 10000).toFixed(1)} ha</strong>
-                    </div>
+                    {activeCategory === 'openSpaces' ? (
+                      <>
+                        <div className="route-history-chip">
+                          <span>Open Spaces</span>
+                          <strong>{openSpaceInsights.summary.count.toLocaleString()}</strong>
+                        </div>
+                        <div className="route-history-chip">
+                          <span>Mapped Area</span>
+                          <strong>{(openSpaceInsights.summary.totalAreaM2 / 10000).toFixed(1)} ha</strong>
+                        </div>
+                        <div className="route-history-chip">
+                          <span>City Owned</span>
+                          <strong>{openSpaceInsights.summary.cityOwned.toLocaleString()}</strong>
+                        </div>
+                        <div className="route-history-chip">
+                          <span>Selected Area</span>
+                          <strong>{Number.isFinite(selectedOpenSpaceDetails?.areaM2) ? `${(selectedOpenSpaceDetails.areaM2 / 10000).toFixed(2)} ha` : 'Click a site'}</strong>
+                        </div>
+                        <div className="route-history-chip route-history-chip--accent">
+                          <span>Project Value</span>
+                          <strong>{Number.isFinite(selectedOpenSpaceScore?.interventionScore) ? `${selectedOpenSpaceScore.interventionScore.toFixed(0)}/100` : '—'}</strong>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="route-history-chip">
+                          <span>Total Market Value</span>
+                          <strong>{formatRandCompact(parcelInsights.summary.totalMarketValue)}</strong>
+                        </div>
+                        <div className="route-history-chip">
+                          <span>City Owned</span>
+                          <strong>{parcelInsights.summary.cityOwned.toLocaleString()}</strong>
+                        </div>
+                        <div className="route-history-chip">
+                          <span>Land Area</span>
+                          <strong>{(parcelInsights.summary.totalAreaM2 / 10000).toFixed(1)} ha</strong>
+                        </div>
+                        <div className="route-history-chip">
+                          <span>Avg Value</span>
+                          <strong>{formatRandCompact(parcelInsights.summary.valuedCount ? parcelInsights.summary.totalMarketValue / parcelInsights.summary.valuedCount : null)}</strong>
+                        </div>
+                        <div className="route-history-chip">
+                          <span>Open Spaces</span>
+                          <strong>{openSpaceInsights.summary.count.toLocaleString()}</strong>
+                        </div>
+                        <div className="route-history-chip">
+                          <span>Open Space Area</span>
+                          <strong>{(openSpaceInsights.summary.totalAreaM2 / 10000).toFixed(1)} ha</strong>
+                        </div>
+                      </>
+                    )}
                   </div>
                   <div className="charts-container parcel-charts">
+                    {activeCategory === 'openSpaces' ? (
+                      <>
+                        <div className="chart-panel parcel-selected-panel">
+                          <h4>Selected Plot Details</h4>
+                          {selectedOpenSpaceDetails ? (
+                            <>
+                              <div className="parcel-selected-title">
+                                <strong>{selectedOpenSpaceDetails.name}</strong>
+                                <span>{selectedOpenSpaceDetails.category}</span>
+                              </div>
+                              <div className="parcel-detail-grid">
+                                <div><span>Site ID</span><strong>{selectedOpenSpaceDetails.id}</strong></div>
+                                <div><span>Area</span><strong>{Number.isFinite(selectedOpenSpaceDetails.areaM2) ? `${Number(selectedOpenSpaceDetails.areaM2).toLocaleString(undefined, { maximumFractionDigits: 0 })} m2` : '—'}</strong></div>
+                                <div><span>Zoning</span><strong>{selectedOpenSpaceDetails.zoning}</strong></div>
+                                <div><span>Group</span><strong>{selectedOpenSpaceDetails.group}</strong></div>
+                              </div>
+                              {selectedOpenSpaceDetails.streetView && (
+                                <div className="parcel-streetview-card">
+                                  {GOOGLE_MAPS_KEY ? (
+                                    <img
+                                      src={`https://maps.googleapis.com/maps/api/streetview?size=420x150&location=${selectedOpenSpaceDetails.streetView.lat},${selectedOpenSpaceDetails.streetView.lng}&fov=85&heading=0&pitch=5&key=${GOOGLE_MAPS_KEY}`}
+                                      alt={`Street View near ${selectedOpenSpaceDetails.name}`}
+                                      onError={(event) => {
+                                        event.currentTarget.style.display = 'none'
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div>
+                                    <span>Street View</span>
+                                    <strong>{selectedOpenSpaceDetails.streetView.lat.toFixed(5)}, {selectedOpenSpaceDetails.streetView.lng.toFixed(5)}</strong>
+                                  </div>
+                                  <a
+                                    href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${selectedOpenSpaceDetails.streetView.lat},${selectedOpenSpaceDetails.streetView.lng}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Open Street View
+                                  </a>
+                                </div>
+                              )}
+                              {selectedOpenSpaceDetails.notes && <p className="parcel-selected-note">{selectedOpenSpaceDetails.notes}</p>}
+                            </>
+                          ) : (
+                            <div className="parcel-empty-state">Click an open space on the map to inspect the plot and intervention metrics.</div>
+                          )}
+                        </div>
+                        <div className="chart-panel parcel-selected-panel">
+                          <h4>Intervention Metrics</h4>
+                          {selectedOpenSpaceScore ? (
+                            <>
+                              <div className="parcel-selected-score">
+                                <strong>{Number.isFinite(selectedOpenSpaceScore.interventionScore) ? selectedOpenSpaceScore.interventionScore.toFixed(0) : '—'}</strong>
+                                <span>Project value score</span>
+                              </div>
+                              <div className="parcel-score-bars">
+                                {selectedOpenSpaceScore.metrics.map((metric) => (
+                                  <div key={metric.id} className="parcel-score-row">
+                                    <div>
+                                      <span>{metric.label}</span>
+                                      <strong>{metric.display}</strong>
+                                    </div>
+                                    <i>
+                                      <b
+                                        style={{
+                                          width: `${Number.isFinite(metric.value) ? Math.max(4, metric.value) : 0}%`,
+                                          background: metric.tone
+                                        }}
+                                      />
+                                    </i>
+                                    <em>{Number.isFinite(metric.value) ? metric.value.toFixed(0) : '—'}</em>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="parcel-evidence-row">
+                                <span>{selectedOpenSpaceScore.evidence.canopyFeatures} open-space canopy benchmarks</span>
+                                <span>{selectedOpenSpaceScore.evidence.heatFeatures} heat</span>
+                                <span>{selectedOpenSpaceScore.evidence.mobilityFeatures} mobility benchmarks</span>
+                              </div>
+                              <p className="parcel-selected-note">
+                                Higher values mean stronger intervention value relative to the mapped open-space set: canopy gap, heat exposure, and active-mobility demand are all pulling upward.
+                              </p>
+                            </>
+                          ) : (
+                            <div className="parcel-empty-state">
+                              {openSpaceScoringStatus === 'idle'
+                                ? 'Run Calculate KPI Scores to load support layers and score open spaces.'
+                                : 'Metrics are waiting for a selected open space and supporting climate/mobility layers.'}
+                            </div>
+                          )}
+                        </div>
+                        <div className="chart-panel parcel-opportunity-panel">
+                          <h4>Priority Shortlist</h4>
+                          <p className="parcel-panel-note">
+                            Ordered by the intervention score model. Higher values combine canopy gap, heat exposure, and nearby mobility demand.
+                          </p>
+                          <div className="parcel-opportunity-list">
+                            {priorityOpenSpaces.length ? priorityOpenSpaces.map(({ feature, score }, index) => {
+                              const props = feature.properties || {}
+                              const areaHa = Number(score?.areaM2 || props.area_m2 || 0) / 10000
+                              const interventionScore = score?.interventionScore
+                              return (
+                                <button
+                                  key={props.square_id || props.fid || openSpaceDisplayName(feature)}
+                                  type="button"
+                                  className={`parcel-opportunity-row parcel-opportunity-row--button ${selectedOpenSpaceFeature === feature ? 'parcel-opportunity-row--active' : ''}`}
+                                  onClick={() => setSelectedOpenSpaceFeature(feature)}
+                                >
+                                  <span>{index + 1}. {openSpaceDisplayName(feature)}</span>
+                                  <strong>
+                                    {openSpaceCategoryLabel(props)} · {areaHa.toFixed(2)} ha · {Number.isFinite(interventionScore) ? `${interventionScore.toFixed(0)}/100 priority` : 'priority unavailable'}
+                                  </strong>
+                                </button>
+                              )
+                            }) : (
+                              <div className="parcel-empty-state">
+                                {openSpaceScoringStatus === 'idle'
+                                  ? 'Run Calculate KPI Scores to build the intervention shortlist.'
+                                  : 'No open spaces available from cadastre.squares.'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="chart-panel parcel-opportunity-panel">
+                          <h4>Open Space Types</h4>
+                          <ResponsiveContainer width="100%" height={220}>
+                            <BarChart data={openSpaceInsights.categoryChart}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                              <XAxis dataKey="name" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 10 }} />
+                              <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                              <Tooltip formatter={(value, name) => name === 'areaM2' ? `${Number(value).toLocaleString()} m2` : value} />
+                              <Bar dataKey="areaM2" name="Area m2" radius={[4, 4, 0, 0]}>
+                                {openSpaceInsights.categoryChart.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="chart-panel parcel-opportunity-panel">
+                          <h4>Largest Open Spaces</h4>
+                          <div className="parcel-opportunity-list">
+                            {openSpaceInsights.largestSpaces.length ? openSpaceInsights.largestSpaces.map((feature) => {
+                              const props = feature.properties || {}
+                              return (
+                                <button
+                                  key={props.square_id || props.fid || openSpaceDisplayName(feature)}
+                                  type="button"
+                                  className="parcel-opportunity-row parcel-opportunity-row--button"
+                                  onClick={() => setSelectedOpenSpaceFeature(feature)}
+                                >
+                                  <span>{openSpaceDisplayName(feature)}</span>
+                                  <strong>{openSpaceCategoryLabel(props)} · {(Number(props.area_m2 || 0) / 10000).toFixed(2)} ha</strong>
+                                </button>
+                              )
+                            }) : (
+                              <div className="parcel-empty-state">No open spaces available from cadastre.squares.</div>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                    {selectedOpenSpaceScore && (
+                      <div className="chart-panel parcel-selected-panel">
+                        <h4>Selected Intervention Fit</h4>
+                        <div className="parcel-selected-score">
+                          <strong>{Number.isFinite(selectedOpenSpaceScore.interventionScore) ? selectedOpenSpaceScore.interventionScore.toFixed(0) : '—'}</strong>
+                          <span>Project value score</span>
+                        </div>
+                        <div className="parcel-score-bars">
+                          {selectedOpenSpaceScore.metrics.map((metric) => (
+                            <div key={metric.id} className="parcel-score-row">
+                              <div>
+                                <span>{metric.label}</span>
+                                <strong>{metric.display}</strong>
+                              </div>
+                              <i>
+                                <b
+                                  style={{
+                                    width: `${Number.isFinite(metric.value) ? Math.max(4, metric.value) : 0}%`,
+                                    background: metric.tone
+                                  }}
+                                />
+                              </i>
+                              <em>{Number.isFinite(metric.value) ? metric.value.toFixed(0) : '—'}</em>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="parcel-selected-note">
+                          High scores indicate open spaces where canopy gaps, heat exposure, and active-mobility demand combine into a stronger improvement case.
+                        </p>
+                      </div>
+                    )}
                     <div className="chart-panel">
                       <h4>Zoning Mix</h4>
                       <ResponsiveContainer width="100%" height={220}>
@@ -2667,7 +3352,7 @@ const UnifiedDataExplorer = () => {
                           const props = feature.properties || {}
                           return (
                             <div key={props.square_id} className="parcel-opportunity-row">
-                              <span>{props.name || props.category_label || `Open space ${props.square_id}`}</span>
+                              <span>{openSpaceDisplayName(feature)}</span>
                               <strong>{props.category_label || 'open space'} · {(Number(props.area_m2 || 0) / 10000).toFixed(2)} ha</strong>
                             </div>
                           )
@@ -2692,6 +3377,8 @@ const UnifiedDataExplorer = () => {
                         )}
                       </div>
                     </div>
+                      </>
+                    )}
                   </div>
                 </>
               )}

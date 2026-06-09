@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadHospitalityAnalytics, loadHospitalityListings } from './data'
 
-export function useExplorerHospitalityData({ dashboardMode, lockedLayers, scope }) {
+export function useExplorerHospitalityData({ dashboardMode, activeCategory, lockedLayers, scope }) {
   const [airbnbListings, setAirbnbListings] = useState(null)
   const [airbnbAnalytics, setAirbnbAnalytics] = useState(null)
   const [hospitalityLoading, setHospitalityLoading] = useState(false)
@@ -9,19 +9,23 @@ export function useExplorerHospitalityData({ dashboardMode, lockedLayers, scope 
 
   useEffect(() => {
     const hasLockedHospitalityLayer = ['airbnbListings', 'airbnbZones'].some((id) => lockedLayers.has(id))
+    const isActiveHospitalityLayer = activeCategory === 'airbnbListings' || activeCategory === 'airbnbZones'
     if (dashboardMode !== 'hospitality' && !hasLockedHospitalityLayer) return
+    if (dashboardMode === 'hospitality' && activeCategory && !isActiveHospitalityLayer && !hasLockedHospitalityLayer) return
 
     let cancelled = false
     setHospitalityLoading(true)
     setHospitalityError(null)
 
+    const includeListings = isActiveHospitalityLayer || hasLockedHospitalityLayer || !activeCategory
+
     Promise.all([
-      loadHospitalityListings(scope),
+      includeListings ? loadHospitalityListings(scope) : Promise.resolve(null),
       loadHospitalityAnalytics(scope)
     ])
       .then(([listings, analytics]) => {
         if (cancelled) return
-        setAirbnbListings(listings)
+        if (includeListings) setAirbnbListings(listings)
         setAirbnbAnalytics(analytics)
       })
       .catch((error) => {
@@ -36,7 +40,7 @@ export function useExplorerHospitalityData({ dashboardMode, lockedLayers, scope 
     return () => {
       cancelled = true
     }
-  }, [dashboardMode, lockedLayers, scope])
+  }, [activeCategory, dashboardMode, lockedLayers, scope])
 
   return {
     airbnbListings,

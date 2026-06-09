@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import { loadExplorerBusinessBoundary, loadExplorerBusinessData } from './data'
 
-export function useExplorerBusinessData({ dashboardMode, lockedLayers }) {
+const BUSINESS_POI_LAYERS = ['businessLiveliness', 'businessRatings', 'amenities', 'businessCategories']
+const BUSINESS_DATA_LAYERS = [...BUSINESS_POI_LAYERS, 'vendorOpinions', 'propertySales', 'cityEvents']
+const PARCEL_DATA_LAYERS = ['landParcels', 'openSpaces']
+
+export function useExplorerBusinessData({ dashboardMode, activeCategory, lockedLayers }) {
   const [businessesData, setBusinessesData] = useState(null)
   const [streetStallsData, setStreetStallsData] = useState(null)
   const [propertiesData, setPropertiesData] = useState(null)
@@ -20,36 +24,60 @@ export function useExplorerBusinessData({ dashboardMode, lockedLayers }) {
   useEffect(() => {
     const loadBusinessExplorerState = async () => {
       try {
-        const { businesses, streetStalls, properties, survey, eventsData, landParcels, openSpaces } = await loadExplorerBusinessData()
+        const requestedLayers = new Set([...lockedLayers])
+        const isActiveBusinessLayer = BUSINESS_DATA_LAYERS.includes(activeCategory)
+        const isActiveParcelLayer = PARCEL_DATA_LAYERS.includes(activeCategory)
+        if (isActiveBusinessLayer || isActiveParcelLayer) requestedLayers.add(activeCategory)
+        if (dashboardMode === 'business' && !isActiveBusinessLayer) requestedLayers.add('businessLiveliness')
+        if (dashboardMode === 'landParcels' && !isActiveParcelLayer) requestedLayers.add('landParcels')
 
-        console.log('Business data loaded:', {
-          businesses: businesses.features?.length,
-          stalls: streetStalls.features?.length,
-          properties: properties.features?.length,
-          survey: survey.features?.length,
-          landParcels: landParcels.features?.length,
-          openSpaces: openSpaces.features?.length
+        const includeBusinesses = BUSINESS_POI_LAYERS.some((id) => requestedLayers.has(id))
+        const includeStreetStalls = requestedLayers.has('vendorOpinions')
+        const includeProperties = requestedLayers.has('propertySales')
+        const includeEvents = requestedLayers.has('cityEvents')
+        const includeLandParcels = requestedLayers.has('landParcels')
+        const includeOpenSpaces = requestedLayers.has('openSpaces')
+        const { businesses, streetStalls, properties, survey, eventsData, landParcels, openSpaces } = await loadExplorerBusinessData({
+          includeBusinesses,
+          includeStreetStalls,
+          includeProperties,
+          includeSurvey: false,
+          includeEvents,
+          includeLandParcels,
+          includeOpenSpaces
         })
 
-        console.log('Sample processed property:', properties.features?.[0]?.properties)
+        console.log('Business data loaded:', {
+          landParcels: landParcels?.features?.length,
+          openSpaces: openSpaces?.features?.length,
+          businesses: businesses?.features?.length,
+          stalls: streetStalls?.features?.length,
+          properties: properties?.features?.length,
+          survey: survey?.features?.length
+        })
 
-        setBusinessesData(businesses)
-        setStreetStallsData(streetStalls)
-        setPropertiesData(properties)
-        setLandParcelsData(landParcels)
-        setOpenSpacesData(openSpaces)
-        setSurveyData(survey)
-        setEventsData(eventsData)
+        if (properties?.features?.length) {
+          console.log('Sample processed property:', properties.features?.[0]?.properties)
+        }
+
+        if (includeBusinesses) setBusinessesData(businesses)
+        if (includeStreetStalls) setStreetStallsData(streetStalls)
+        if (includeProperties) setPropertiesData(properties)
+        if (survey) setSurveyData(survey)
+        if (includeEvents) setEventsData(eventsData)
+        if (includeLandParcels) setLandParcelsData(landParcels)
+        if (includeOpenSpaces) setOpenSpacesData(openSpaces)
       } catch (error) {
         console.error('Error loading business data:', error)
       }
     }
 
-    const hasLockedBusinessLayer = ['businessLiveliness', 'vendorOpinions', 'businessRatings', 'amenities', 'businessCategories', 'propertySales', 'cityEvents', 'landParcels', 'openSpaces'].some((id) => lockedLayers.has(id))
-    if (dashboardMode === 'business' || dashboardMode === 'landParcels' || hasLockedBusinessLayer) {
+    const hasLockedBusinessLayer = BUSINESS_DATA_LAYERS.some((id) => lockedLayers.has(id))
+    const hasLockedParcelLayer = PARCEL_DATA_LAYERS.some((id) => lockedLayers.has(id))
+    if (dashboardMode === 'business' || dashboardMode === 'landParcels' || hasLockedBusinessLayer || hasLockedParcelLayer) {
       loadBusinessExplorerState()
     }
-  }, [dashboardMode, lockedLayers])
+  }, [activeCategory, dashboardMode, lockedLayers])
 
   return {
     businessesData,

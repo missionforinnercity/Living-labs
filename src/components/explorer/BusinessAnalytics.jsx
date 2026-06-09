@@ -23,6 +23,8 @@ const BusinessAnalytics = ({
   openSpaceInsights,
   parcelColorMode = 'zoning',
   onParcelColorModeChange,
+  openSpaceColorMode = 'zoning',
+  onOpenSpaceColorModeChange,
   opinionSource,
   onOpinionSourceChange,
   amenitiesFilters: amenitiesFiltersProps,
@@ -206,16 +208,18 @@ const BusinessAnalytics = ({
   
   // Calculate opinion stats
   useEffect(() => {
-    if (businessMode === 'opinions' && surveyData?.features && streetStallsData?.features) {
-      // Combine survey and street stalls data with stake_consent=yes
+    if (businessMode === 'opinions') {
       const consentedData = [
-        ...surveyData.features.filter(f => f.properties.stake_consent === 'yes'),
-        ...streetStallsData.features.filter(f => f.properties.stake_consent === 'yes')
+        ...(opinionSource === 'formal' || opinionSource === 'both'
+          ? (surveyData?.features || []).filter(f => f.properties.stake_consent === 'yes')
+          : []),
+        ...(opinionSource === 'informal' || opinionSource === 'both'
+          ? (streetStallsData?.features || []).filter(f => f.properties.stake_consent === 'yes')
+          : [])
       ]
-      const stats = getOpinionStats(consentedData, 'stake_big_change')
-      setOpinionStats(stats)
+      setOpinionStats(consentedData.length ? getOpinionStats(consentedData, 'stake_big_change') : null)
     }
-  }, [businessMode, surveyData, streetStallsData])
+  }, [businessMode, opinionSource, surveyData, streetStallsData])
   
   // Calculate review ratings stats
   useEffect(() => {
@@ -973,6 +977,26 @@ const BusinessAnalytics = ({
                 onClick={() => onParcelColorModeChange?.('valueChange')}
               >
                 GV Change
+              </button>
+            </div>
+          </div>
+
+          <div className="control-section">
+            <div className="control-header">OPEN SPACES COLOUR</div>
+            <div className="parcel-color-mode-switch">
+              <button
+                type="button"
+                className={openSpaceColorMode === 'zoning' ? 'active' : ''}
+                onClick={() => onOpenSpaceColorModeChange?.('zoning')}
+              >
+                Zoning
+              </button>
+              <button
+                type="button"
+                className={openSpaceColorMode === 'priority' ? 'active' : ''}
+                onClick={() => onOpenSpaceColorModeChange?.('priority')}
+              >
+                Priority Score
               </button>
             </div>
           </div>

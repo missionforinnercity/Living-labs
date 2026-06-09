@@ -359,12 +359,14 @@ const EcologyHeatDetailPanel = ({
     if (featureSeries.length < 2) return null
     const first = featureSeries[0]
     const last = featureSeries[featureSeries.length - 1]
+    const firstCanopy = numberOrNull(first.effective_canopy_pct)
+    const lastCanopy = numberOrNull(last.effective_canopy_pct)
     return {
       startYear: first.analysis_year,
       endYear: last.analysis_year,
       heat: (numberOrNull(last.urban_heat_score) ?? 0) - (numberOrNull(first.urban_heat_score) ?? 0),
       cool: (numberOrNull(last.cool_island_score) ?? 0) - (numberOrNull(first.cool_island_score) ?? 0),
-      canopy: (numberOrNull(last.effective_canopy_pct) ?? 0) - (numberOrNull(first.effective_canopy_pct) ?? 0)
+      canopy: Number.isFinite(firstCanopy) && Number.isFinite(lastCanopy) ? lastCanopy - firstCanopy : null
     }
   }, [featureSeries])
 

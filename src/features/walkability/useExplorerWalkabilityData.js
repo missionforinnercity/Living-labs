@@ -7,7 +7,9 @@ import { loadExplorerWalkabilityData } from './data'
 
 export function useExplorerWalkabilityData({
   dashboardMode,
+  activeCategory,
   lockedLayers,
+  enableOpenSpaceScoring = false,
   selectedMonth,
   selectedRouteSegment,
   compareRouteSegment
@@ -24,6 +26,16 @@ export function useExplorerWalkabilityData({
     const loadWalkabilityExplorerState = async () => {
       try {
         console.log('Loading active mobility files...')
+        const requestedLayers = new Set([...lockedLayers])
+        const isActiveWalkabilityLayer = ['activeMobility', 'networkAnalysis', 'transitAccessibility', 'roadSteepness'].includes(activeCategory)
+        if (isActiveWalkabilityLayer) requestedLayers.add(activeCategory)
+        if (dashboardMode === 'walkability' && !isActiveWalkabilityLayer) requestedLayers.add('activeMobility')
+
+        const includeActiveMobility = requestedLayers.has('activeMobility') ||
+          (dashboardMode === 'landParcels' && activeCategory === 'openSpaces' && enableOpenSpaceScoring)
+        const includeNetwork = requestedLayers.has('networkAnalysis')
+        const includeTransit = requestedLayers.has('transitAccessibility')
+        const includeRoadSteepness = requestedLayers.has('roadSteepness')
 
         const {
           network,
@@ -33,35 +45,47 @@ export function useExplorerWalkabilityData({
           busStops,
           trainStation,
           roadSteepness
-        } = await loadExplorerWalkabilityData()
-
-        console.log('Active mobility data loaded:', {
-          network: network.features?.length,
-          transit: transit.features?.length,
-          roadSteepness: roadSteepness?.features?.length,
-          busStops: busStops.features?.length,
-          trainStation: trainStation.features?.length
+        } = await loadExplorerWalkabilityData({
+          includeActiveMobility,
+          includeNetwork,
+          includeTransit,
+          includeRoadSteepness
         })
 
-        console.log('Transformed network data sample coordinate:', network.features?.[0]?.geometry?.coordinates?.[0]?.[0])
+        console.log('Active mobility data loaded:', {
+          network: network?.features?.length,
+          transit: transit?.features?.length,
+          roadSteepness: roadSteepness?.features?.length,
+          busStops: busStops?.features?.length,
+          trainStation: trainStation?.features?.length
+        })
 
-        setNetworkData(network)
-        setStravaAggregated(rawStrava)
-        setWalkabilityMonths(availableMonths)
-        setTransitData(transit)
-        setBusStopsData(busStops)
-        setTrainStationData(trainStation)
-        setRoadSteepnessData(roadSteepness)
+        if (network) {
+          console.log('Transformed network data sample coordinate:', network.features?.[0]?.geometry?.coordinates?.[0]?.[0])
+        }
+
+        if (includeNetwork) setNetworkData(network)
+        if (includeActiveMobility) {
+          setStravaAggregated(rawStrava)
+          setWalkabilityMonths(availableMonths)
+        }
+        if (includeTransit) {
+          setTransitData(transit)
+          setBusStopsData(busStops)
+          setTrainStationData(trainStation)
+        }
+        if (includeRoadSteepness) setRoadSteepnessData(roadSteepness)
       } catch (error) {
         console.error('Error loading walkability data:', error)
       }
     }
 
     const hasLockedWalkabilityLayer = ['activeMobility', 'networkAnalysis', 'transitAccessibility', 'roadSteepness'].some((id) => lockedLayers.has(id))
-    if (dashboardMode === 'walkability' || hasLockedWalkabilityLayer) {
+    const shouldScoreOpenSpaces = dashboardMode === 'landParcels' && activeCategory === 'openSpaces' && enableOpenSpaceScoring
+    if (dashboardMode === 'walkability' || hasLockedWalkabilityLayer || shouldScoreOpenSpaces) {
       loadWalkabilityExplorerState()
     }
-  }, [dashboardMode, lockedLayers])
+  }, [activeCategory, dashboardMode, enableOpenSpaceScoring, lockedLayers])
 
   const effectiveSelectedMonth = selectedMonth || null
 

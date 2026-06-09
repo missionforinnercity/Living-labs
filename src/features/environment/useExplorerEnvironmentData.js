@@ -17,7 +17,7 @@ const clampShadeTime = (value) => {
   return String(Math.max(SHADE_TIME_MIN, Math.min(SHADE_TIME_MAX, parsed))).padStart(4, '0')
 }
 
-export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, season, timeOfDay, windDirection, windSpeedKmh }) {
+export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lockedLayers, enableOpenSpaceScoring = false, season, timeOfDay, windDirection, windSpeedKmh }) {
   const [temperatureData, setTemperatureData] = useState(null)
   const [heatGridData, setHeatGridData] = useState(null)
   const [shadeData, setShadeData] = useState(null)
@@ -31,6 +31,7 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
   const envLastFetch = useRef(0)
 
   useEffect(() => {
+    const isHeatStreetsActive = activeCategory === 'heatStreets'
     const loadClimateExplorerState = async () => {
       try {
         const heatStreets = await loadExplorerTemperatureData()
@@ -44,11 +45,12 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
       }
     }
 
-    const hasLockedClimateLayer = ['heatStreets', 'estimatedWind'].some((id) => lockedLayers.has(id))
-    if (dashboardMode === 'climate' || hasLockedClimateLayer) {
+    const hasLockedClimateLayer = lockedLayers.has('heatStreets')
+    const shouldScoreOpenSpaces = activeCategory === 'openSpaces' && enableOpenSpaceScoring
+    if (isHeatStreetsActive || hasLockedClimateLayer || shouldScoreOpenSpaces) {
       loadClimateExplorerState()
     }
-  }, [dashboardMode, lockedLayers])
+  }, [activeCategory, dashboardMode, enableOpenSpaceScoring, lockedLayers])
 
   useEffect(() => {
     const loadWindExplorerState = async () => {
@@ -72,6 +74,7 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
   }, [activeCategory, dashboardMode, lockedLayers, windDirection])
 
   useEffect(() => {
+    const isShadeActive = activeCategory === 'climateShade'
     const loadShadeExplorerState = async () => {
       try {
         const shadeTime = clampShadeTime(timeOfDay)
@@ -85,11 +88,20 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
 
     const loadGreeneryExplorerState = async () => {
       try {
-        const greeneryState = await loadExplorerGreeneryData()
-        setGreeneryAndSkyview(greeneryState.greeneryAndSkyview)
-        setTreeCanopyData(greeneryState.treeCanopyData)
-        setParksData(greeneryState.parksData)
-        setEcologyHeatByYear(greeneryState.ecologyHeatByYear)
+        const isGreeneryAccessActive = activeCategory === 'greeneryIndex'
+        const isTreeCanopyActive = activeCategory === 'treeCanopy'
+        const isUrbanHeatActive = activeCategory === 'urbanHeatConcrete' || (activeCategory === 'openSpaces' && enableOpenSpaceScoring)
+        const greeneryState = await loadExplorerGreeneryData({
+          includeGreeneryAccess: isGreeneryAccessActive || lockedLayers.has('greeneryIndex'),
+          includeTreeCanopy: isTreeCanopyActive || isUrbanHeatActive || lockedLayers.has('treeCanopy'),
+          includeParks: isGreeneryAccessActive || lockedLayers.has('greeneryIndex'),
+          includeHeatZones: activeCategory === 'urbanHeatConcrete' || lockedLayers.has('urbanHeatConcrete')
+        })
+
+        if (greeneryState.greeneryAndSkyview) setGreeneryAndSkyview(greeneryState.greeneryAndSkyview)
+        if (greeneryState.treeCanopyData) setTreeCanopyData(greeneryState.treeCanopyData)
+        if (greeneryState.parksData) setParksData(greeneryState.parksData)
+        if (Object.keys(greeneryState.ecologyHeatByYear || {}).length) setEcologyHeatByYear(greeneryState.ecologyHeatByYear)
         console.log('Loaded greenery layers:', {
           greeneryData: greeneryState.greeneryAndSkyview,
           treeCanopyData: greeneryState.treeCanopyData,
@@ -116,13 +128,25 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
       }
     }
 
-    const hasLockedEnvLayer = ['greeneryIndex', 'treeCanopy', 'parksNearby', 'airQuality', 'urbanHeatConcrete', 'climateShade'].some((id) => lockedLayers.has(id))
-    if (dashboardMode === 'environment' || dashboardMode === 'climate' || hasLockedEnvLayer) {
+    const hasLockedShade = lockedLayers.has('climateShade')
+    const hasLockedGreenery = ['greeneryIndex', 'treeCanopy', 'urbanHeatConcrete'].some((id) => lockedLayers.has(id))
+    const hasLockedAirQuality = lockedLayers.has('airQuality')
+    const isGreeneryAccessActive = activeCategory === 'greeneryIndex'
+    const isTreeCanopyActive = activeCategory === 'treeCanopy'
+    const isUrbanHeatActive = activeCategory === 'urbanHeatConcrete'
+    const shouldScoreOpenSpaces = activeCategory === 'openSpaces' && enableOpenSpaceScoring
+    const isAirQualityActive = activeCategory === 'airQuality'
+
+    if (isShadeActive || hasLockedShade) {
       loadShadeExplorerState()
+    }
+    if (isGreeneryAccessActive || isTreeCanopyActive || isUrbanHeatActive || shouldScoreOpenSpaces || hasLockedGreenery) {
       loadGreeneryExplorerState()
+    }
+    if (isAirQualityActive || hasLockedAirQuality) {
       loadAirQualityExplorerState()
     }
-  }, [dashboardMode, envCurrentData, lockedLayers, season, timeOfDay])
+  }, [activeCategory, dashboardMode, enableOpenSpaceScoring, envCurrentData, lockedLayers, season, timeOfDay])
 
   return {
     temperatureData,

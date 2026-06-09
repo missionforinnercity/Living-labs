@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadServiceRequestAnalytics, loadServiceRequestStreetSegments } from './data'
 
-export function useExplorerServiceRequestsData({ dashboardMode, lockedLayers, timeframe = 'all' }) {
+export function useExplorerServiceRequestsData({ dashboardMode, activeCategory, lockedLayers, timeframe = 'all' }) {
   const [serviceRequests, setServiceRequests] = useState(null)
   const [serviceRequestAnalytics, setServiceRequestAnalytics] = useState(null)
   const [serviceRequestsLoading, setServiceRequestsLoading] = useState(false)
@@ -9,7 +9,8 @@ export function useExplorerServiceRequestsData({ dashboardMode, lockedLayers, ti
 
   useEffect(() => {
     const hasLockedServiceRequests = lockedLayers.has('serviceRequests')
-    if (dashboardMode !== 'sentiment' && !hasLockedServiceRequests) return
+    const shouldLoadServiceRequests = activeCategory === 'serviceRequests'
+    if (!shouldLoadServiceRequests && !hasLockedServiceRequests) return
 
     let cancelled = false
 
@@ -37,7 +38,7 @@ export function useExplorerServiceRequestsData({ dashboardMode, lockedLayers, ti
     return () => {
       cancelled = true
     }
-  }, [dashboardMode, lockedLayers, timeframe])
+  }, [activeCategory, dashboardMode, lockedLayers, timeframe])
 
   return {
     serviceRequests,

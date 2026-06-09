@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadExplorerSentimentAnalytics, loadExplorerSentimentData } from './data'
 
-export function useExplorerSentimentData({ dashboardMode, lockedLayers, selectedMonth, sourceMode = 'public' }) {
+export function useExplorerSentimentData({ dashboardMode, activeCategory, lockedLayers, selectedMonth, sourceMode = 'public' }) {
   const [sentimentSegments, setSentimentSegments] = useState(null)
   const [sentimentAnalytics, setSentimentAnalytics] = useState(null)
   const [sentimentLoading, setSentimentLoading] = useState(false)
@@ -9,7 +9,8 @@ export function useExplorerSentimentData({ dashboardMode, lockedLayers, selected
 
   useEffect(() => {
     const hasLockedSentimentLayer = lockedLayers.has('streetSentiment')
-    if (dashboardMode !== 'sentiment' && !hasLockedSentimentLayer) return
+    const shouldLoadSentiment = activeCategory === 'streetSentiment'
+    if (!shouldLoadSentiment && !hasLockedSentimentLayer) return
 
     let cancelled = false
 
@@ -37,7 +38,7 @@ export function useExplorerSentimentData({ dashboardMode, lockedLayers, selected
     return () => {
       cancelled = true
     }
-  }, [dashboardMode, lockedLayers, selectedMonth, sourceMode])
+  }, [activeCategory, dashboardMode, lockedLayers, selectedMonth, sourceMode])
 
   return {
     sentimentSegments,

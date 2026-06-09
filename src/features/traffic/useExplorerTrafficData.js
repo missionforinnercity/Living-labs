@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadExplorerTrafficData } from './data'
 
-export function useExplorerTrafficData({ dashboardMode, lockedLayers }) {
+export function useExplorerTrafficData({ dashboardMode, activeCategory, lockedLayers }) {
   const [trafficData, setTrafficData] = useState(null)
 
   useEffect(() => {
@@ -15,11 +15,12 @@ export function useExplorerTrafficData({ dashboardMode, lockedLayers }) {
       }
     }
 
+    const isTrafficActive = activeCategory === 'trafficFlow'
     const hasLockedTrafficLayer = lockedLayers.has('trafficFlow')
-    if (dashboardMode === 'traffic' || hasLockedTrafficLayer) {
+    if ((dashboardMode === 'traffic' && (isTrafficActive || !activeCategory)) || hasLockedTrafficLayer) {
       loadTrafficExplorerState()
     }
-  }, [dashboardMode, lockedLayers])
+  }, [activeCategory, dashboardMode, lockedLayers])
 
   return { trafficData }
 }

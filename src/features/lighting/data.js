@@ -18,11 +18,21 @@ function computeLightingThresholds(segments) {
   }
 }
 
-export async function loadExplorerLightingData() {
+export async function loadExplorerLightingData({
+  includeSegments = false,
+  includeProjects = false,
+  includeStreetLights = false
+} = {}) {
   const [segments, projects, streetLights] = await Promise.all([
-    fetchJson('/data/lighting/new_Lights/road_segments_lighting_kpis_all.geojson', 'Lighting segment load failed'),
-    fetchJson('/data/lighting/streetLighting.json', 'Lighting project load failed'),
-    fetchJson('/data/lighting/new_Lights/Street_lights.geojson', 'Street light load failed')
+    includeSegments
+      ? fetchJson('/data/lighting/new_Lights/road_segments_lighting_kpis_all.geojson', 'Lighting segment load failed')
+      : Promise.resolve(null),
+    includeProjects
+      ? fetchJson('/data/lighting/streetLighting.json', 'Lighting project load failed')
+      : Promise.resolve(null),
+    includeStreetLights
+      ? fetchJson('/data/lighting/new_Lights/Street_lights.geojson', 'Street light load failed')
+      : Promise.resolve(null)
   ])
 
   return {

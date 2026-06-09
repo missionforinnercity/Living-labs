@@ -8,9 +8,25 @@ import { dirname, join } from 'path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const roadSegmentsPath = join(__dirname, '..', 'data', 'roads', 'segments.geojson')
+const ccidBoundaryPath = join(__dirname, '..', 'data', 'DEM', 'CCID_boundary.geojson')
 const SERVICE_REQUEST_SNAP_DISTANCE_M = 55
 let roadSegmentsGeojson = null
 let roadSegmentIndex = null
+let ccidBoundaryGeometryJson = null
+
+function getCcidBoundaryGeometryJson() {
+  if (!ccidBoundaryGeometryJson) {
+    const boundary = JSON.parse(readFileSync(ccidBoundaryPath, 'utf-8'))
+    const geometries = (boundary.features || [])
+      .map((feature) => feature.geometry)
+      .filter(Boolean)
+    ccidBoundaryGeometryJson = JSON.stringify({
+      type: 'GeometryCollection',
+      geometries
+    })
+  }
+  return ccidBoundaryGeometryJson
+}
 
 function getRoadSegmentsGeojson() {
   if (!roadSegmentsGeojson) {
@@ -1529,44 +1545,63 @@ app.get('/api/hospitality/airbnb-analytics', async (req, res) => {
 app.get('/api/cadastre/landparcels', async (req, res) => {
   try {
     const limit = Math.max(1, Math.min(Number(req.query.limit) || 12000, 20000))
+    const scope = String(req.query.scope || 'ccid').toLowerCase()
+    const useCcidClip = scope !== 'all'
+    const boundarySql = useCcidClip
+      ? 'WITH boundary AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($2), 4326) AS geom)'
+      : ''
+    const fromSql = useCcidClip
+      ? 'FROM cadastre.landparcels_gv p CROSS JOIN boundary b'
+      : 'FROM cadastre.landparcels_gv p'
+    const geometrySql = useCcidClip
+      ? `ST_AsGeoJSON(ST_SimplifyPreserveTopology(ST_CollectionExtract(ST_MakeValid(ST_Intersection(p.geom, b.geom)), 3), 0.00001))::json AS geometry`
+      : `ST_AsGeoJSON(ST_SimplifyPreserveTopology(p.geom, 0.00001))::json AS geometry`
+    const whereSql = useCcidClip
+      ? `WHERE p.geom IS NOT NULL
+        AND p.geom && b.geom
+        AND ST_Intersects(p.geom, b.geom)
+        AND NOT ST_IsEmpty(ST_Intersection(p.geom, b.geom))`
+      : 'WHERE p.geom IS NOT NULL'
+    const queryParams = useCcidClip ? [limit, getCcidBoundaryGeometryJson()] : [limit]
     const { rows } = await pool.query(`
+      ${boundarySql}
       SELECT
-        fid,
-        sg26_code,
-        sl_land_prcl_key,
-        adr_no,
-        adr_no_sfx,
-        str_name,
-        lu_str_name_type,
-        ofc_sbrb_name,
-        alt_name,
-        ward_name,
-        prty_nmbr,
-        zoning,
-        shape__area,
-        owner_type,
-        gv2025_owner_type,
-        is_city_owned,
-        gv2025_is_city_owned,
-        gv_match_count,
-        gv2025_match_count,
-        gv_rating_categories,
-        gv2025_rating_categories,
-        gv_registered_descriptions,
-        gv2025_registered_descriptions,
-        gv_valuation_types,
-        gv2025_valuation_types,
-        gv_market_values_numeric,
-        gv2025_market_values_numeric,
-        ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.00001))::json AS geometry
-      FROM cadastre.landparcels_gv
-      WHERE geom IS NOT NULL
+        p.fid,
+        p.sg26_code,
+        p.sl_land_prcl_key,
+        p.adr_no,
+        p.adr_no_sfx,
+        p.str_name,
+        p.lu_str_name_type,
+        p.ofc_sbrb_name,
+        p.alt_name,
+        p.ward_name,
+        p.prty_nmbr,
+        p.zoning,
+        p.shape__area,
+        p.owner_type,
+        p.gv2025_owner_type,
+        p.is_city_owned,
+        p.gv2025_is_city_owned,
+        p.gv_match_count,
+        p.gv2025_match_count,
+        p.gv_rating_categories,
+        p.gv2025_rating_categories,
+        p.gv_registered_descriptions,
+        p.gv2025_registered_descriptions,
+        p.gv_valuation_types,
+        p.gv2025_valuation_types,
+        p.gv_market_values_numeric,
+        p.gv2025_market_values_numeric,
+        ${geometrySql}
+      ${fromSql}
+      ${whereSql}
       ORDER BY
-        COALESCE(gv2025_is_city_owned, is_city_owned, false) DESC,
-        shape__area DESC NULLS LAST,
-        fid
+        COALESCE(p.gv2025_is_city_owned, p.is_city_owned, false) DESC,
+        p.shape__area DESC NULLS LAST,
+        p.fid
       LIMIT $1
-    `, [limit])
+    `, queryParams)
 
     res.json(buildLandParcelFeatureCollection(rows))
   } catch (err) {
@@ -1578,36 +1613,55 @@ app.get('/api/cadastre/landparcels', async (req, res) => {
 app.get('/api/cadastre/squares', async (req, res) => {
   try {
     const limit = Math.max(1, Math.min(Number(req.query.limit) || 12000, 20000))
+    const scope = String(req.query.scope || 'ccid').toLowerCase()
+    const useCcidClip = scope !== 'all'
+    const boundarySql = useCcidClip
+      ? 'WITH boundary AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($2), 4326) AS geom)'
+      : ''
+    const fromSql = useCcidClip
+      ? 'FROM cadastre.squares s CROSS JOIN boundary b'
+      : 'FROM cadastre.squares s'
+    const geometrySql = useCcidClip
+      ? `ST_AsGeoJSON(ST_SimplifyPreserveTopology(ST_CollectionExtract(ST_MakeValid(ST_Intersection(s.wkb_geometry, b.geom)), 3), 0.00001))::json AS geometry`
+      : `ST_AsGeoJSON(ST_SimplifyPreserveTopology(s.wkb_geometry, 0.00001))::json AS geometry`
+    const whereSql = useCcidClip
+      ? `WHERE s.wkb_geometry IS NOT NULL
+        AND s.wkb_geometry && b.geom
+        AND ST_Intersects(s.wkb_geometry, b.geom)
+        AND NOT ST_IsEmpty(ST_Intersection(s.wkb_geometry, b.geom))`
+      : 'WHERE s.wkb_geometry IS NOT NULL'
+    const queryParams = useCcidClip ? [limit, getCcidBoundaryGeometryJson()] : [limit]
     const { rows } = await pool.query(`
+      ${boundarySql}
       SELECT
-        ogc_fid,
-        name,
-        category,
-        source,
-        detail_level,
-        area_m2,
-        osm_type,
-        osm_id,
-        osm_tags,
-        overlap_with_existing,
-        within_boundary,
-        notes,
-        zoning_primary,
-        zoning_mix,
-        zoning_match_count,
-        zoning_coverage_pct,
-        zoning_owner_mix,
-        zoning_city_owned_area_m2,
-        zoning_city_owned_pct,
-        ST_AsGeoJSON(ST_SimplifyPreserveTopology(wkb_geometry, 0.00001))::json AS geometry
-      FROM cadastre.squares
-      WHERE wkb_geometry IS NOT NULL
+        s.ogc_fid,
+        s.name,
+        s.category,
+        s.source,
+        s.detail_level,
+        s.area_m2,
+        s.osm_type,
+        s.osm_id,
+        s.osm_tags,
+        s.overlap_with_existing,
+        s.within_boundary,
+        s.notes,
+        s.zoning_primary,
+        s.zoning_mix,
+        s.zoning_match_count,
+        s.zoning_coverage_pct,
+        s.zoning_owner_mix,
+        s.zoning_city_owned_area_m2,
+        s.zoning_city_owned_pct,
+        ${geometrySql}
+      ${fromSql}
+      ${whereSql}
       ORDER BY
-        COALESCE(zoning_city_owned_pct, 0) DESC,
-        area_m2 DESC NULLS LAST,
-        ogc_fid
+        COALESCE(s.zoning_city_owned_pct, 0) DESC,
+        s.area_m2 DESC NULLS LAST,
+        s.ogc_fid
       LIMIT $1
-    `, [limit])
+    `, queryParams)
 
     res.json(buildOpenSpacesFeatureCollection(rows))
   } catch (err) {

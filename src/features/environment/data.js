@@ -247,19 +247,32 @@ export async function loadExplorerShadeData(season, timeOfDay, shadeMonth) {
   return fetchJson(`/api/climate/shade?${params.toString()}`, 'Climate shade data load failed')
 }
 
-export async function loadExplorerGreeneryData() {
+export async function loadExplorerGreeneryData({
+  includeGreeneryAccess = false,
+  includeTreeCanopy = false,
+  includeParks = false,
+  includeHeatZones = false
+} = {}) {
   const [greeneryAndSkyview, treeCanopyData, parksData, heatZonesData] = await Promise.all([
-    fetchJson('/api/environment/greenery-access', 'Greenery access load failed'),
-    fetchJson('/data/greenery/tree_canopy.geojson', 'Tree canopy load failed'),
-    fetchJson('/api/environment/green-destinations', 'Green destinations load failed'),
-    fetchJson('/api/climate/heat-zones', 'Heat zones load failed')
+    includeGreeneryAccess
+      ? fetchJson('/api/environment/greenery-access', 'Greenery access load failed')
+      : Promise.resolve(null),
+    includeTreeCanopy
+      ? fetchJson('/data/greenery/tree_canopy.geojson', 'Tree canopy load failed')
+      : Promise.resolve(null),
+    includeParks
+      ? fetchJson('/api/environment/green-destinations', 'Green destinations load failed')
+      : Promise.resolve(null),
+    includeHeatZones
+      ? fetchJson('/api/climate/heat-zones', 'Heat zones load failed')
+      : Promise.resolve(null)
   ])
 
   return {
-    greeneryAndSkyview: enrichGreeneryAccessData(greeneryAndSkyview),
-    treeCanopyData: transformGeoJSON(treeCanopyData, 'EPSG:3857', 'EPSG:4326'),
-    parksData: enrichGreenDestinationsData(parksData),
-    ecologyHeatByYear: groupHeatZonesByYear(heatZonesData)
+    greeneryAndSkyview: greeneryAndSkyview ? enrichGreeneryAccessData(greeneryAndSkyview) : null,
+    treeCanopyData: treeCanopyData ? transformGeoJSON(treeCanopyData, 'EPSG:3857', 'EPSG:4326') : null,
+    parksData: parksData ? enrichGreenDestinationsData(parksData) : null,
+    ecologyHeatByYear: heatZonesData ? groupHeatZonesByYear(heatZonesData) : {}
   }
 }
 

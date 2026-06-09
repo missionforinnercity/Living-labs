@@ -575,13 +575,22 @@ export async function loadBusinessData() {
   }
 }
 
-export async function loadWalkabilityData() {
+export async function loadWalkabilityData({
+  includeNetwork = true,
+  includeActivity = true
+} = {}) {
   const [network, stravaAggregated] = await Promise.all([
-    fetch('/data/processed/walkability/network_connectivity.geojson').then(r => r.json()),
-    fetch(STRAVA_AGGREGATED_PATH).then(r => r.json())
+    includeNetwork
+      ? fetch('/data/processed/walkability/network_connectivity.geojson').then(r => r.json())
+      : Promise.resolve(null),
+    includeActivity
+      ? fetch(STRAVA_AGGREGATED_PATH).then(r => r.json())
+      : Promise.resolve(null)
   ])
 
-  const { pedestrian, cycling, peakStats, meta } = buildStravaActivityLayers(stravaAggregated)
+  const { pedestrian, cycling, peakStats, meta } = stravaAggregated
+    ? buildStravaActivityLayers(stravaAggregated)
+    : { pedestrian: null, cycling: null, peakStats: null, meta: null }
   
   return { 
     network,      // Network connectivity - street segments with analysis

@@ -27,23 +27,41 @@ function addTripPercentiles(featureCollection) {
   }
 }
 
-export async function loadExplorerWalkabilityData() {
+export async function loadExplorerWalkabilityData({
+  includeActiveMobility = false,
+  includeNetwork = false,
+  includeTransit = false,
+  includeRoadSteepness = false
+} = {}) {
   const [walkability, transit, busStops, trainStation, roadSteepness] = await Promise.all([
-    loadActiveMobilityData(),
-    fetchJson('/data/walkabilty/roads_with_walking_times.geojson', 'Transit walking times file failed'),
-    fetchJson('/data/walkabilty/bus stops.geojson', 'Bus stops file failed'),
-    fetchJson('/data/walkabilty/trainStation.geojson', 'Train station file failed'),
-    fetchJson('/api/transport/road-steepness', 'Road steepness API load failed')
+    (includeActiveMobility || includeNetwork)
+      ? loadActiveMobilityData({
+        includeNetwork,
+        includeActivity: includeActiveMobility
+      })
+      : Promise.resolve(null),
+    includeTransit
+      ? fetchJson('/data/walkabilty/roads_with_walking_times.geojson', 'Transit walking times file failed')
+      : Promise.resolve(null),
+    includeTransit
+      ? fetchJson('/data/walkabilty/bus stops.geojson', 'Bus stops file failed')
+      : Promise.resolve(null),
+    includeTransit
+      ? fetchJson('/data/walkabilty/trainStation.geojson', 'Train station file failed')
+      : Promise.resolve(null),
+    includeRoadSteepness
+      ? fetchJson('/api/transport/road-steepness', 'Road steepness API load failed')
+      : Promise.resolve(null)
   ])
 
-  const { network, pedestrian, cycling, stravaAggregated } = walkability
+  const { network, pedestrian, cycling, stravaAggregated } = walkability || {}
 
   return {
-    network: transformGeoJSON(network, 'EPSG:3857', 'EPSG:4326'),
-    pedestrian: addTripPercentiles(pedestrian),
-    cycling: addTripPercentiles(cycling),
+    network: network ? transformGeoJSON(network, 'EPSG:3857', 'EPSG:4326') : null,
+    pedestrian: pedestrian ? addTripPercentiles(pedestrian) : null,
+    cycling: cycling ? addTripPercentiles(cycling) : null,
     stravaAggregated,
-    availableMonths: getStravaAvailableMonths(stravaAggregated),
+    availableMonths: stravaAggregated ? getStravaAvailableMonths(stravaAggregated) : [],
     transit,
     busStops,
     trainStation,

@@ -60,38 +60,82 @@ async function loadEventsData() {
 }
 
 async function loadLandParcelsData() {
-  return fetchJson('/api/cadastre/landparcels', 'Land parcel cadastre load failed')
+  return fetchJson('/api/cadastre/landparcels?scope=ccid', 'Land parcel cadastre load failed')
 }
 
 async function loadOpenSpacesData() {
-  return fetchJson('/api/cadastre/squares', 'Open spaces cadastre load failed')
+  return fetchJson('/api/cadastre/squares?scope=ccid', 'Open spaces cadastre load failed')
 }
 
 export async function loadExplorerBusinessBoundary() {
   return loadCCIDBoundary()
 }
 
-export async function loadExplorerBusinessData() {
-  const [businesses, stalls, properties, survey, eventsData, landParcels, openSpaces] = await Promise.all([
-    fetchJson('/data/business/POI_enriched_20260120_185944.geojson', 'Business POI load failed'),
-    fetchJson('/data/business/streetStalls.geojson', 'Street stalls load failed'),
-    fetchJson('/data/business/properties_consolidated.geojson', 'Property load failed'),
-    fetchJson('/data/business/survey_data.geojson', 'Survey load failed'),
-    loadEventsData(),
-    loadLandParcelsData().catch((error) => {
-      console.error(error)
-      return { type: 'FeatureCollection', features: [], metadata: { error: error.message, source: 'cadastre.landparcels_gv' } }
-    }),
-    loadOpenSpacesData().catch((error) => {
-      console.error(error)
-      return { type: 'FeatureCollection', features: [], metadata: { error: error.message, source: 'cadastre.squares' } }
-    })
+const emptyCollection = (source, error = null) => ({
+  type: 'FeatureCollection',
+  features: [],
+  metadata: error ? { error: error.message, source } : { source }
+})
+
+const loadOptional = (loader, source) => loader().catch((error) => {
+  console.error(error)
+  return emptyCollection(source, error)
+})
+
+export async function loadExplorerBusinessData({
+  includeBusinesses = false,
+  includeStreetStalls = false,
+  includeProperties = false,
+  includeSurvey = false,
+  includeEvents = false,
+  includeLandParcels = false,
+  includeOpenSpaces = false,
+  includeBusinessBundle = null
+} = {}) {
+  if (includeBusinessBundle !== null) {
+    includeBusinesses = includeBusinessBundle
+    includeStreetStalls = includeBusinessBundle
+    includeProperties = includeBusinessBundle
+    includeSurvey = includeBusinessBundle
+    includeEvents = includeBusinessBundle
+  }
+
+  const [
+    businesses,
+    stalls,
+    properties,
+    survey,
+    eventsData,
+    landParcels,
+    openSpaces
+  ] = await Promise.all([
+    includeBusinesses
+      ? loadOptional(() => fetchJson('/data/business/POI_enriched_20260120_185944.geojson', 'Business POI load failed'), 'data/business/POI_enriched_20260120_185944.geojson')
+      : Promise.resolve(null),
+    includeStreetStalls
+      ? loadOptional(() => fetchJson('/data/business/streetStalls.geojson', 'Street stalls load failed'), 'data/business/streetStalls.geojson')
+      : Promise.resolve(null),
+    includeProperties
+      ? loadOptional(() => fetchJson('/data/business/properties_consolidated.geojson', 'Property load failed'), 'data/business/properties_consolidated.geojson')
+      : Promise.resolve(null),
+    includeSurvey
+      ? loadOptional(() => fetchJson('/data/business/survey_data.geojson', 'Survey load failed'), 'data/business/survey_data.geojson')
+      : Promise.resolve(null),
+    includeEvents
+      ? loadEventsData()
+      : Promise.resolve(null),
+    includeLandParcels
+      ? loadOptional(loadLandParcelsData, 'cadastre.landparcels_gv')
+      : Promise.resolve(null),
+    includeOpenSpaces
+      ? loadOptional(loadOpenSpacesData, 'cadastre.squares')
+      : Promise.resolve(null)
   ])
 
   return {
     businesses,
     streetStalls: stalls,
-    properties: enrichProperties(properties),
+    properties: properties ? enrichProperties(properties) : null,
     survey,
     eventsData,
     landParcels,

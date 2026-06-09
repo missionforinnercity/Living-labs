@@ -69,6 +69,17 @@ const OPEN_SPACE_COLOR_EXPRESSION = [
   'Unknown', '#94a3b8',
   '#14b8a6'
 ]
+const OPEN_SPACE_PRIORITY_COLOR_EXPRESSION = [
+  'interpolate',
+  ['linear'],
+  ['coalesce', ['get', 'priority_score_relative_percentile'], ['get', 'priority_score'], 0],
+  0, '#ecfeff',
+  20, '#22c55e',
+  60, '#fef08a',
+  80, '#f97316',
+  90, '#dc2626',
+  100, '#7f1d1d'
+]
 const SERVICE_REQUEST_GROUPS = [
   { id: 'Sewage', color: '#2563eb', soft: 'rgba(37,99,235,0.12)', mid: 'rgba(37,99,235,0.46)', strong: 'rgba(37,99,235,0.86)' },
   { id: 'Water', color: '#06b6d4', soft: 'rgba(6,182,212,0.12)', mid: 'rgba(6,182,212,0.46)', strong: 'rgba(6,182,212,0.86)' },
@@ -154,6 +165,27 @@ const getStreetViewUrl = (feature) => {
   const coordinates = getStreetViewCoordinates(feature)
   if (!coordinates) return null
   return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${coordinates.lat},${coordinates.lng}`
+}
+
+const titleCase = (value) => String(value || '')
+  .replace(/[_-]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase()
+  .replace(/\b\w/g, (match) => match.toUpperCase())
+
+const isMachineOpenSpaceName = (value) => {
+  const text = String(value || '').trim()
+  return !text || /^osm\s/i.test(text) || /\bway\/\d+/i.test(text) || /\bamenity=/i.test(text)
+}
+
+const openSpaceDisplayName = (props = {}) => {
+  if (!isMachineOpenSpaceName(props.name)) return titleCase(props.name)
+  const category = titleCase(props.category_label || props.category || props.zoning_group || props.zoning_primary || 'Open space')
+  const areaM2 = Number(props.area_m2)
+  const areaLabel = Number.isFinite(areaM2) && areaM2 > 0 ? `${(areaM2 / 10000).toFixed(2)} ha` : null
+  const id = props.square_id || props.fid || props.ogc_fid
+  return [category, areaLabel, id ? `Site ${id}` : null].filter(Boolean).join(' · ')
 }
 
 const getEcologySelectionGrid = (feature, explicitSegmentCount = null) => {
@@ -434,7 +466,9 @@ const ExplorerMap = ({
   propertiesData,
   landParcelsData,
   openSpacesData,
+  openSpacesPriorityData,
   parcelColorMode = 'zoning',
+  openSpaceColorMode = 'zoning',
   networkData,
   pedestrianData,
   cyclingData,
@@ -469,6 +503,8 @@ const ExplorerMap = ({
   onGreeneryStreetSelect,
   onEcologyFeatureSelect,
   onHeatGridFeatureSelect,
+  selectedOpenSpaceFeature,
+  onOpenSpaceSelect,
   onServiceRequestSegmentClick,
   visibleLayers,
   layerStack = [],
@@ -997,6 +1033,14 @@ const ExplorerMap = ({
   
   const [selectedFeature, setSelectedFeature] = useState(null)
   const [popupInfo, setPopupInfo] = useState(null)
+  const selectedOpenSpaceHighlight = useMemo(() => (
+    selectedOpenSpaceFeature?.geometry
+      ? {
+          type: 'FeatureCollection',
+          features: [selectedOpenSpaceFeature]
+        }
+      : { type: 'FeatureCollection', features: [] }
+  ), [selectedOpenSpaceFeature])
 
   // ── Bbox drawing state ──────────────────────────────────────
   const [boxPos, setBoxPos] = useState(null)    // { x, y } top-left of fixed box
@@ -1200,6 +1244,13 @@ const ExplorerMap = ({
           latitude: event.lngLat.lat,
           feature
         })
+        return
+      }
+
+      if (feature.source === 'open-spaces') {
+        onOpenSpaceSelect?.(feature)
+        setPopupInfo(null)
+        setSelectedFeature(null)
         return
       }
 
@@ -1967,12 +2018,14 @@ const ExplorerMap = ({
             )}
 
             {shouldRenderCategory('openSpaces') && openSpacesData && (
-              <Source id="open-spaces" type="geojson" data={openSpacesData}>
+              <Source id="open-spaces" type="geojson" data={openSpaceColorMode === 'priority' && openSpacesPriorityData ? openSpacesPriorityData : openSpacesData}>
                 <Layer
                   id="open-spaces-fill"
                   type="fill"
                   paint={{
-                    'fill-color': OPEN_SPACE_COLOR_EXPRESSION,
+                    'fill-color': openSpaceColorMode === 'priority'
+                      ? OPEN_SPACE_PRIORITY_COLOR_EXPRESSION
+                      : OPEN_SPACE_COLOR_EXPRESSION,
                     'fill-opacity': [
                       'case',
                       ['boolean', ['get', 'is_city_owned'], false],
@@ -1998,6 +2051,28 @@ const ExplorerMap = ({
                       0.85
                     ],
                     'line-opacity': 0.86
+                  }}
+                />
+              </Source>
+            )}
+
+            {selectedOpenSpaceFeature && (
+              <Source id="selected-open-space-highlight" type="geojson" data={selectedOpenSpaceHighlight}>
+                <Layer
+                  id="selected-open-space-highlight-fill"
+                  type="fill"
+                  paint={{
+                    'fill-color': '#fef08a',
+                    'fill-opacity': 0.18
+                  }}
+                />
+                <Layer
+                  id="selected-open-space-highlight-outline"
+                  type="line"
+                  paint={{
+                    'line-color': '#fde68a',
+                    'line-width': 4,
+                    'line-opacity': 0.95
                   }}
                 />
               </Source>
@@ -3735,7 +3810,7 @@ const ExplorerMap = ({
                     const props = popupInfo.feature.properties || {}
                     return (
                       <>
-                        <h3>{props.name || 'Open Space'}</h3>
+                        <h3>{openSpaceDisplayName(props)}</h3>
                         <p><strong>Category:</strong> {props.category_label || props.category || 'Open space'}</p>
                         <p><strong>Zoning:</strong> {props.zoning_primary || 'Unknown'}</p>
                         <p><strong>Group:</strong> {props.zoning_group || 'Unknown'}</p>
@@ -4059,7 +4134,7 @@ const ExplorerMap = ({
                     <p><strong>Pedestrian Heat Score:</strong> {numberLabel(props.pedestrian_heat_score)}</p>
                     <p><strong>Priority:</strong> {props.priority_class || '—'}{valueFrom('priority_score') != null ? ` (${numberLabel(props.priority_score)})` : ''}</p>
                     <p><strong>Night Heat Retention:</strong> {numberLabel(valueFrom('night_heat_retention_c', 'retained_heat_score'), '°C')}</p>
-                    <p><strong>Effective Canopy:</strong> {numberLabel(props.effective_canopy_pct, '%')}</p>
+                    <p><strong>Effective Canopy:</strong> {Number.isFinite(Number(props.effective_canopy_pct)) ? `${Number(props.effective_canopy_pct).toFixed(1)}%` : '—'}</p>
                     <p><strong>Thermal Confidence:</strong> {props.thermal_confidence_class || '—'}</p>
                   </>
                 )
