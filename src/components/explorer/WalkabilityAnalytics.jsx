@@ -10,6 +10,29 @@ const NETWORK_METRICS = [
   { id: 'harmonic_800', label: 'Closeness 800m', field: 'cc_harmonic_800' }
 ]
 
+const WALKABILITY_SECTION_META = {
+  activity: {
+    kicker: 'Active Mobility',
+    title: 'Walking, Running & Cycling',
+    intro: 'Follow observed movement patterns over time and compare walking demand with cycling demand.'
+  },
+  steepness: {
+    kicker: 'Terrain',
+    title: 'Road Steepness',
+    intro: 'Inspect climb intensity, uphill direction, and which streets may feel hardest on foot.'
+  },
+  network: {
+    kicker: 'Street Network',
+    title: 'Network Analysis',
+    intro: 'Review centrality metrics to see which corridors matter most to movement through the inner city.'
+  },
+  transit: {
+    kicker: 'Public Transport',
+    title: 'Transit Accessibility',
+    intro: 'Compare walking access to bus stops and train stations across the mapped street network.'
+  }
+}
+
 const classifyGrade = (grade) => {
   const abs = Math.abs(Number(grade) || 0)
   if (abs < 1) return 'Flat'
@@ -54,6 +77,7 @@ const WalkabilityAnalytics = ({
   selectedSegment = null
 }) => {
   const [localTransitView, setLocalTransitView] = useState(transitView || 'combined')
+  const sectionMeta = WALKABILITY_SECTION_META[walkabilityMode] || WALKABILITY_SECTION_META.activity
 
   const networkStats = useMemo(() => {
     if (!networkData?.features?.length) return null
@@ -132,8 +156,9 @@ const WalkabilityAnalytics = ({
       <div className="walkability-temporal-shell">
         <div className="walkability-temporal-header">
           <div>
-            <p className="walkability-kicker">Active Mobility Timeline</p>
-            <h2>Temporal Route Explorer</h2>
+            <p className="walkability-kicker">{sectionMeta.kicker}</p>
+            <h2>{sectionMeta.title}</h2>
+            <p className="walkability-header-copy">{sectionMeta.intro}</p>
           </div>
           <div className="temporal-mode-pills">
             <button className={`temporal-pill ${walkabilityMode === 'activity' ? 'active' : ''}`} onClick={() => onWalkabilityModeChange('activity')}>Routes</button>
@@ -143,41 +168,43 @@ const WalkabilityAnalytics = ({
           </div>
         </div>
 
-        <div className="month-slider-card">
-          <div className="month-slider-copy">
-            <span className="month-slider-label">Map time window</span>
-            <strong>{walkabilityMonths.length ? selectedMonthLabel : 'No month available'}</strong>
+        {walkabilityMode === 'activity' && (
+          <div className="month-slider-card">
+            <div className="month-slider-copy">
+              <span className="month-slider-label">Map time window</span>
+              <strong>{walkabilityMonths.length ? selectedMonthLabel : 'No month available'}</strong>
+            </div>
+            <button
+              className={`temporal-pill ${!selectedMonth ? 'active' : ''}`}
+              onClick={() => onMonthChange?.(null)}
+              disabled={!walkabilityMonths.length}
+            >
+              All Months Avg
+            </button>
+            <input
+              className="month-slider"
+              type="range"
+              min="0"
+              max={Math.max(0, walkabilityMonths.length - 1)}
+              step="1"
+              value={selectedMonthIndex}
+              onChange={(event) => onMonthChange?.(walkabilityMonths[Number(event.target.value)]?.key || null)}
+              disabled={walkabilityMonths.length <= 1}
+            />
+            <div className="month-slider-stops">
+              {walkabilityMonths.map((month, index) => (
+                <button
+                  key={month.key}
+                  className={`month-stop ${month.key === selectedMonth ? 'active' : ''}`}
+                  onClick={() => onMonthChange?.(month.key)}
+                  style={{ left: `${walkabilityMonths.length === 1 ? 0 : (index / (walkabilityMonths.length - 1)) * 100}%` }}
+                >
+                  <span>{month.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <button
-            className={`temporal-pill ${!selectedMonth ? 'active' : ''}`}
-            onClick={() => onMonthChange?.(null)}
-            disabled={!walkabilityMonths.length}
-          >
-            All Months Avg
-          </button>
-          <input
-            className="month-slider"
-            type="range"
-            min="0"
-            max={Math.max(0, walkabilityMonths.length - 1)}
-            step="1"
-            value={selectedMonthIndex}
-            onChange={(event) => onMonthChange?.(walkabilityMonths[Number(event.target.value)]?.key || null)}
-            disabled={walkabilityMonths.length <= 1}
-          />
-          <div className="month-slider-stops">
-            {walkabilityMonths.map((month, index) => (
-              <button
-                key={month.key}
-                className={`month-stop ${month.key === selectedMonth ? 'active' : ''}`}
-                onClick={() => onMonthChange?.(month.key)}
-                style={{ left: `${walkabilityMonths.length === 1 ? 0 : (index / (walkabilityMonths.length - 1)) * 100}%` }}
-              >
-                <span>{month.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
 
         {walkabilityMode === 'activity' && (
           <div className="temporal-insight-panel">

@@ -33,7 +33,7 @@ function formatMonthLabel(monthKey) {
   const [year, month] = String(monthKey).split('-').map(Number)
   if (!year || !month) return String(monthKey)
   return new Date(Date.UTC(year, month - 1, 1)).toLocaleString('en-US', {
-    month: 'long',
+    month: 'short',
     year: 'numeric',
     timeZone: 'UTC'
   })

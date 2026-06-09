@@ -22,7 +22,6 @@ import {
 import * as turf from '@turf/turf'
 import TrafficAnalytics from './TrafficAnalytics'
 import EventInsightsPanel from './EventInsightsPanel'
-import { buildEnvDisplayData } from '../../features/environment/data'
 import { useExplorerBusinessData } from '../../features/business/useExplorerBusinessData'
 import { useExplorerWalkabilityData } from '../../features/walkability/useExplorerWalkabilityData'
 import { useExplorerLightingData } from '../../features/lighting/useExplorerLightingData'
@@ -517,7 +516,6 @@ const LAYER_CATEGORIES = [
   { id: 'climateShade', label: 'Shade', dashboard: 'climate', dataKey: 'climateShade' },
   { id: 'estimatedWind', label: 'Est. Wind', dashboard: 'climate', dataKey: 'estimatedWind' },
   { id: 'urbanHeatConcrete', label: 'Heat Islands & Cool Islands', dashboard: 'climate', dataKey: 'ecologyHeat' },
-  { id: 'airQuality',   label: 'Air Quality',  dashboard: 'climate', dataKey: 'airQualityVoronoi' },
   // Environment layers
   { id: 'greeneryIndex', label: 'Greenery Access', dashboard: 'environment', dataKey: 'greenerySegments' },
   { id: 'treeCanopy', label: 'Tree Canopy', dashboard: 'environment', dataKey: 'treeCanopy' },
@@ -1160,10 +1158,6 @@ const UnifiedDataExplorer = () => {
     return [...new Set(envHistoryData.rows.map(r => r.hour_utc?.slice(0, 10)).filter(Boolean))].sort()
   }, [envHistoryData])
 
-  const envDisplayData = useMemo(() => {
-    return buildEnvDisplayData(envHistoryData, envDate)
-  }, [envDate, envHistoryData])
-
   const greeneryStreetSummaries = useMemo(() => {
     const features = greeneryAndSkyview?.features || []
     if (!features.length) return {}
@@ -1753,7 +1747,6 @@ const UnifiedDataExplorer = () => {
         setWalkabilityMode(modeMap[categoryId])
       }
     } else if (category.dashboard === 'climate') {
-      if (categoryId === 'airQuality') setEnvIndex('uaqi')
     } else if (category.dashboard === 'hospitality') {
       setHospitalityMapMode(categoryId === 'airbnbZones' ? 'zones' : 'points')
     }
@@ -2779,7 +2772,7 @@ const UnifiedDataExplorer = () => {
               ecologyMetric={ecologyMetric}
               selectedEcologyFeatureKeys={selectedEcologyFeatureKeys}
               selectedHeatGridFeatureKeys={selectedHeatGridFeatureKeys}
-              envCurrentData={envDisplayData}
+              envCurrentData={envCurrentData}
               envHistoryData={envHistoryData}
               envIndex={envIndex}
               onEnvGridDetail={openEnvGridDetail}
@@ -4057,7 +4050,7 @@ const UnifiedDataExplorer = () => {
 
           {/* ── Environment detail bottom panel ── */}
           {dashboardMode === 'climate' && activeCategory === 'airQuality' && envDetailGrid && (() => {
-            const gridRow = envDisplayData?.rows?.find(r => r.grid_id === envDetailGrid) || envCurrentData?.rows?.find(r => r.grid_id === envDetailGrid)
+            const gridRow = envCurrentData?.rows?.find(r => r.grid_id === envDetailGrid)
             const currentGridRow = envCurrentData?.rows?.find(r => r.grid_id === envDetailGrid)
             const histRows = (envHistoryData?.rows || []).filter(r => r.grid_id === envDetailGrid)
             if (!gridRow || histRows.length === 0) return null

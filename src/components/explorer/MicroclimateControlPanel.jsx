@@ -4,8 +4,7 @@ const CLIMATE_LAYERS = [
   { id: 'urbanHeatConcrete', label: 'Heat Zones', detail: 'Adaptive zone ranking' },
   { id: 'climateShade', label: 'Shade', detail: 'DB time slice' },
   { id: 'estimatedWind', label: 'Wind', detail: 'DB wind scenario' },
-  { id: 'heatStreets', label: 'Heat Streets', detail: 'Pedestrian exposure' },
-  { id: 'airQuality', label: 'Air Quality', detail: 'Current AQ layer' }
+  { id: 'heatStreets', label: 'Heat Streets', detail: 'Pedestrian exposure' }
 ]
 
 const SHADE_TIME_MIN = 800

@@ -39,6 +39,14 @@
   line-height: 1.1;
 }
 
+.walkability-header-copy {
+  margin: 0.45rem 0 0;
+  max-width: 34ch;
+  color: rgba(248, 250, 252, 0.74);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
 .temporal-mode-pills {
   display: flex;
   flex-wrap: wrap;
@@ -150,8 +158,11 @@
 
 .month-stop span {
   display: block;
-  max-width: 84px;
+  max-width: 58px;
+  white-space: nowrap;
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .temporal-summary-grid {
