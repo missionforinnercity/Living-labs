@@ -33,6 +33,7 @@ export function useExplorerBusinessData({ dashboardMode, activeCategory, lockedL
 
         const includeBusinesses = BUSINESS_POI_LAYERS.some((id) => requestedLayers.has(id))
         const includeStreetStalls = requestedLayers.has('vendorOpinions')
+        const includeSurvey = requestedLayers.has('vendorOpinions')
         const includeProperties = requestedLayers.has('propertySales')
         const includeEvents = requestedLayers.has('cityEvents')
         const includeLandParcels = requestedLayers.has('landParcels')
@@ -41,7 +42,7 @@ export function useExplorerBusinessData({ dashboardMode, activeCategory, lockedL
           includeBusinesses,
           includeStreetStalls,
           includeProperties,
-          includeSurvey: false,
+          includeSurvey,
           includeEvents,
           includeLandParcels,
           includeOpenSpaces

@@ -104,10 +104,19 @@ export function isBusinessOpen(business, dayOfWeek, hour) {
   return false;
 }
 
+export const BUSINESS_LIVELINESS_HEATMAP_STOPS = [
+  { stop: 0, color: 'rgba(33, 102, 172, 0)', label: 'No visible cluster' },
+  { stop: 0.2, color: 'rgb(103, 169, 207)', label: 'Light presence' },
+  { stop: 0.4, color: 'rgb(209, 229, 240)', label: 'Steady footfall' },
+  { stop: 0.6, color: 'rgb(253, 219, 199)', label: 'Busy streets' },
+  { stop: 0.8, color: 'rgb(239, 138, 98)', label: 'Strong hotspot' },
+  { stop: 1, color: 'rgb(178, 24, 43)', label: 'Peak hotspot' }
+]
+
 /**
  * Helper function to categorize business type
  */
-function categorizeBusinessType(primaryType, types) {
+export function categorizeBusinessType(primaryType, types) {
   const typeStr = (primaryType || '') + ' ' + (types || '');
   const lower = typeStr.toLowerCase();
   
@@ -164,6 +173,94 @@ export function getBusinessStats(businesses, dayOfWeek, hour) {
   });
   
   return stats;
+}
+
+export function getBusinessLivelinessInsights(businesses = [], selectedDay = 1, selectedHour = 12) {
+  const safeBusinesses = Array.isArray(businesses) ? businesses : []
+  const totalBusinesses = safeBusinesses.length
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  const hourlyProfile = Array.from({ length: 24 }, (_, slotHour) => {
+    const stats = getBusinessStats(safeBusinesses, selectedDay, slotHour)
+    const openShare = stats.totalBusinesses > 0 ? stats.openBusinesses / stats.totalBusinesses : 0
+    return {
+      hour: slotHour,
+      label: formatHour(slotHour),
+      openBusinesses: stats.openBusinesses,
+      openShare
+    }
+  })
+
+  const dailyProfile = dayLabels.map((label, dayIndex) => {
+    const stats = getBusinessStats(safeBusinesses, dayIndex, selectedHour)
+    const openShare = stats.totalBusinesses > 0 ? stats.openBusinesses / stats.totalBusinesses : 0
+    return {
+      dayIndex,
+      label,
+      openBusinesses: stats.openBusinesses,
+      openShare
+    }
+  })
+
+  const currentStats = getBusinessStats(safeBusinesses, selectedDay, selectedHour)
+  const currentOpenShare = currentStats.totalBusinesses > 0
+    ? currentStats.openBusinesses / currentStats.totalBusinesses
+    : 0
+
+  const peakHour = hourlyProfile.reduce((best, entry) => (
+    !best || entry.openShare > best.openShare ? entry : best
+  ), null)
+  const quietHour = hourlyProfile.reduce((best, entry) => (
+    !best || entry.openShare < best.openShare ? entry : best
+  ), null)
+  const peakDay = dailyProfile.reduce((best, entry) => (
+    !best || entry.openShare > best.openShare ? entry : best
+  ), null)
+  const quietDay = dailyProfile.reduce((best, entry) => (
+    !best || entry.openShare < best.openShare ? entry : best
+  ), null)
+
+  const dayParts = [
+    { id: 'breakfast', label: 'Morning', hours: [6, 7, 8, 9, 10] },
+    { id: 'midday', label: 'Midday', hours: [11, 12, 13, 14] },
+    { id: 'afternoon', label: 'After Work', hours: [15, 16, 17, 18] },
+    { id: 'night', label: 'Night', hours: [19, 20, 21, 22, 23] }
+  ].map((band) => {
+    const values = band.hours
+      .map((hour) => hourlyProfile.find((entry) => entry.hour === hour)?.openShare ?? 0)
+    const averageOpenShare = values.length
+      ? values.reduce((sum, value) => sum + value, 0) / values.length
+      : 0
+    return {
+      ...band,
+      averageOpenShare
+    }
+  })
+
+  const openByCategory = Object.entries(currentStats.byCategory || {})
+    .map(([key, value]) => ({
+      key,
+      label: key.charAt(0).toUpperCase() + key.slice(1),
+      open: value.open,
+      total: value.total,
+      share: value.total > 0 ? value.open / value.total : 0
+    }))
+    .sort((a, b) => b.open - a.open)
+    .slice(0, 5)
+
+  return {
+    totalBusinesses,
+    currentStats,
+    currentOpenShare,
+    hourlyProfile,
+    dailyProfile,
+    peakHour,
+    quietHour,
+    peakDay,
+    quietDay,
+    dayParts,
+    openByCategory
+  }
 }
 
 /**

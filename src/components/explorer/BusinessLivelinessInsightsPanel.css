@@ -1,0 +1,282 @@
+.business-liveliness-panel {
+  position: absolute;
+  left: 16px;
+  right: calc(var(--sidebar-width, 360px) + 16px);
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  max-height: min(600px, calc(100vh - 220px));
+  z-index: 92;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(82, 82, 82, 0.92), rgba(61, 61, 61, 0.94));
+  box-shadow:
+    0 20px 44px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  backdrop-filter: blur(28px) saturate(1.02);
+  -webkit-backdrop-filter: blur(28px) saturate(1.02);
+  overflow: hidden;
+}
+
+.business-liveliness-panel__header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.95rem 1.1rem 1rem;
+  background: transparent;
+  border: none;
+  color: #f8fafc;
+  text-align: left;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.business-liveliness-panel__header span,
+.business-liveliness-card__head span {
+  display: block;
+  color: rgba(125, 211, 252, 0.82);
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.business-liveliness-panel__header strong,
+.business-liveliness-card__head strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1rem;
+  color: #f8fafc;
+}
+
+.business-liveliness-panel__header small,
+.business-liveliness-card__footer small {
+  color: rgba(226, 232, 240, 0.58);
+  font-size: 0.74rem;
+}
+
+.business-liveliness-panel__header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-shrink: 0;
+}
+
+.business-liveliness-panel__header-meta em {
+  font-style: normal;
+  color: #67e8f9;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.business-liveliness-panel__header-meta i {
+  display: inline-flex;
+  min-width: 52px;
+  height: 30px;
+  padding: 0 0.7rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.28);
+  color: #e2e8f0;
+  font-style: normal;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.business-liveliness-panel__body {
+  padding: 0 1.1rem 1rem;
+  display: grid;
+  gap: 0.75rem;
+  overflow: auto;
+  min-height: 0;
+}
+
+.business-liveliness-panel__grid {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 0.75rem;
+}
+
+.business-liveliness-panel__grid--compact {
+  grid-template-columns: 1fr 1fr;
+}
+
+.business-liveliness-card {
+  padding: 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(71, 85, 105, 0.22), rgba(51, 65, 85, 0.18)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.business-liveliness-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.business-liveliness-bars {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  gap: 0.22rem;
+  height: 132px;
+  align-items: end;
+}
+
+.business-liveliness-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: end;
+  gap: 0.3rem;
+  height: 100%;
+}
+
+.business-liveliness-bar i {
+  display: block;
+  width: 100%;
+  min-height: 10px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.84), rgba(100, 116, 139, 0.22));
+}
+
+.business-liveliness-bar.is-peak i {
+  background: linear-gradient(180deg, #67e8f9, rgba(34, 211, 238, 0.18));
+}
+
+.business-liveliness-bar.is-quiet i {
+  background: linear-gradient(180deg, #fbbf24, rgba(245, 158, 11, 0.18));
+}
+
+.business-liveliness-bar.is-current i {
+  box-shadow: 0 0 0 2px rgba(248, 250, 252, 0.16);
+}
+
+.business-liveliness-bar span {
+  color: rgba(226, 232, 240, 0.48);
+  font-size: 0.52rem;
+}
+
+.business-liveliness-card__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.7rem;
+}
+
+.business-liveliness-days {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.business-liveliness-days__item {
+  padding: 0.62rem 0.72rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.business-liveliness-days__item.is-current {
+  border-color: rgba(103, 232, 249, 0.4);
+  background: rgba(14, 165, 233, 0.1);
+}
+
+.business-liveliness-days__item div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.business-liveliness-days__item small,
+.business-liveliness-categories__row small {
+  color: rgba(226, 232, 240, 0.56);
+  font-size: 0.7rem;
+}
+
+.business-liveliness-days__item strong,
+.business-liveliness-band-grid strong,
+.business-liveliness-categories__row strong {
+  color: #f8fafc;
+  font-size: 0.92rem;
+}
+
+.business-liveliness-days__item i {
+  display: block;
+  height: 6px;
+  margin-top: 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #67e8f9, #22d3ee);
+}
+
+.business-liveliness-band-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.business-liveliness-band-grid > div {
+  padding: 0.8rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.business-liveliness-band-grid > div span,
+.business-liveliness-categories__row span {
+  display: block;
+  margin-top: 0.18rem;
+  color: rgba(226, 232, 240, 0.6);
+  font-size: 0.74rem;
+}
+
+.business-liveliness-categories {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.business-liveliness-categories__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.72rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 1200px) {
+  .business-liveliness-panel {
+    max-height: min(640px, calc(100vh - 180px));
+  }
+
+  .business-liveliness-panel__grid,
+  .business-liveliness-panel__grid--compact {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .business-liveliness-panel {
+    right: 12px;
+    left: 12px;
+    max-height: min(70vh, calc(100vh - 180px));
+  }
+
+  .business-liveliness-band-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

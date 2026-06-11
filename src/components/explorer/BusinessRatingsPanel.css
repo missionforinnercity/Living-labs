@@ -1,0 +1,351 @@
+.business-ratings-panel {
+  position: absolute;
+  left: 16px;
+  right: calc(var(--sidebar-width, 360px) + 16px);
+  bottom: 16px;
+  z-index: 92;
+  display: flex;
+  flex-direction: column;
+  max-height: min(290px, calc(100vh - 220px));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(82, 82, 82, 0.94), rgba(61, 61, 61, 0.96));
+  box-shadow:
+    0 20px 44px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  backdrop-filter: blur(28px) saturate(1.02);
+  -webkit-backdrop-filter: blur(28px) saturate(1.02);
+  overflow: hidden;
+}
+
+.business-ratings-panel.business-ratings-panel--expanded {
+  max-height: min(620px, calc(100vh - 220px));
+}
+
+.business-ratings-panel__topbar {
+  height: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.business-ratings-panel__topbar::before {
+  content: '';
+  width: 56px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.business-ratings-panel__header,
+.business-ratings-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0.9rem 0.7rem;
+}
+
+.business-ratings-panel__header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.business-ratings-panel__kicker,
+.business-ratings-insights__head span {
+  display: block;
+  color: rgba(125, 211, 252, 0.82);
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.business-ratings-panel__header strong,
+.business-ratings-insights__head strong {
+  display: block;
+  margin-top: 0.16rem;
+  color: #f8fafc;
+  font-size: 0.94rem;
+}
+
+.business-ratings-panel__header small,
+.business-ratings-panel__footer span {
+  color: rgba(226, 232, 240, 0.58);
+  font-size: 0.7rem;
+}
+
+.business-ratings-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.business-ratings-panel__sort {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.24rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.business-ratings-panel__sort button,
+.business-ratings-panel__toggle,
+.business-ratings-panel__footer button,
+.business-ratings-insights__row strong,
+.business-ratings-carousel__arrow {
+  border: none;
+}
+
+.business-ratings-panel__sort button,
+.business-ratings-panel__toggle,
+.business-ratings-panel__footer button,
+.business-ratings-insights__row strong,
+.business-ratings-insights__row span,
+.business-ratings-carousel__arrow,
+.business-ratings-insights__row small {
+  font-family: inherit;
+}
+
+.business-ratings-panel__sort button,
+.business-ratings-panel__toggle,
+.business-ratings-panel__footer button,
+.business-ratings-carousel__arrow,
+.business-ratings-insights__row strong {
+  cursor: pointer;
+}
+
+.business-ratings-panel__sort button {
+  min-height: 28px;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(248, 250, 252, 0.72);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.business-ratings-panel__sort button.active {
+  background: rgba(14, 165, 233, 0.18);
+  color: #cffafe;
+}
+
+.business-ratings-panel__toggle,
+.business-ratings-panel__footer button {
+  min-height: 30px;
+  padding: 0 0.78rem;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.14);
+  background: rgba(15, 23, 42, 0.32);
+  color: rgba(248, 250, 252, 0.92);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.business-ratings-carousel {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: stretch;
+  gap: 0.55rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.business-ratings-carousel__arrow {
+  width: 34px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  font-size: 1.35rem;
+}
+
+.business-ratings-carousel__track {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.business-ratings-card {
+  min-width: 0;
+  padding: 0.72rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.08), transparent 44%),
+    linear-gradient(180deg, rgba(71, 85, 105, 0.18), rgba(51, 65, 85, 0.16)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.business-ratings-card h4 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.business-ratings-card__type,
+.business-ratings-card__address,
+.business-ratings-insights__row span,
+.business-ratings-insights__row small {
+  color: rgba(226, 232, 240, 0.58);
+}
+
+.business-ratings-card__type {
+  margin: 0.22rem 0 0;
+  font-size: 0.64rem;
+  text-transform: capitalize;
+}
+
+.business-ratings-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+  margin-top: 0.55rem;
+  color: rgba(226, 232, 240, 0.74);
+  font-size: 0.64rem;
+}
+
+.business-ratings-card__meta .rating {
+  color: #67e8f9;
+  font-weight: 700;
+}
+
+.business-ratings-card__status {
+  display: inline-flex;
+  margin-top: 0.55rem;
+  padding: 0.22rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.63rem;
+  font-weight: 700;
+}
+
+.business-ratings-card__status.open {
+  color: #67e8f9;
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(103, 232, 249, 0.14);
+}
+
+.business-ratings-card__status.closed {
+  color: rgba(203, 213, 225, 0.78);
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.business-ratings-card__address {
+  margin: 0.55rem 0 0;
+  font-size: 0.63rem;
+  line-height: 1.35;
+}
+
+.business-ratings-panel__footer {
+  padding-top: 0;
+}
+
+.business-ratings-insights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 0 1rem 1rem;
+  overflow: auto;
+  min-height: 0;
+}
+
+.business-ratings-insights__card {
+  padding: 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.08), transparent 44%),
+    linear-gradient(180deg, rgba(71, 85, 105, 0.18), rgba(51, 65, 85, 0.16)),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.business-ratings-insights__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.business-ratings-insights__list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.business-ratings-insights__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+.business-ratings-insights__row small {
+  display: block;
+  font-size: 0.72rem;
+}
+
+.business-ratings-insights__row span {
+  display: block;
+  margin-top: 0.22rem;
+  font-size: 0.68rem;
+}
+
+.business-ratings-insights__row strong {
+  flex-shrink: 0;
+  color: #f8fafc;
+  font-size: 0.75rem;
+  background: none;
+  padding: 0;
+}
+
+@media (max-width: 1200px) {
+  .business-ratings-panel {
+    max-height: min(700px, calc(100vh - 180px));
+  }
+
+  .business-ratings-carousel__track,
+  .business-ratings-insights {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .business-ratings-panel {
+    left: 12px;
+    right: 12px;
+    max-height: min(72vh, calc(100vh - 180px));
+  }
+
+  .business-ratings-panel__header,
+  .business-ratings-panel__footer,
+  .business-ratings-panel__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .business-ratings-carousel {
+    grid-template-columns: 1fr;
+  }
+
+  .business-ratings-carousel__track,
+  .business-ratings-insights {
+    grid-template-columns: 1fr;
+  }
+
+  .business-ratings-carousel__arrow {
+    min-height: 36px;
+  }
+}

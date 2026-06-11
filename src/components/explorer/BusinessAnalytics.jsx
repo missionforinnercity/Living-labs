@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getDayName, formatHour, isBusinessOpen, getBusinessStats } from '../../utils/timeUtils'
+import { getDayName, formatHour, isBusinessOpen, getBusinessStats, BUSINESS_LIVELINESS_HEATMAP_STOPS } from '../../utils/timeUtils'
 import { getOpinionStats, OPINION_THEMES } from '../../utils/opinionUtils'
 import EventInsightsPanel from './EventInsightsPanel'
 import './BusinessAnalytics.css'
@@ -211,7 +211,7 @@ const BusinessAnalytics = ({
     if (businessMode === 'opinions') {
       const consentedData = [
         ...(opinionSource === 'formal' || opinionSource === 'both'
-          ? (surveyData?.features || []).filter(f => f.properties.stake_consent === 'yes')
+          ? (surveyData?.features || []).filter(f => [1, '1', '1.0', true, 'yes'].includes(f.properties.stake_consent))
           : []),
         ...(opinionSource === 'informal' || opinionSource === 'both'
           ? (streetStallsData?.features || []).filter(f => f.properties.stake_consent === 'yes')
@@ -368,10 +368,46 @@ const BusinessAnalytics = ({
       {/* Business Liveliness Mode */}
       {businessMode === 'liveliness' && (
         <div className="mode-content">
-          {/* Time Controls */}
-          <div className="control-section">
-            <div className="control-header">TIME CONTROLS</div>
-            
+          <div className="business-liveliness-hero">
+            <div className="business-liveliness-hero-copy">
+              <span>Business Liveliness</span>
+              <h3>{getDayName(dayOfWeek)} · {formatHour(hour)}</h3>
+            </div>
+            {businessStats && (
+              <div className="business-liveliness-hero-metric">
+                <strong>{Math.round((businessStats.openBusinesses / Math.max(1, businessStats.totalBusinesses)) * 100)}%</strong>
+                <small>live</small>
+              </div>
+            )}
+          </div>
+
+          {businessStats && (
+            <div className="business-liveliness-stats">
+              <div className="business-liveliness-stat">
+                <span>Active now</span>
+                <strong>{businessStats.openBusinesses.toLocaleString()}</strong>
+              </div>
+              <div className="business-liveliness-stat">
+                <span>Closed now</span>
+                <strong>{businessStats.closedBusinesses.toLocaleString()}</strong>
+              </div>
+              <div className="business-liveliness-stat">
+                <span>Total mapped</span>
+                <strong>{businessStats.totalBusinesses.toLocaleString()}</strong>
+              </div>
+              <div className="business-liveliness-stat">
+                <span>Open share</span>
+                <strong>{Math.round((businessStats.openBusinesses / Math.max(1, businessStats.totalBusinesses)) * 100)}%</strong>
+              </div>
+            </div>
+          )}
+
+          <div className="control-section business-liveliness-controls">
+            <div className="business-liveliness-controls-head">
+              <span>Time Controls</span>
+              <strong>{formatHour(hour)}</strong>
+            </div>
+
             <label className="control-label">
               Day: <span className="control-value">{getDayName(dayOfWeek)}</span>
             </label>
@@ -387,7 +423,7 @@ const BusinessAnalytics = ({
                 </button>
               ))}
             </div>
-            
+
             <label className="control-label">
               Time: <span className="control-value">{formatHour(hour)}</span>
             </label>
@@ -407,39 +443,31 @@ const BusinessAnalytics = ({
               <span>11 PM</span>
             </div>
           </div>
-          
-          {/* Stats Display */}
-          {businessStats && (
-            <div className="stats-summary">
-              <div className="stat-card primary">
-                <div className="stat-value">{businessStats.openBusinesses}</div>
-                <div className="stat-label">Businesses Open</div>
-                <div className="stat-percentage">
-                  {Math.round((businessStats.openBusinesses / businessStats.totalBusinesses) * 100)}% of total
-                </div>
-              </div>
-              
-              <div className="stat-card">
-                <div className="stat-value">{businessStats.closedBusinesses}</div>
-                <div className="stat-label">Closed</div>
-              </div>
-              
-              <div className="stat-card">
-                <div className="stat-value">{businessStats.totalBusinesses}</div>
-                <div className="stat-label">Total</div>
+
+          <div className="control-section business-liveliness-legend">
+            <div className="business-liveliness-controls-head">
+              <span>Heatmap Legend</span>
+              <strong>Map density</strong>
+            </div>
+            <div className="legend-gradient">
+              <div
+                className="legend-bar"
+                style={{
+                  background: `linear-gradient(to right, ${BUSINESS_LIVELINESS_HEATMAP_STOPS.map((item) => item.color).join(', ')})`
+                }}
+              />
+              <div className="legend-labels">
+                <span>{BUSINESS_LIVELINESS_HEATMAP_STOPS[1].label}</span>
+                <span>{BUSINESS_LIVELINESS_HEATMAP_STOPS.at(-1)?.label}</span>
               </div>
             </div>
-          )}
-          
-          {/* Legend */}
-          <div className="legend-section">
-            <div className="control-header">HEATMAP LEGEND</div>
-            <div className="legend-gradient">
-              <div className="legend-bar"></div>
-              <div className="legend-labels">
-                <span>Low Activity</span>
-                <span>High Activity</span>
-              </div>
+            <div className="business-liveliness-legend-list">
+              {BUSINESS_LIVELINESS_HEATMAP_STOPS.slice(1).map((item) => (
+                <div key={item.stop}>
+                  <i style={{ background: item.color }} />
+                  <span>{item.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -530,7 +558,7 @@ const BusinessAnalytics = ({
           {opinionStats && (
             <div className="opinion-themes">
               {Object.entries(OPINION_THEMES).map(([key, theme]) => {
-                const count = opinionStats[key] || 0
+                const count = opinionStats.byTheme?.[key] || 0
                 if (count === 0) return null
                 
                 return (

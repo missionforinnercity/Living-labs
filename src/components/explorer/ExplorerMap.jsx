@@ -4,7 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import * as turf from '@turf/turf'
 import { latLngToCell, cellToBoundary } from 'h3-js'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { isBusinessOpen } from '../../utils/timeUtils'
+import { isBusinessOpen, BUSINESS_LIVELINESS_HEATMAP_STOPS } from '../../utils/timeUtils'
 import { colorScales } from '../../utils/dataLoader'
 import { MAPBOX_TOKEN } from '../../utils/mapboxToken'
 import './ExplorerMap.css'
@@ -79,6 +79,12 @@ const OPEN_SPACE_PRIORITY_COLOR_EXPRESSION = [
   80, '#f97316',
   90, '#dc2626',
   100, '#7f1d1d'
+]
+const BUSINESS_LIVELINESS_HEATMAP_COLOR_EXPRESSION = [
+  'interpolate',
+  ['linear'],
+  ['heatmap-density'],
+  ...BUSINESS_LIVELINESS_HEATMAP_STOPS.flatMap(({ stop, color }) => [stop, color])
 ]
 const SERVICE_REQUEST_GROUPS = [
   { id: 'Sewage', color: '#2563eb', soft: 'rgba(37,99,235,0.12)', mid: 'rgba(37,99,235,0.46)', strong: 'rgba(37,99,235,0.86)' },
@@ -1523,17 +1529,7 @@ const ExplorerMap = ({
                       0, 1,
                       15, 3
                     ],
-                    'heatmap-color': [
-                      'interpolate',
-                      ['linear'],
-                      ['heatmap-density'],
-                      0, 'rgba(33, 102, 172, 0)',
-                      0.2, 'rgb(103, 169, 207)',
-                      0.4, 'rgb(209, 229, 240)',
-                      0.6, 'rgb(253, 219, 199)',
-                      0.8, 'rgb(239, 138, 98)',
-                      1, 'rgb(178, 24, 43)'
-                    ],
+                    'heatmap-color': BUSINESS_LIVELINESS_HEATMAP_COLOR_EXPRESSION,
                     'heatmap-radius': [
                       'interpolate',
                       ['linear'],
@@ -2489,7 +2485,7 @@ const ExplorerMap = ({
                       [
                         'step',
                         ['get', 'mean_lux'],
-                        '#dc2626',
+  '#dc2626',
                         20,
                         '#f59e0b',
                         80,

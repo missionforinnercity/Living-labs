@@ -44,6 +44,9 @@ const DateAvailabilityCalendar = lazy(() => import('./DateAvailabilityCalendar')
 const SentimentAnalytics = lazy(() => import('./SentimentAnalytics'))
 const ServiceRequestsAnalytics = lazy(() => import('./ServiceRequestsAnalytics'))
 const HospitalityAnalytics = lazy(() => import('./HospitalityAnalytics'))
+const BusinessLivelinessInsightsPanel = lazy(() => import('./BusinessLivelinessInsightsPanel'))
+const OpinionInsightsPanel = lazy(() => import('./OpinionInsightsPanel'))
+const BusinessRatingsPanel = lazy(() => import('./BusinessRatingsPanel'))
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY
 
@@ -555,6 +558,7 @@ const UnifiedDataExplorer = () => {
   
   // Business dashboard state
   const [businessMode, setBusinessMode] = useState('liveliness') // 'liveliness', 'opinions', 'ratings', 'amenities', 'categories', 'property'
+  const [businessLivelinessPanelExpanded, setBusinessLivelinessPanelExpanded] = useState(false)
   const [dayOfWeek, setDayOfWeek] = useState(new Date().getDay())
   const [hour, setHour] = useState(new Date().getHours())
   const [eventsMonth, setEventsMonth] = useState(null) // null = all months, 1-12 for specific month
@@ -562,6 +566,8 @@ const UnifiedDataExplorer = () => {
   const [eventsPanelMinimized, setEventsPanelMinimized] = useState(false)
   const [eventsPanelHeight, setEventsPanelHeight] = useState(520)
   const eventsPanelDrag = useRef({ active: false, startY: 0, startHeight: 520 })
+  const [businessRatingsSortOrder, setBusinessRatingsSortOrder] = useState('best')
+  const [businessRatingsExpanded, setBusinessRatingsExpanded] = useState(false)
   const [parcelPanelMinimized, setParcelPanelMinimized] = useState(false)
   const [selectedOpenSpaceFeature, setSelectedOpenSpaceFeature] = useState(null)
   const [parcelColorMode, setParcelColorMode] = useState('zoning')
@@ -582,6 +588,7 @@ const UnifiedDataExplorer = () => {
 
   // Opinion mode state
   const [opinionSource, setOpinionSource] = useState('both') // 'formal', 'informal', 'both'
+  const [opinionInsightsExpanded, setOpinionInsightsExpanded] = useState(false)
   
   // Amenities filters state
   const [amenitiesFilters, setAmenitiesFilters] = useState({
@@ -1573,9 +1580,27 @@ const UnifiedDataExplorer = () => {
   const [trafficScenario, setTrafficScenario] = useState('WORK_MORNING')
 
   // Resizable sidebar
-  const [sidebarWidth, setSidebarWidth] = useState(360)
+  const [sidebarWidth, setSidebarWidth] = useState(420)
   const sidebarDragRef = useRef(null)
   const effectiveSidebarWidth = greeneryInsightsExpanded ? Math.max(sidebarWidth, 620) : sidebarWidth
+
+  useEffect(() => {
+    if (businessMode !== 'liveliness') {
+      setBusinessLivelinessPanelExpanded(false)
+    }
+  }, [businessMode])
+
+  useEffect(() => {
+    if (businessMode !== 'opinions') {
+      setOpinionInsightsExpanded(false)
+    }
+  }, [businessMode])
+
+  useEffect(() => {
+    if (businessMode !== 'ratings') {
+      setBusinessRatingsExpanded(false)
+    }
+  }, [businessMode])
 
   // Rating filter — null = all, Set of floor values e.g. new Set([4,5])
   const [ratingFilter, setRatingFilter] = useState(null)
@@ -1732,7 +1757,7 @@ const UnifiedDataExplorer = () => {
         setBusinessMode(modeMap[categoryId])
       }
       if (categoryId === 'vendorOpinions') {
-        setOpinionSource('informal')
+        setOpinionSource('both')
       }
     } else if (category.dashboard === 'landParcels') {
       setBusinessMode('parcels')
@@ -1906,90 +1931,22 @@ const UnifiedDataExplorer = () => {
       }
     }
 
-    return features
+    const cleaned = features
       .filter(f => {
         const p = f.properties
         return (p.displayName?.text || p.name) && p.businessStatus !== 'CLOSED_PERMANENTLY'
       })
+
+    if (activeCategory === 'businessRatings') {
+      return cleaned.filter((feature) => (
+        Number.isFinite(Number(feature.properties?.rating)) && Number(feature.properties.rating) > 0
+      ))
+    }
+
+    return cleaned
       .sort((a, b) => (b.properties.rating || 0) - (a.properties.rating || 0))
       .slice(0, 40)
   }
-  
-  // Compute stats for a business category selection
-  const computeCategoryStats = () => {
-    if (dashboardMode !== 'business' || !activeCategory || !businessesData) return null
-    if (['propertySales', 'cityEvents', 'vendorOpinions'].includes(activeCategory)) return null
-
-    const categoryMap = {
-      businessLiveliness: null,     // all businesses
-      businessRatings: null,
-      amenities: null,
-      businessCategories: null
-    }
-    if (!(activeCategory in categoryMap)) return null
-
-    const features = businessesData.features || []
-    const active = features.filter(f => f.properties.businessStatus !== 'CLOSED_PERMANENTLY')
-
-    const withRating = active.filter(f => f.properties.rating > 0)
-    const avgRating = withRating.length > 0
-      ? (withRating.reduce((s, f) => s + f.properties.rating, 0) / withRating.length).toFixed(1)
-      : null
-
-    // Rating distribution
-    const ratingBuckets = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
-    withRating.forEach(f => {
-      const bucket = Math.floor(f.properties.rating)
-      if (ratingBuckets[bucket] !== undefined) ratingBuckets[bucket]++
-    })
-
-    // Open now count
-    const now = new Date()
-    const nowDay = now.getDay()
-    const nowHour = now.getHours()
-    const openCount = active.filter(f => {
-      try {
-        const hrs = f.properties.regularOpeningHours
-        if (!hrs || !hrs.weekdayDescriptions) return false
-        // simple check: use isBusinessOpen util
-        return true
-      } catch { return false }
-    }).length
-    // Use dayOfWeek/hour state as proxy
-    const openNowCount = active.filter(f => {
-      try {
-        const hrs = f.properties.regularOpeningHours
-        if (!hrs || !hrs.periods) return false
-        return true
-      } catch { return false }
-    }).length
-
-    // Top types
-    const typeCounts = {}
-    active.forEach(f => {
-      const t = f.properties.primaryType
-      if (t) typeCounts[t] = (typeCounts[t] || 0) + 1
-    })
-    const topTypes = Object.entries(typeCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-
-    // Avg review count
-    const withReviews = active.filter(f => f.properties.userRatingCount > 0)
-    const avgReviewCount = withReviews.length > 0
-      ? Math.round(withReviews.reduce((s, f) => s + (f.properties.userRatingCount || 0), 0) / withReviews.length)
-      : null
-
-    return {
-      total: active.length,
-      avgRating,
-      ratingBuckets,
-      topTypes,
-      avgReviewCount,
-      withRatingCount: withRating.length
-    }
-  }
-
   // Export: step 1 – toggle draw-bbox mode
   const handleExportReport = useCallback(() => {
     if (isExporting) return
@@ -2231,7 +2188,7 @@ const UnifiedDataExplorer = () => {
         ))}
       </div>
 
-      <div className="explorer-content">
+      <div className="explorer-content" style={{ '--sidebar-width': `${effectiveSidebarWidth}px` }}>
         <aside className={`explorer-sidebar ${greeneryInsightsExpanded ? 'explorer-sidebar--wide' : ''}`} style={{ width: effectiveSidebarWidth }}>
           <div className="sidebar-resize-handle" onMouseDown={startSidebarDrag} />
           <div className="explorer-sidebar-main">
@@ -2328,84 +2285,6 @@ const UnifiedDataExplorer = () => {
                 hideLayerControls={true}
               />
             )}
-
-          {/* Business category stats panel */}
-          {dashboardMode === 'business' && (() => {
-            const stats = computeCategoryStats()
-            if (!stats) return null
-            const maxBucket = Math.max(...Object.values(stats.ratingBuckets), 1)
-            return (
-              <div className="biz-stats-panel">
-                <div className="biz-stats-header">
-                  <span className="biz-stats-title">Category Intelligence</span>
-                  <span className="biz-stats-count">{stats.total.toLocaleString()} businesses</span>
-                </div>
-                <div className="biz-stats-grid">
-                  <div className="biz-stat-card">
-                    <div className="biz-stat-value">{stats.avgRating ?? '—'}</div>
-                    <div className="biz-stat-label">Avg Rating</div>
-                  </div>
-                  <div className="biz-stat-card">
-                    <div className="biz-stat-value">{stats.withRatingCount}</div>
-                    <div className="biz-stat-label">Rated</div>
-                  </div>
-                  <div className="biz-stat-card">
-                    <div className="biz-stat-value">{stats.avgReviewCount ?? '—'}</div>
-                    <div className="biz-stat-label">Avg Reviews</div>
-                  </div>
-                  <div className="biz-stat-card">
-                    <div className="biz-stat-value">{stats.topTypes.length > 0 ? stats.topTypes[0][1] : '—'}</div>
-                    <div className="biz-stat-label">Top Type Count</div>
-                  </div>
-                </div>
-                <div className="biz-stats-section-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Rating Distribution</span>
-                  {ratingFilter && ratingFilter.size > 0 && (
-                    <button className="biz-filter-clear" onClick={() => setRatingFilter(null)}>clear filter</button>
-                  )}
-                </div>
-                <div className="biz-rating-dist">
-                  {[5,4,3,2,1].map(star => {
-                    const count = stats.ratingBuckets[star] || 0
-                    const pct = maxBucket > 0 ? (count / maxBucket) * 100 : 0
-                    const isSelected = ratingFilter && ratingFilter.has(star)
-                    const hasFilter = ratingFilter && ratingFilter.size > 0
-                    const toggleStar = () => {
-                      setRatingFilter(prev => {
-                        const next = new Set(prev || [])
-                        if (next.has(star)) { next.delete(star) } else { next.add(star) }
-                        return next.size === 0 ? null : next
-                      })
-                    }
-                    return (
-                      <div
-                        key={star}
-                        className={`biz-rating-row biz-rating-row--clickable ${isSelected ? 'selected' : ''} ${hasFilter && !isSelected ? 'dimmed' : ''}`}
-                        onClick={toggleStar}
-                        title={`${isSelected ? 'Deselect' : 'Select'} ${star}-star businesses`}
-                      >
-                        <span className="biz-rating-star">{star}★</span>
-                        <div className="biz-rating-bar-track">
-                          <div className="biz-rating-bar-fill" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="biz-rating-count">{count}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-                <div className="biz-stats-section-label">Top Business Types</div>
-                <div className="biz-top-types">
-                  {stats.topTypes.map(([type, count]) => (
-                    <div key={type} className="biz-type-row">
-                      <span className="biz-type-name">{type.replace(/_/g, ' ')}</span>
-                      <span className="biz-type-count">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
-
             {dashboardMode === 'walkability' && (
               <WalkabilityAnalytics
                 walkabilityMode={walkabilityMode}
@@ -4319,6 +4198,30 @@ const UnifiedDataExplorer = () => {
           )}
         </main>
 
+        {dashboardMode === 'business' && businessMode === 'liveliness' && (
+          <Suspense fallback={<div className="app-panel-loading">Loading liveliness insights...</div>}>
+            <BusinessLivelinessInsightsPanel
+              businessesData={businessesData}
+              dayOfWeek={dayOfWeek}
+              hour={hour}
+              expanded={businessLivelinessPanelExpanded}
+              onToggle={() => setBusinessLivelinessPanelExpanded((value) => !value)}
+            />
+          </Suspense>
+        )}
+
+        {dashboardMode === 'business' && businessMode === 'opinions' && (
+          <Suspense fallback={<div className="app-panel-loading">Loading opinion insights...</div>}>
+            <OpinionInsightsPanel
+              surveyData={surveyData}
+              streetStallsData={streetStallsData}
+              opinionSource={opinionSource}
+              expanded={opinionInsightsExpanded}
+              onToggle={() => setOpinionInsightsExpanded((value) => !value)}
+            />
+          </Suspense>
+        )}
+
         {/* Business bottom panel */}
         {dashboardMode === 'business' && businessMode === 'events' ? (
           <div
@@ -4356,46 +4259,19 @@ const UnifiedDataExplorer = () => {
               </div>
             )}
           </div>
-        ) : activeCategory !== 'landParcels' ? (() => {
+        ) : dashboardMode === 'business' && businessMode === 'ratings' && activeCategory !== 'landParcels' ? (() => {
           const businesses = getActiveBusinesses()
           if (businesses.length === 0) return null
-          const categoryLabel = LAYER_CATEGORIES.find(c => c.id === activeCategory)?.label || 'Businesses'
           return (
-            <div className="biz-bottom-panel">
-              <div className="bbp-header">
-                <span className="bbp-title">{categoryLabel}</span>
-                <span className="bbp-count">{businesses.length}</span>
-              </div>
-              <div className="bbp-list">
-                {businesses.map((feature, i) => {
-                  const p = feature.properties
-                  const name = p.displayName?.text || p.name || 'Unknown'
-                  const type = p.primaryTypeDisplayName?.text || p.types?.[0]?.replace(/_/g, ' ') || ''
-                  const rating = p.rating
-                  const isOpen = p.currentOpeningHours?.openNow
-                  const addr = p.shortFormattedAddress || ''
-                  const price = p.priceLevel ? '·'.repeat(parseInt(p.priceLevel.replace('PRICE_LEVEL_', '') || 0)) : ''
-                  return (
-                    <div key={p.id || i} className="bbp-card">
-                      <div className="bbp-card-name" title={name}>{name}</div>
-                      {type && <div className="bbp-card-type">{type}</div>}
-                      <div className="bbp-card-meta">
-                        {rating != null && (
-                          <span className="bbp-rating">★ {rating.toFixed(1)}</span>
-                        )}
-                        {price && <span className="bbp-price">{price}</span>}
-                        {isOpen != null && (
-                          <span className={`bbp-status ${isOpen ? 'open' : 'closed'}`}>
-                            {isOpen ? 'Open' : 'Closed'}
-                          </span>
-                        )}
-                      </div>
-                      {addr && <div className="bbp-card-address" title={addr}>{addr}</div>}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+            <Suspense fallback={<div className="app-panel-loading">Loading business ratings...</div>}>
+              <BusinessRatingsPanel
+                businesses={businesses}
+                sortOrder={businessRatingsSortOrder}
+                onSortOrderChange={setBusinessRatingsSortOrder}
+                expanded={businessRatingsExpanded}
+                onToggleExpanded={() => setBusinessRatingsExpanded((value) => !value)}
+              />
+            </Suspense>
           )
         })() : null}
 

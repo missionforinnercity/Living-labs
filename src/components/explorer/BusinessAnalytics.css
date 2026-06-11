@@ -72,6 +72,11 @@
   padding: 0.75rem;
 }
 
+.business-analytics .mode-content {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .control-section {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -96,6 +101,117 @@
   font-size: 0.78rem;
   line-height: 1.55;
   margin-bottom: 1rem;
+}
+
+.business-liveliness-hero {
+  min-height: 110px;
+  padding: 1.1rem 1rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.16), transparent 42%),
+    linear-gradient(155deg, rgba(148, 163, 184, 0.16), rgba(71, 85, 105, 0.22));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.business-liveliness-hero-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.business-liveliness-hero span,
+.business-liveliness-controls-head span,
+.business-liveliness-stat span {
+  display: block;
+  color: rgba(125, 211, 252, 0.82);
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.business-liveliness-hero h3 {
+  margin: 0.22rem 0 0;
+  color: #f8fafc;
+  font-size: 1.24rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.business-liveliness-hero-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 78px;
+  text-align: right;
+}
+
+.business-liveliness-hero strong {
+  color: #f8fafc;
+  font-size: 1.9rem;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.business-liveliness-hero-metric small {
+  margin-top: 0.22rem;
+  color: rgba(125, 211, 252, 0.82);
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.business-liveliness-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.business-liveliness-stat {
+  min-height: 84px;
+  padding: 0.82rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset;
+}
+
+.business-liveliness-stat strong {
+  display: block;
+  margin-top: 0.38rem;
+  color: #f8fafc;
+  font-size: 1.18rem;
+  line-height: 1.05;
+}
+
+.business-liveliness-controls {
+  padding-top: 0.9rem;
+}
+
+.business-liveliness-controls-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.8rem;
+}
+
+.business-liveliness-controls-head strong {
+  color: #f8fafc;
+  font-size: 0.86rem;
 }
 
 /* Time Controls */
@@ -251,11 +367,46 @@
   color: rgba(255,255,255,0.45);
 }
 
+.business-liveliness-legend-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.business-liveliness-legend-list div {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: rgba(226, 232, 240, 0.74);
+  font-size: 0.68rem;
+}
+
+.business-liveliness-legend-list i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  flex: none;
+}
+
 .parcel-command-panel {
   background:
     radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 36%),
     rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(18px);
+}
+
+@media (max-width: 900px) {
+  .business-liveliness-stats,
+  .business-liveliness-legend-list {
+    grid-template-columns: 1fr;
+  }
+
+  .business-liveliness-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .parcel-search-input,
