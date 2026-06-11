@@ -4,6 +4,138 @@ import { getOpinionStats, OPINION_THEMES } from '../../utils/opinionUtils'
 import EventInsightsPanel from './EventInsightsPanel'
 import './BusinessAnalytics.css'
 
+export const AMENITY_GROUPS = [
+  {
+    id: 'service',
+    label: 'Service Model',
+    items: [
+      { id: 'dineIn', label: 'Dine-in' },
+      { id: 'takeout', label: 'Takeout' },
+      { id: 'delivery', label: 'Delivery' },
+      { id: 'reservable', label: 'Reservations' }
+    ]
+  },
+  {
+    id: 'meals',
+    label: 'Meal Times',
+    items: [
+      { id: 'servesBreakfast', label: 'Breakfast' },
+      { id: 'servesBrunch', label: 'Brunch' },
+      { id: 'servesLunch', label: 'Lunch' },
+      { id: 'servesDinner', label: 'Dinner' }
+    ]
+  },
+  {
+    id: 'beverages',
+    label: 'Beverages',
+    items: [
+      { id: 'servesCoffee', label: 'Coffee' },
+      { id: 'servesBeer', label: 'Beer' },
+      { id: 'servesWine', label: 'Wine' },
+      { id: 'servesCocktails', label: 'Cocktails' }
+    ]
+  },
+  {
+    id: 'experience',
+    label: 'Experience',
+    items: [
+      { id: 'outdoorSeating', label: 'Outdoor seating' },
+      { id: 'liveMusic', label: 'Live music' },
+      { id: 'allowsDogs', label: 'Dog friendly' },
+      { id: 'goodForGroups', label: 'Good for groups' },
+      { id: 'goodForChildren', label: 'Kid friendly' },
+      { id: 'wheelchairAccessible', label: 'Wheelchair access' }
+    ]
+  }
+]
+
+export const CATEGORY_GROUPS = {
+  foodDining: {
+    label: 'Food & Dining',
+    color: '#67e8f9',
+    categories: [
+      'african_restaurant', 'american_restaurant', 'asian_restaurant', 'bakery', 'bar', 'bar_and_grill',
+      'barbecue_restaurant', 'breakfast_restaurant', 'buffet_restaurant', 'cafe', 'cafeteria',
+      'chinese_restaurant', 'coffee_shop', 'fast_food_restaurant', 'food_court', 'hamburger_restaurant',
+      'indian_restaurant', 'italian_restaurant', 'japanese_restaurant', 'korean_restaurant', 'meal_takeaway',
+      'mediterranean_restaurant', 'mexican_restaurant', 'night_club', 'pizza_restaurant', 'ramen_restaurant',
+      'restaurant', 'seafood_restaurant', 'sushi_restaurant', 'thai_restaurant', 'vegan_restaurant', 'wine_bar'
+    ]
+  },
+  shopping: {
+    label: 'Shopping',
+    color: '#f59e0b',
+    categories: [
+      'auto_parts_store', 'bicycle_store', 'book_store', 'cell_phone_store', 'clothing_store', 'convenience_store',
+      'department_store', 'discount_store', 'drugstore', 'electronics_store', 'florist', 'furniture_store',
+      'gift_shop', 'grocery_store', 'hardware_store', 'home_goods_store', 'home_improvement_store',
+      'jewelry_store', 'liquor_store', 'market', 'pet_store', 'shoe_store', 'shopping_mall',
+      'sporting_goods_store', 'store', 'supermarket'
+    ]
+  },
+  lodging: {
+    label: 'Lodging',
+    color: '#7dd3fc',
+    categories: ['bed_and_breakfast', 'hostel', 'hotel', 'lodging', 'motel']
+  },
+  culture: {
+    label: 'Culture & Entertainment',
+    color: '#c084fc',
+    categories: [
+      'art_gallery', 'community_center', 'convention_center', 'cultural_center', 'event_venue',
+      'movie_theater', 'museum', 'performing_arts_theater', 'visitor_center'
+    ]
+  },
+  religious: {
+    label: 'Religious Buildings',
+    color: '#fbbf24',
+    categories: ['church', 'mosque', 'place_of_worship', 'synagogue']
+  },
+  health: {
+    label: 'Health & Wellness',
+    color: '#4ade80',
+    categories: [
+      'beauty_salon', 'dental_clinic', 'dentist', 'doctor', 'fitness_center', 'gym', 'hair_salon',
+      'health', 'hospital', 'medical_lab', 'pharmacy', 'physiotherapist', 'spa'
+    ]
+  },
+  education: {
+    label: 'Education',
+    color: '#22d3ee',
+    categories: ['library', 'preschool', 'school', 'secondary_school', 'university']
+  },
+  financial: {
+    label: 'Financial Services',
+    color: '#34d399',
+    categories: ['accounting', 'atm', 'bank', 'finance', 'insurance_agency', 'real_estate_agency']
+  },
+  transportation: {
+    label: 'Transportation',
+    color: '#94a3b8',
+    categories: [
+      'bus_station', 'car_dealer', 'car_rental', 'car_repair', 'car_wash',
+      'electric_vehicle_charging_station', 'gas_station', 'parking'
+    ]
+  },
+  recreation: {
+    label: 'Recreation & Sports',
+    color: '#fb7185',
+    categories: ['athletic_field', 'park', 'sports_club', 'sports_complex', 'swimming_pool', 'yoga_studio']
+  },
+  publicServices: {
+    label: 'Public Services',
+    color: '#60a5fa',
+    categories: ['city_hall', 'courthouse', 'embassy', 'lawyer', 'local_government_office', 'police', 'post_office']
+  },
+  tourist: {
+    label: 'Tourist Attractions',
+    color: '#38bdf8',
+    categories: ['tourist_attraction']
+  }
+}
+
+const formatCategoryLabel = (value) => value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+
 const BusinessAnalytics = ({
   businessMode,
   onModeChange,
@@ -79,92 +211,6 @@ const BusinessAnalytics = ({
       current.add(group)
     }
     updateParcelFilter({ zoningGroups: [...current] })
-  }
-
-  // Define hierarchical category structure
-  const CATEGORY_GROUPS = {
-    'foodDining': {
-      label: '🍽️ Food & Dining',
-      color: '#ff6b35',
-      categories: [
-        'african_restaurant', 'american_restaurant', 'asian_restaurant', 'bakery', 'bar', 'bar_and_grill',
-        'barbecue_restaurant', 'breakfast_restaurant', 'buffet_restaurant', 'cafe', 'cafeteria',
-        'chinese_restaurant', 'coffee_shop', 'fast_food_restaurant', 'food_court', 'hamburger_restaurant',
-        'indian_restaurant', 'italian_restaurant', 'japanese_restaurant', 'korean_restaurant', 'meal_takeaway',
-        'mediterranean_restaurant', 'mexican_restaurant', 'night_club', 'pizza_restaurant', 'ramen_restaurant',
-        'restaurant', 'seafood_restaurant', 'sushi_restaurant', 'thai_restaurant', 'vegan_restaurant', 'wine_bar'
-      ]
-    },
-    'shopping': {
-      label: '🛍️ Shopping',
-      color: '#c44569',
-      categories: [
-        'auto_parts_store', 'bicycle_store', 'book_store', 'cell_phone_store', 'clothing_store', 'convenience_store',
-        'department_store', 'discount_store', 'drugstore', 'electronics_store', 'florist', 'furniture_store',
-        'gift_shop', 'grocery_store', 'hardware_store', 'home_goods_store', 'home_improvement_store',
-        'jewelry_store', 'liquor_store', 'market', 'pet_store', 'shoe_store', 'shopping_mall',
-        'sporting_goods_store', 'store', 'supermarket'
-      ]
-    },
-    'lodging': {
-      label: '🏨 Lodging',
-      color: '#4a90e2',
-      categories: ['bed_and_breakfast', 'hostel', 'hotel', 'lodging', 'motel']
-    },
-    'culture': {
-      label: '🎭 Culture & Entertainment',
-      color: '#e056fd',
-      categories: [
-        'art_gallery', 'community_center', 'convention_center', 'cultural_center', 'event_venue',
-        'movie_theater', 'museum', 'performing_arts_theater', 'visitor_center'
-      ]
-    },
-    'religious': {
-      label: '⛪ Religious Buildings',
-      color: '#f7b731',
-      categories: ['church', 'mosque', 'place_of_worship', 'synagogue']
-    },
-    'health': {
-      label: '🏥 Health & Wellness',
-      color: '#5cd65c',
-      categories: [
-        'beauty_salon', 'dental_clinic', 'dentist', 'doctor', 'fitness_center', 'gym', 'hair_salon',
-        'health', 'hospital', 'medical_lab', 'pharmacy', 'physiotherapist', 'spa'
-      ]
-    },
-    'education': {
-      label: '🎓 Education',
-      color: '#0fb9b1',
-      categories: ['library', 'preschool', 'school', 'secondary_school', 'university']
-    },
-    'financial': {
-      label: '🏦 Financial Services',
-      color: '#20bf6b',
-      categories: ['accounting', 'atm', 'bank', 'finance', 'insurance_agency', 'real_estate_agency']
-    },
-    'transportation': {
-      label: '🚗 Transportation',
-      color: '#778ca3',
-      categories: [
-        'bus_station', 'car_dealer', 'car_rental', 'car_repair', 'car_wash',
-        'electric_vehicle_charging_station', 'gas_station', 'parking'
-      ]
-    },
-    'recreation': {
-      label: '⚽ Recreation & Sports',
-      color: '#fa8231',
-      categories: ['athletic_field', 'park', 'sports_club', 'sports_complex', 'swimming_pool', 'yoga_studio']
-    },
-    'publicServices': {
-      label: '🏛️ Public Services',
-      color: '#4b7bec',
-      categories: ['city_hall', 'courthouse', 'embassy', 'lawyer', 'local_government_office', 'police', 'post_office']
-    },
-    'tourist': {
-      label: '📸 Tourist Attractions',
-      color: '#45aaf2',
-      categories: ['tourist_attraction']
-    }
   }
 
   const toggleGroup = (groupId) => {
@@ -623,123 +669,39 @@ const BusinessAnalytics = ({
       {/* Amenities Mode */}
       {businessMode === 'amenities' && (
         <div className="mode-content">
-          <div className="control-section">
-            <div className="control-header">FILTER BY AMENITIES</div>
+          <div className="control-section amenities-summary-card">
+            <div className="business-liveliness-controls-head">
+              <span>Amenities</span>
+              <strong>{Object.values(amenitiesFiltersProps || {}).filter(Boolean).length} selected</strong>
+            </div>
             <p className="mode-description">
-              Select amenities to filter businesses on the map.
+              Filter mapped businesses by service format, meal times, drinks, and customer experience.
             </p>
           </div>
           
           <div className="amenities-filters">
-            {/* Dining Options */}
-            <div className="amenity-group">
-              <div className="amenity-group-label">Dining Options</div>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.dineIn || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, dineIn: !amenitiesFiltersProps.dineIn})} />
-                <span>🍽️ Dine-in</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.takeout || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, takeout: !amenitiesFiltersProps.takeout})} />
-                <span>🥡 Takeout</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.delivery || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, delivery: !amenitiesFiltersProps.delivery})} />
-                <span>🚚 Delivery</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.reservable || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, reservable: !amenitiesFiltersProps.reservable})} />
-                <span>📅 Reservations</span>
-              </label>
-            </div>
-
-            {/* Meals */}
-            <div className="amenity-group">
-              <div className="amenity-group-label">Meals</div>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.servesBreakfast || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesBreakfast: !amenitiesFiltersProps.servesBreakfast})} />
-                <span>🌅 Breakfast</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.servesBrunch || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesBrunch: !amenitiesFiltersProps.servesBrunch})} />
-                <span>🥐 Brunch</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.servesLunch || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesLunch: !amenitiesFiltersProps.servesLunch})} />
-                <span>🥗 Lunch</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.servesDinner || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesDinner: !amenitiesFiltersProps.servesDinner})} />
-                <span>🍝 Dinner</span>
-              </label>
-            </div>
-
-            {/* Beverages */}
-            <div className="amenity-group">
-              <div className="amenity-group-label">Beverages</div>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.servesCoffee || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesCoffee: !amenitiesFiltersProps.servesCoffee})} />
-                <span>☕ Coffee</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.servesBeer || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesBeer: !amenitiesFiltersProps.servesBeer})} />
-                <span>🍺 Beer</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.servesWine || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesWine: !amenitiesFiltersProps.servesWine})} />
-                <span>🍷 Wine</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.servesCocktails || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, servesCocktails: !amenitiesFiltersProps.servesCocktails})} />
-                <span>🍹 Cocktails</span>
-              </label>
-            </div>
-
-            {/* Features */}
-            <div className="amenity-group">
-              <div className="amenity-group-label">Features</div>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.outdoorSeating || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, outdoorSeating: !amenitiesFiltersProps.outdoorSeating})} />
-                <span>🌳 Outdoor Seating</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.liveMusic || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, liveMusic: !amenitiesFiltersProps.liveMusic})} />
-                <span>🎵 Live Music</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.allowsDogs || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, allowsDogs: !amenitiesFiltersProps.allowsDogs})} />
-                <span>🐕 Dog Friendly</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.goodForGroups || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, goodForGroups: !amenitiesFiltersProps.goodForGroups})} />
-                <span>👥 Good for Groups</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.goodForChildren || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, goodForChildren: !amenitiesFiltersProps.goodForChildren})} />
-                <span>👶 Kid Friendly</span>
-              </label>
-              <label className="filter-checkbox">
-                <input type="checkbox" checked={amenitiesFiltersProps.wheelchairAccessible || false}
-                  onChange={() => onAmenitiesFiltersChange({...amenitiesFiltersProps, wheelchairAccessible: !amenitiesFiltersProps.wheelchairAccessible})} />
-                <span>♿ Wheelchair Accessible</span>
-              </label>
-            </div>
+            {AMENITY_GROUPS.map((group) => (
+              <section key={group.id} className="amenity-group">
+                <div className="amenity-group-top">
+                  <div className="amenity-group-label">{group.label}</div>
+                  <div className="amenity-group-count">
+                    {group.items.filter((item) => amenitiesFiltersProps[item.id]).length}/{group.items.length}
+                  </div>
+                </div>
+                <div className="amenity-chip-grid">
+                  {group.items.map((item) => (
+                    <label key={item.id} className={`filter-checkbox amenity-chip ${amenitiesFiltersProps[item.id] ? 'is-active' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={amenitiesFiltersProps[item.id] || false}
+                        onChange={() => onAmenitiesFiltersChange({ ...amenitiesFiltersProps, [item.id]: !amenitiesFiltersProps[item.id] })}
+                      />
+                      <span>{item.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
         </div>
       )}
@@ -747,10 +709,13 @@ const BusinessAnalytics = ({
       {/* Categories Mode */}
       {businessMode === 'categories' && (
         <div className="mode-content">
-          <div className="control-section">
-            <div className="control-header">BUSINESS CATEGORIES</div>
+          <div className="control-section amenities-summary-card">
+            <div className="business-liveliness-controls-head">
+              <span>Business Categories</span>
+              <strong>{Object.values(categoriesFilters || {}).filter(Boolean).length} selected</strong>
+            </div>
             <p className="mode-description">
-              Click on a category group to expand and select specific types.
+              Open a sector group to isolate specific business types and compare street-level concentration.
             </p>
           </div>
           
@@ -764,26 +729,18 @@ const BusinessAnalytics = ({
                 <div key={groupId} className="category-group">
                   <div 
                     className="category-group-header"
-                    style={{ borderLeft: `4px solid ${group.color}` }}
+                    style={{ '--group-color': group.color }}
                   >
                     <button 
                       className="expand-btn"
                       onClick={() => toggleGroup(groupId)}
-                      style={{ color: group.color }}
                     >
                       {isExpanded ? '▼' : '▶'}
                     </button>
                     <label className="group-label" onClick={() => toggleGroup(groupId)}>
-                      <span style={{ color: group.color }}>{group.label}</span>
+                      <span>{group.label}</span>
                       {checkedCount > 0 && (
-                        <span 
-                          className="count-badge"
-                          style={{ 
-                            color: group.color,
-                            background: `${group.color}20`,
-                            borderColor: `${group.color}40`
-                          }}
-                        >
+                        <span className="count-badge">
                           {checkedCount}/{totalCount}
                         </span>
                       )}
@@ -792,12 +749,8 @@ const BusinessAnalytics = ({
                       className="select-all-btn"
                       onClick={() => toggleAllInGroup(groupId)}
                       title={checkedCount === totalCount ? 'Deselect all' : 'Select all'}
-                      style={{ 
-                        color: group.color,
-                        borderColor: `${group.color}60`
-                      }}
                     >
-                      {checkedCount === totalCount ? '☑' : '☐'}
+                      {checkedCount === totalCount ? 'Clear' : 'All'}
                     </button>
                   </div>
                   
@@ -810,7 +763,7 @@ const BusinessAnalytics = ({
                             checked={categoriesFilters[categoryId] || false}
                             onChange={() => toggleCategory(categoryId)}
                           />
-                          <span>{categoryId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                          <span>{formatCategoryLabel(categoryId)}</span>
                         </label>
                       ))}
                     </div>

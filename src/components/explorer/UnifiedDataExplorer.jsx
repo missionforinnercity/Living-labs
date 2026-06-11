@@ -47,6 +47,7 @@ const HospitalityAnalytics = lazy(() => import('./HospitalityAnalytics'))
 const BusinessLivelinessInsightsPanel = lazy(() => import('./BusinessLivelinessInsightsPanel'))
 const OpinionInsightsPanel = lazy(() => import('./OpinionInsightsPanel'))
 const BusinessRatingsPanel = lazy(() => import('./BusinessRatingsPanel'))
+const BusinessFiltersInsightsPanel = lazy(() => import('./BusinessFiltersInsightsPanel'))
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY
 
@@ -568,6 +569,7 @@ const UnifiedDataExplorer = () => {
   const eventsPanelDrag = useRef({ active: false, startY: 0, startHeight: 520 })
   const [businessRatingsSortOrder, setBusinessRatingsSortOrder] = useState('best')
   const [businessRatingsExpanded, setBusinessRatingsExpanded] = useState(false)
+  const [businessFiltersInsightsExpanded, setBusinessFiltersInsightsExpanded] = useState(false)
   const [parcelPanelMinimized, setParcelPanelMinimized] = useState(false)
   const [selectedOpenSpaceFeature, setSelectedOpenSpaceFeature] = useState(null)
   const [parcelColorMode, setParcelColorMode] = useState('zoning')
@@ -4273,7 +4275,18 @@ const UnifiedDataExplorer = () => {
               />
             </Suspense>
           )
-        })() : null}
+        })() : dashboardMode === 'business' && (businessMode === 'amenities' || businessMode === 'categories') ? (
+          <Suspense fallback={<div className="app-panel-loading">Loading business filter insights...</div>}>
+            <BusinessFiltersInsightsPanel
+              businessesData={businessesData}
+              mode={businessMode}
+              amenitiesFilters={amenitiesFilters}
+              categoriesFilters={categoriesFilters}
+              expanded={businessFiltersInsightsExpanded}
+              onToggle={() => setBusinessFiltersInsightsExpanded((value) => !value)}
+            />
+          </Suspense>
+        ) : null}
 
       </div>
     </div>
