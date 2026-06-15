@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { loadExplorerBusinessBoundary, loadExplorerBusinessData } from './data'
 
 const BUSINESS_POI_LAYERS = ['businessLiveliness', 'businessRatings', 'amenities', 'businessCategories']
-const BUSINESS_DATA_LAYERS = [...BUSINESS_POI_LAYERS, 'vendorOpinions', 'propertySales', 'cityEvents']
-const PARCEL_DATA_LAYERS = ['landParcels', 'openSpaces']
+const BUSINESS_DATA_LAYERS = [...BUSINESS_POI_LAYERS, 'vendorOpinions', 'cityEvents']
+const PARCEL_DATA_LAYERS = ['landParcels', 'openSpaces', 'parcelSales']
 
 export function useExplorerBusinessData({ dashboardMode, activeCategory, lockedLayers }) {
   const [businessesData, setBusinessesData] = useState(null)
   const [streetStallsData, setStreetStallsData] = useState(null)
-  const [propertiesData, setPropertiesData] = useState(null)
+  const [parcelSalesData, setParcelSalesData] = useState(null)
   const [landParcelsData, setLandParcelsData] = useState(null)
   const [openSpacesData, setOpenSpacesData] = useState(null)
   const [surveyData, setSurveyData] = useState(null)
@@ -34,14 +34,14 @@ export function useExplorerBusinessData({ dashboardMode, activeCategory, lockedL
         const includeBusinesses = BUSINESS_POI_LAYERS.some((id) => requestedLayers.has(id))
         const includeStreetStalls = requestedLayers.has('vendorOpinions')
         const includeSurvey = requestedLayers.has('vendorOpinions')
-        const includeProperties = requestedLayers.has('propertySales')
+        const includeParcelSales = requestedLayers.has('parcelSales')
         const includeEvents = requestedLayers.has('cityEvents')
         const includeLandParcels = requestedLayers.has('landParcels')
         const includeOpenSpaces = requestedLayers.has('openSpaces')
-        const { businesses, streetStalls, properties, survey, eventsData, landParcels, openSpaces } = await loadExplorerBusinessData({
+        const { businesses, streetStalls, parcelSales, survey, eventsData, landParcels, openSpaces } = await loadExplorerBusinessData({
           includeBusinesses,
           includeStreetStalls,
-          includeProperties,
+          includeParcelSales,
           includeSurvey,
           includeEvents,
           includeLandParcels,
@@ -53,17 +53,13 @@ export function useExplorerBusinessData({ dashboardMode, activeCategory, lockedL
           openSpaces: openSpaces?.features?.length,
           businesses: businesses?.features?.length,
           stalls: streetStalls?.features?.length,
-          properties: properties?.features?.length,
+          parcelSales: parcelSales?.features?.length,
           survey: survey?.features?.length
         })
 
-        if (properties?.features?.length) {
-          console.log('Sample processed property:', properties.features?.[0]?.properties)
-        }
-
         if (includeBusinesses) setBusinessesData(businesses)
         if (includeStreetStalls) setStreetStallsData(streetStalls)
-        if (includeProperties) setPropertiesData(properties)
+        if (includeParcelSales) setParcelSalesData(parcelSales)
         if (survey) setSurveyData(survey)
         if (includeEvents) setEventsData(eventsData)
         if (includeLandParcels) setLandParcelsData(landParcels)
@@ -83,7 +79,7 @@ export function useExplorerBusinessData({ dashboardMode, activeCategory, lockedL
   return {
     businessesData,
     streetStallsData,
-    propertiesData,
+    parcelSalesData,
     landParcelsData,
     openSpacesData,
     surveyData,

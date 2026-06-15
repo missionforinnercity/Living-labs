@@ -470,6 +470,98 @@ function getParcelValueChangeGroup(previousValue, currentValue) {
   return 'Stable'
 }
 
+function parseLooseNumber(value) {
+  if (value === null || value === undefined) return null
+  const cleaned = String(value).replace(/[^0-9.-]/g, '')
+  if (!cleaned) return null
+  const numeric = Number(cleaned)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function parseSalesDate(value) {
+  if (!value) return null
+  const match = String(value).trim().match(/^(\d{4})[/-](\d{2})[/-](\d{2})$/)
+  if (!match) return null
+  return `${match[1]}-${match[2]}-${match[3]}`
+}
+
+function buildParcelSalesFeatureCollection(rows) {
+  const features = rows
+    .filter((row) => row.geometry)
+    .map((row) => {
+      const latestSaleDate = parseSalesDate(row.latest_sale_date)
+      const salesRecords = Array.isArray(row.sales_records) ? row.sales_records.map((sale) => ({
+        sale_id: sale.sale_id,
+        sale_category: sale.sale_category || null,
+        sale_year: sale.sale_year || null,
+        property: sale.property || null,
+        address: sale.address || null,
+        type: sale.type || null,
+        usage: sale.usage || null,
+        extent_m2: parseLooseNumber(sale.extent_m2),
+        sale_date: parseSalesDate(sale.sale_date),
+        sale_price: parseLooseNumber(sale.sale_price),
+        list_date: parseSalesDate(sale.list_date),
+        list_price: parseLooseNumber(sale.list_price),
+        days_on_market: parseLooseNumber(sale.days_on_market),
+        change_in_price_pct: parseLooseNumber(sale.change_in_price),
+        rate_per_m2: parseLooseNumber(sale.rate_per_m2)
+      })) : []
+
+      return {
+        type: 'Feature',
+        properties: {
+          fid: row.fid,
+          sg26_code: row.sg26_code,
+          sl_land_prcl_key: row.sl_land_prcl_key,
+          prty_nmbr: row.prty_nmbr,
+          street_name: row.str_name || null,
+          street_type: row.lu_str_name_type || null,
+          address: [row.adr_no, row.adr_no_sfx, row.str_name, row.lu_str_name_type]
+            .filter((part) => part !== null && part !== undefined && String(part).trim() !== '')
+            .join(' '),
+          suburb: row.ofc_sbrb_name || row.alt_name || null,
+          zoning: row.zoning || 'Unzoned / unknown',
+          zoning_group: getParcelZoningGroup(row.zoning),
+          owner_type: row.gv2025_owner_type || row.owner_type || null,
+          is_city_owned: Boolean(row.gv2025_is_city_owned || row.is_city_owned),
+          area_m2: Number.isFinite(Number(row.shape__area)) ? Number(row.shape__area) : null,
+          sales_count: Number(row.sales_count) || 0,
+          total_sale_price: parseLooseNumber(row.total_sale_price) || 0,
+          avg_sale_price: parseLooseNumber(row.avg_sale_price),
+          latest_sale_date: latestSaleDate,
+          latest_sale_year: latestSaleDate ? Number(latestSaleDate.slice(0, 4)) : (parseLooseNumber(row.latest_sale_year) || null),
+          sale_categories: Array.isArray(row.sale_categories) ? row.sale_categories.filter(Boolean) : [],
+          sales_records: JSON.stringify(salesRecords),
+          sales_record_count: salesRecords.length
+        },
+        geometry: row.geometry
+      }
+    })
+
+  let totalSalePrice = 0
+  let totalSalesCount = 0
+
+  features.forEach((feature) => {
+    totalSalePrice += Number(feature.properties.total_sale_price) || 0
+    totalSalesCount += Number(feature.properties.sales_count) || 0
+  })
+
+  return {
+    type: 'FeatureCollection',
+    features,
+    metadata: {
+      totalRows: rows.length,
+      totalFeatures: features.length,
+      totalSalesRows: totalSalesCount,
+      totalSalePrice,
+      avgSalesPerParcel: features.length ? totalSalesCount / features.length : null,
+      fetchedAt: new Date().toISOString(),
+      source: 'cadastre.sales + cadastre.landparcels_gv'
+    }
+  }
+}
+
 function buildLandParcelFeatureCollection(rows) {
   const features = rows
     .filter((row) => row.geometry)
@@ -1666,6 +1758,102 @@ app.get('/api/cadastre/squares', async (req, res) => {
     res.json(buildOpenSpacesFeatureCollection(rows))
   } catch (err) {
     console.error('[API] /cadastre/squares error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/cadastre/sales', async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 12000, 20000))
+    const scope = String(req.query.scope || 'ccid').toLowerCase()
+    const useCcidClip = scope !== 'all'
+    const boundarySql = useCcidClip
+      ? 'WITH boundary AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($2), 4326) AS geom)'
+      : ''
+    const fromSql = useCcidClip
+      ? 'FROM cadastre.landparcels_gv p CROSS JOIN boundary b'
+      : 'FROM cadastre.landparcels_gv p'
+    const geometrySql = useCcidClip
+      ? `ST_AsGeoJSON(ST_SimplifyPreserveTopology(ST_CollectionExtract(ST_MakeValid(ST_Intersection(p.geom, b.geom)), 3), 0.00001))::json AS geometry`
+      : `ST_AsGeoJSON(ST_SimplifyPreserveTopology(p.geom, 0.00001))::json AS geometry`
+    const whereSql = useCcidClip
+      ? `WHERE p.geom IS NOT NULL
+        AND p.geom && b.geom
+        AND ST_Intersects(p.geom, b.geom)
+        AND NOT ST_IsEmpty(ST_Intersection(p.geom, b.geom))`
+      : 'WHERE p.geom IS NOT NULL'
+    const queryParams = useCcidClip ? [limit, getCcidBoundaryGeometryJson()] : [limit]
+    const { rows } = await pool.query(`
+      ${boundarySql}
+      SELECT
+        p.fid,
+        p.sg26_code,
+        p.sl_land_prcl_key,
+        p.adr_no,
+        p.adr_no_sfx,
+        p.str_name,
+        p.lu_str_name_type,
+        p.ofc_sbrb_name,
+        p.alt_name,
+        p.prty_nmbr,
+        p.zoning,
+        p.shape__area,
+        p.owner_type,
+        p.gv2025_owner_type,
+        p.is_city_owned,
+        p.gv2025_is_city_owned,
+        sales_summary.sales_count,
+        sales_summary.total_sale_price,
+        sales_summary.avg_sale_price,
+        sales_summary.latest_sale_date,
+        sales_summary.latest_sale_year,
+        sales_summary.sale_categories,
+        sales_summary.sales_records,
+        ${geometrySql}
+      ${fromSql}
+      JOIN (
+        SELECT
+          sl_land_prcl_key,
+          COUNT(*) AS sales_count,
+          SUM(NULLIF(regexp_replace("sale price", '[^0-9.-]', '', 'g'), '')::numeric) AS total_sale_price,
+          AVG(NULLIF(regexp_replace("sale price", '[^0-9.-]', '', 'g'), '')::numeric) AS avg_sale_price,
+          MAX("sale date") AS latest_sale_date,
+          MAX(sale_year) AS latest_sale_year,
+          ARRAY_REMOVE(ARRAY_AGG(DISTINCT sale_category), NULL) AS sale_categories,
+          json_agg(json_build_object(
+            'sale_id', ogc_fid,
+            'sale_category', sale_category,
+            'sale_year', sale_year,
+            'property', property,
+            'address', address,
+            'type', type,
+            'usage', usage,
+            'extent_m2', "extent m²",
+            'sale_date', "sale date",
+            'sale_price', "sale price",
+            'list_date', "list date",
+            'list_price', "list price",
+            'days_on_market', "days on market",
+            'change_in_price', "change in price",
+            'rate_per_m2', "r/m²"
+          ) ORDER BY "sale date" DESC NULLS LAST, ogc_fid DESC) AS sales_records
+        FROM cadastre.sales
+        WHERE sl_land_prcl_key IS NOT NULL
+          AND trim(sl_land_prcl_key) <> ''
+        GROUP BY sl_land_prcl_key
+      ) AS sales_summary
+        ON p.sl_land_prcl_key::text = sales_summary.sl_land_prcl_key
+      ${whereSql}
+      ORDER BY
+        sales_summary.sales_count DESC,
+        sales_summary.total_sale_price DESC NULLS LAST,
+        p.fid
+      LIMIT $1
+    `, queryParams)
+
+    res.json(buildParcelSalesFeatureCollection(rows))
+  } catch (err) {
+    console.error('[API] /cadastre/sales error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })

@@ -28,7 +28,7 @@ After entering the dashboard, the app exposes:
   - `District Explorer`
   - `Walkability`
 - `Data Explorer`
-  - `Business Analytics`
+  - `Retail`
   - `Active Mobility`
   - `Street Lighting`
   - `Climate`

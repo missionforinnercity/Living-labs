@@ -109,7 +109,7 @@ const DATA_SOURCES = [
   { layer: 'Tree Canopy',           explorer: 'Greenery › Tree Canopy',                          provider: 'City of Cape Town' },
   { layer: 'Sky View Factor (SVF)', explorer: 'Greenery › Greenery & Sky View',                  provider: 'City of Cape Town' },
   { layer: 'Digital Terrain Model', explorer: 'Slope — used in index only',                      provider: 'City of Cape Town' },
-  { layer: 'Points of Interest',    explorer: 'Business Analytics › Business Liveliness',        provider: 'Google Places' },
+  { layer: 'Points of Interest',    explorer: 'Retail › Business Liveliness',                    provider: 'Google Places' },
   { layer: 'Traffic Congestion',    explorer: 'Traffic › Traffic Analysis',                      provider: 'City of Cape Town' },
 ]
 

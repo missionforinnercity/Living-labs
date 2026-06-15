@@ -1,38 +1,6 @@
 import { loadCCIDBoundary } from '../../utils/dataLoader'
 import { fetchJson } from '../shared/http'
 
-function enrichProperties(properties) {
-  return {
-    ...properties,
-    features: (properties.features || []).map((feature) => {
-      const transactions = feature.properties?.properties || []
-      const transferCount = transactions.filter((transaction) => {
-        const price = transaction.sale_price
-        return price && price !== 'DONATION' && price !== 'CRST' && price.startsWith('R')
-      }).length
-
-      const totalValue = transactions.reduce((sum, transaction) => {
-        const price = transaction.sale_price
-        if (!price || price === 'DONATION' || price === 'CRST' || !price.startsWith('R')) {
-          return sum
-        }
-
-        const numericValue = parseFloat(price.replace('R ', '').replace(/\s/g, ''))
-        return sum + (Number.isNaN(numericValue) ? 0 : numericValue)
-      }, 0)
-
-      return {
-        ...feature,
-        properties: {
-          ...feature.properties,
-          transfer_count: transferCount,
-          total_value: totalValue
-        }
-      }
-    })
-  }
-}
-
 async function loadEventsData() {
   try {
     const response = await fetch('/api/planning/events')
@@ -67,6 +35,10 @@ async function loadOpenSpacesData() {
   return fetchJson('/api/cadastre/squares?scope=ccid', 'Open spaces cadastre load failed')
 }
 
+async function loadParcelSalesData() {
+  return fetchJson('/api/cadastre/sales?scope=ccid', 'Parcel sales cadastre load failed')
+}
+
 export async function loadExplorerBusinessBoundary() {
   return loadCCIDBoundary()
 }
@@ -85,7 +57,7 @@ const loadOptional = (loader, source) => loader().catch((error) => {
 export async function loadExplorerBusinessData({
   includeBusinesses = false,
   includeStreetStalls = false,
-  includeProperties = false,
+  includeParcelSales = false,
   includeSurvey = false,
   includeEvents = false,
   includeLandParcels = false,
@@ -95,7 +67,6 @@ export async function loadExplorerBusinessData({
   if (includeBusinessBundle !== null) {
     includeBusinesses = includeBusinessBundle
     includeStreetStalls = includeBusinessBundle
-    includeProperties = includeBusinessBundle
     includeSurvey = includeBusinessBundle
     includeEvents = includeBusinessBundle
   }
@@ -103,7 +74,7 @@ export async function loadExplorerBusinessData({
   const [
     businesses,
     stalls,
-    properties,
+    parcelSales,
     survey,
     eventsData,
     landParcels,
@@ -115,8 +86,8 @@ export async function loadExplorerBusinessData({
     includeStreetStalls
       ? loadOptional(() => fetchJson('/data/business/streetStalls.geojson', 'Street stalls load failed'), 'data/business/streetStalls.geojson')
       : Promise.resolve(null),
-    includeProperties
-      ? loadOptional(() => fetchJson('/data/business/properties_consolidated.geojson', 'Property load failed'), 'data/business/properties_consolidated.geojson')
+    includeParcelSales
+      ? loadOptional(loadParcelSalesData, 'cadastre.sales')
       : Promise.resolve(null),
     includeSurvey
       ? loadOptional(() => fetchJson('/data/business/survey_data.geojson', 'Survey load failed'), 'data/business/survey_data.geojson')
@@ -135,7 +106,7 @@ export async function loadExplorerBusinessData({
   return {
     businesses,
     streetStalls: stalls,
-    properties: properties ? enrichProperties(properties) : null,
+    parcelSales,
     survey,
     eventsData,
     landParcels,

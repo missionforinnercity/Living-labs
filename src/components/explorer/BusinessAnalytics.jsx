@@ -136,6 +136,45 @@ export const CATEGORY_GROUPS = {
 
 const formatCategoryLabel = (value) => value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 
+const SALES_VIEW_OPTIONS = [
+  { id: 'saleValue', label: 'Sale Value', helper: 'Total parcel sale value' },
+  { id: 'pricePerSqm', label: 'Sale Price / m2', helper: 'Higher sale-price intensity streets' },
+  { id: 'daysOnMarket', label: 'Time To Sell', helper: 'How long stock sits before selling' },
+  { id: 'turnover', label: 'Turnover', helper: 'Repeat trading concentration' }
+]
+
+const formatRandCompact = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '—'
+  if (numeric >= 1000000) return `R${(numeric / 1000000).toFixed(1)}M`
+  if (numeric >= 1000) return `R${Math.round(numeric / 1000)}k`
+  return `R${Math.round(numeric)}`
+}
+
+const formatPopupDate = (value) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+const parseSalesRecords = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+const formatSalesCategoryLabel = (value) => String(value || '')
+  .replace(/[_-]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .replace(/\b\w/g, (letter) => letter.toUpperCase())
+
 const BusinessAnalytics = ({
   businessMode,
   onModeChange,
@@ -146,7 +185,16 @@ const BusinessAnalytics = ({
   businessesData,
   streetStallsData,
   surveyData,
-  propertiesData,
+  salesData,
+  availableSalesYears = [],
+  selectedSalesYear = 'all',
+  onSelectedSalesYearChange,
+  salesMapView = 'saleValue',
+  onSalesMapViewChange,
+  salesInsights,
+  salesLegend,
+  selectedSalesFeature,
+  onSelectedSalesFeatureChange,
   landParcelsData,
   openSpacesData,
   parcelFilters,
@@ -170,8 +218,8 @@ const BusinessAnalytics = ({
   onEventsMonthChange,
   eventsScope = 'cbd',
   onEventsScopeChange,
-  analyticsTitle = 'Business Analytics',
-  analyticsSubtitle = 'Explore business patterns and insights',
+  analyticsTitle = 'Retail',
+  analyticsSubtitle = 'Explore retail patterns and insights',
   renderEventsInline = true,
   hideLayerControls = false
 }) => {
@@ -287,6 +335,16 @@ const BusinessAnalytics = ({
   }, [businessMode, businessesData])
   
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const salesYearOptions = ['all', ...availableSalesYears]
+  const selectedSalesYearIndex = Math.max(0, salesYearOptions.findIndex((year) => String(year) === String(selectedSalesYear)))
+  const selectedSalesView = SALES_VIEW_OPTIONS.find((option) => option.id === salesMapView) || SALES_VIEW_OPTIONS[0]
+  const selectedSalesProps = selectedSalesFeature?.properties || null
+  const selectedSalesRecords = parseSalesRecords(selectedSalesProps?.sales_records)
+  const latestSelectedSale = selectedSalesRecords[0] || null
+  const selectedSalesStreet = [selectedSalesProps?.street_name, selectedSalesProps?.street_type].filter(Boolean).join(' ').trim()
+  const selectedSalesCategories = Array.isArray(selectedSalesProps?.sale_categories)
+    ? selectedSalesProps.sale_categories.filter(Boolean)
+    : []
 
   return (
     <div className="business-analytics">
@@ -348,16 +406,6 @@ const BusinessAnalytics = ({
           <span>Business Categories</span>
         </label>
         
-        <label className="mode-radio">
-          <input
-            type="radio"
-            name="businessMode"
-            checked={businessMode === 'property'}
-            onChange={() => onModeChange('property')}
-          />
-          <span>Property Sales</span>
-        </label>
-
         <label className="mode-radio">
           <input
             type="radio"
@@ -775,84 +823,242 @@ const BusinessAnalytics = ({
         </div>
       )}
       
-      {/* Property Sales Mode */}
-      {businessMode === 'property' && propertiesData && (
+      {/* Parcel Sales Mode */}
+      {businessMode === 'parcelSales' && salesData && (
         <div className="mode-content">
-          <div className="control-section">
-            <div className="control-header">PROPERTY SALES</div>
+          <div className="control-section sales-hero-card">
+            <div className="business-liveliness-controls-head">
+              <span>CBD Sales Market</span>
+              <strong>{salesInsights?.yearLabel || 'All years'}</strong>
+            </div>
             <p className="mode-description">
-              Bubble size shows number of transfers, color intensity shows total transaction value.
+              Sales are matched to land parcels by `SL` key. Use the year slider and lens controls to inspect value, intensity, time to sell, and turnover patterns across the CBD.
             </p>
           </div>
-          
-          {/* Bubble Size Legend */}
-          <div className="control-section">
-            <div className="control-header">BUBBLE SIZE</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ 
-                  width: '16px', 
-                  height: '16px', 
-                  borderRadius: '50%', 
-                  backgroundColor: '#3b82f6',
-                  border: '2px solid #fff'
-                }}></div>
-                <span style={{ fontSize: '0.875rem', color: '#e8f5e9' }}>1-2 sales</span>
+
+          <div className="control-section sales-selection-card">
+            <div className="business-liveliness-controls-head">
+              <span>Selected Parcel</span>
+              <strong>{selectedSalesFeature ? 'Parcel details' : 'Click a parcel'}</strong>
+            </div>
+            {selectedSalesFeature ? (
+              <div className="sales-selection-detail">
+                <div className="sales-selection-title-row">
+                  <div>
+                    <h4>{selectedSalesProps?.address || selectedSalesProps?.prty_nmbr || selectedSalesStreet || 'Sales Parcel'}</h4>
+                    <p>{[selectedSalesStreet || null, selectedSalesProps?.zoning || null].filter(Boolean).join(' · ') || 'CBD sales parcel'}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="sales-selection-clear"
+                    onClick={() => onSelectedSalesFeatureChange?.(null)}
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                <div className="sales-selection-grid">
+                  <div className="sales-selection-metric">
+                    <span>Sales count</span>
+                    <strong>{(Number(selectedSalesProps?.sales_count) || 0).toLocaleString()}</strong>
+                  </div>
+                  <div className="sales-selection-metric">
+                    <span>Total value</span>
+                    <strong>{formatRandCompact(selectedSalesProps?.total_sale_price)}</strong>
+                  </div>
+                  <div className="sales-selection-metric">
+                    <span>Avg price / m2</span>
+                    <strong>{formatRandCompact(selectedSalesProps?.avg_rate_per_m2)}</strong>
+                  </div>
+                  <div className="sales-selection-metric">
+                    <span>Avg days to sell</span>
+                    <strong>{Number.isFinite(Number(selectedSalesProps?.avg_days_on_market)) ? `${Number(selectedSalesProps.avg_days_on_market).toFixed(0)} days` : '—'}</strong>
+                  </div>
+                </div>
+
+                <div className="sales-selection-meta">
+                  <span>Latest sale: {formatPopupDate(latestSelectedSale?.sale_date || selectedSalesProps?.latest_sale_date)}</span>
+                  <span>Area: {Number.isFinite(Number(selectedSalesProps?.area_m2)) ? `${Number(selectedSalesProps.area_m2).toLocaleString(undefined, { maximumFractionDigits: 0 })} m2` : '—'}</span>
+                  <span>Ownership: {selectedSalesProps?.is_city_owned ? 'City owned' : (selectedSalesProps?.owner_type || 'Unknown')}</span>
+                </div>
+
+                {selectedSalesCategories.length > 0 && (
+                  <div className="sales-selection-tags">
+                    {selectedSalesCategories.slice(0, 4).map((category) => (
+                      <span key={category}>{formatSalesCategoryLabel(category)}</span>
+                    ))}
+                  </div>
+                )}
+
+                {latestSelectedSale && (
+                  <div className="sales-selection-transaction">
+                    <span>Latest transaction</span>
+                    <strong>{formatRandCompact(latestSelectedSale.sale_price)}</strong>
+                    <em>
+                      {[
+                        latestSelectedSale.property || latestSelectedSale.address || null,
+                        Number.isFinite(Number(latestSelectedSale.rate_per_m2)) ? `${formatRandCompact(latestSelectedSale.rate_per_m2)}/m2` : null,
+                        Number.isFinite(Number(latestSelectedSale.days_on_market)) ? `${Number(latestSelectedSale.days_on_market).toFixed(0)} days on market` : null
+                      ].filter(Boolean).join(' · ')}
+                    </em>
+                  </div>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ 
-                  width: '28px', 
-                  height: '28px', 
-                  borderRadius: '50%', 
-                  backgroundColor: '#3b82f6',
-                  border: '2px solid #fff'
-                }}></div>
-                <span style={{ fontSize: '0.875rem', color: '#e8f5e9' }}>5-10 sales</span>
+            ) : (
+              <p className="sales-selection-empty">
+                Click any sales parcel on the map to inspect the property in this side panel.
+              </p>
+            )}
+          </div>
+
+          <div className="sales-sidebar-grid">
+            <div className="sales-mini-card">
+              <span>Sales Count</span>
+              <strong>{(salesInsights?.summary?.salesCount || 0).toLocaleString()}</strong>
+            </div>
+            <div className="sales-mini-card">
+              <span>Avg Days To Sell</span>
+              <strong>{Number.isFinite(salesInsights?.summary?.avgDaysOnMarket) ? `${salesInsights.summary.avgDaysOnMarket.toFixed(0)}d` : '—'}</strong>
+            </div>
+            <div className="sales-mini-card">
+              <span>Avg Sale Price / m2</span>
+              <strong>{formatRandCompact(salesInsights?.summary?.avgRatePerSqm)}</strong>
+            </div>
+            <div className="sales-mini-card">
+              <span>Peak Month</span>
+              <strong>{salesInsights?.summary?.peakMonth?.name || '—'}</strong>
+            </div>
+          </div>
+
+          <div className="control-section sales-year-card">
+            <div className="business-liveliness-controls-head">
+              <span>Year Filter</span>
+              <strong>{selectedSalesYear === 'all' ? 'All years' : selectedSalesYear}</strong>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max={Math.max(0, salesYearOptions.length - 1)}
+              value={selectedSalesYearIndex}
+              onChange={(event) => onSelectedSalesYearChange?.(salesYearOptions[Number(event.target.value)] || 'all')}
+              className="sales-year-slider"
+              disabled={salesYearOptions.length <= 1}
+            />
+            <div className="sales-year-scale">
+              {salesYearOptions.map((year, index) => (
+                <button
+                  key={`${year}-${index}`}
+                  type="button"
+                  className={`sales-year-tick ${index === selectedSalesYearIndex ? 'is-active' : ''}`}
+                  onClick={() => onSelectedSalesYearChange?.(year)}
+                >
+                  {year === 'all' ? 'All' : year}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="control-section sales-view-card">
+            <div className="business-liveliness-controls-head">
+              <span>Map Lenses</span>
+              <strong>{selectedSalesView.label}</strong>
+            </div>
+            <div className="sales-view-switcher">
+              {SALES_VIEW_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={salesMapView === option.id ? 'active' : ''}
+                  onClick={() => onSalesMapViewChange?.(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="sales-view-helper">{selectedSalesView.helper}</p>
+            {salesLegend && (
+              <div className="sales-sidebar-legend" aria-label="Sales lens colour legend">
+                <div className="sales-sidebar-legend-top">
+                  <span>{salesLegend.title}</span>
+                  <strong>Colour Key</strong>
+                </div>
+                <p className="sales-sidebar-legend-subtitle">{salesLegend.subtitle}</p>
+                <div className="sales-sidebar-legend-gradient" style={{ background: salesLegend.gradient }} />
+                <div className="sales-sidebar-legend-scale">
+                  {salesLegend.scale.map((label) => (
+                    <span key={label}>{label}</span>
+                  ))}
+                </div>
+                <div className="sales-sidebar-legend-items">
+                  {salesLegend.items.map((item) => (
+                    <div key={item.label}>
+                      <i style={{ background: item.color }} />
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="sales-sidebar-legend-note">{salesLegend.note}</p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ 
-                  width: '44px', 
-                  height: '44px', 
-                  borderRadius: '50%', 
-                  backgroundColor: '#3b82f6',
-                  border: '2px solid #fff'
-                }}></div>
-                <span style={{ fontSize: '0.875rem', color: '#e8f5e9' }}>20+ sales</span>
+            )}
+          </div>
+
+          <div className="control-section sales-seasonality-card">
+            <div className="sales-panel-topline">
+              <span>Seasonality</span>
+              <strong>{Number.isFinite(salesInsights?.summary?.monthlyMean) ? `${salesInsights.summary.monthlyMean.toFixed(1)} monthly mean` : 'No trend yet'}</strong>
+            </div>
+            <div className="sales-mini-bars" aria-hidden="true">
+              {(salesInsights?.monthly || []).map((entry) => {
+                const peak = salesInsights?.summary?.peakMonth?.name
+                const low = salesInsights?.summary?.lowMonth?.name
+                const maxSales = Math.max(1, ...(salesInsights?.monthly || []).map((item) => item.sales || 0))
+                const height = `${Math.max(24, ((entry.sales || 0) / maxSales) * 68)}px`
+                const className = entry.name === peak ? 'is-peak' : entry.name === low ? 'is-low' : ''
+                return (
+                  <div key={entry.name} className="sales-mini-bar-col">
+                    <i className={className} style={{ height }} />
+                    <span>{entry.name}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="sales-seasonality-summary">
+              <div className="sales-seasonality-card sales-seasonality-card--peak">
+                <span>Peak</span>
+                <strong>{salesInsights?.summary?.peakMonth?.name || '—'}</strong>
+                <em>{(salesInsights?.summary?.peakMonth?.sales || 0).toLocaleString()} sales</em>
+              </div>
+              <div className="sales-seasonality-card sales-seasonality-card--low">
+                <span>Low</span>
+                <strong>{salesInsights?.summary?.lowMonth?.name || '—'}</strong>
+                <em>{(salesInsights?.summary?.lowMonth?.sales || 0).toLocaleString()} sales</em>
               </div>
             </div>
           </div>
-          
-          {/* Color Legend */}
-          <div className="control-section">
-            <div className="control-header">TRANSACTION VALUE</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: '#dbeafe' }}></div>
-                <span>Under R1M</span>
+
+          <div className="control-section sales-leader-card">
+            <div className="control-header">Street Leaders</div>
+            <div className="sales-leader-list">
+              <div className="sales-leader-item">
+                <span>Longest time to sell</span>
+                <strong>{salesInsights?.streetLeaders?.slowestStreet?.name || '—'}</strong>
+                <em>{Number.isFinite(salesInsights?.streetLeaders?.slowestStreet?.avgDaysOnMarket) ? `${salesInsights.streetLeaders.slowestStreet.avgDaysOnMarket.toFixed(0)} days avg` : 'No days-on-market data'}</em>
               </div>
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: '#60a5fa' }}></div>
-                <span>R5M - R10M</span>
+              <div className="sales-leader-item">
+                <span>Highest sale price per m2</span>
+                <strong>{salesInsights?.streetLeaders?.highestValueStreet?.name || '—'}</strong>
+                <em>{formatRandCompact(salesInsights?.streetLeaders?.highestValueStreet?.avgRatePerSqm)} avg intensity</em>
               </div>
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: '#3b82f6' }}></div>
-                <span>R10M - R20M</span>
+              <div className="sales-leader-item">
+                <span>Most sales</span>
+                <strong>{salesInsights?.streetLeaders?.highestVolumeStreet?.name || '—'}</strong>
+                <em>{(salesInsights?.streetLeaders?.highestVolumeStreet?.salesCount || 0).toLocaleString()} transactions</em>
               </div>
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: '#2563eb' }}></div>
-                <span>R20M - R50M</span>
+              <div className="sales-leader-item">
+                <span>Highest turnover</span>
+                <strong>{salesInsights?.streetLeaders?.highestTurnoverStreet?.name || '—'}</strong>
+                <em>{Number.isFinite(salesInsights?.streetLeaders?.highestTurnoverStreet?.turnoverIndex) ? `${salesInsights.streetLeaders.highestTurnoverStreet.turnoverIndex.toFixed(1)} sales per parcel` : 'No turnover signal yet'}</em>
               </div>
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: '#1e40af' }}></div>
-                <span>Over R100M</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="stats-summary">
-            <div className="stat-card primary">
-              <div className="stat-value">{propertiesData.features.length}</div>
-              <div className="stat-label">Properties</div>
             </div>
           </div>
         </div>

@@ -389,7 +389,7 @@ const KNOWN_DATA_LAYERS = [
   'businesses-heatmap-layer', 'businesses-points-layer',
   'survey-opinions-layer', 'stalls-opinions-layer',
   'businesses-ratings-layer', 'businesses-amenities-layer',
-  'businesses-categories-layer', 'properties-sales-layer',
+  'businesses-categories-layer', 'parcel-sales-fill',
   'pedestrian-routes-layer', 'cycling-routes-layer',
   'network-glow-outer', 'network-glow-mid', 'network-betweenness-layer',
   'transit-accessibility-layer', 'bus-stops-layer',

@@ -112,6 +112,24 @@ const formatRandCompact = (value) => {
   return `${sign}R${Math.round(absolute)}`
 }
 
+const formatPopupDate = (value) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+const parseSalesRecords = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 const toEcologyFeatureKey = (value) => {
   if (value === null || value === undefined || value === '') return null
   return String(value)
@@ -179,6 +197,8 @@ const titleCase = (value) => String(value || '')
   .trim()
   .toLowerCase()
   .replace(/\b\w/g, (match) => match.toUpperCase())
+
+const formatPropertyCategory = (value) => titleCase(String(value || '').replace(/\//g, ' / '))
 
 const isMachineOpenSpaceName = (value) => {
   const text = String(value || '').trim()
@@ -469,7 +489,8 @@ const ExplorerMap = ({
   businessesData,
   streetStallsData,
   surveyData,
-  propertiesData,
+  salesData,
+  salesMapView = 'saleValue',
   landParcelsData,
   openSpacesData,
   openSpacesPriorityData,
@@ -511,6 +532,8 @@ const ExplorerMap = ({
   onHeatGridFeatureSelect,
   selectedOpenSpaceFeature,
   onOpenSpaceSelect,
+  selectedSalesFeature,
+  onSalesParcelSelect,
   onServiceRequestSegmentClick,
   visibleLayers,
   layerStack = [],
@@ -1033,7 +1056,7 @@ const ExplorerMap = ({
     longitude: 18.4241,
     latitude: -33.9249,
     zoom: 14,
-    pitch: 45,
+    pitch: 0,
     bearing: 0
   })
   
@@ -1047,6 +1070,14 @@ const ExplorerMap = ({
         }
       : { type: 'FeatureCollection', features: [] }
   ), [selectedOpenSpaceFeature])
+  const selectedSalesHighlight = useMemo(() => (
+    selectedSalesFeature?.geometry
+      ? {
+          type: 'FeatureCollection',
+          features: [selectedSalesFeature]
+        }
+      : { type: 'FeatureCollection', features: [] }
+  ), [selectedSalesFeature])
 
   // ── Bbox drawing state ──────────────────────────────────────
   const [boxPos, setBoxPos] = useState(null)    // { x, y } top-left of fixed box
@@ -1255,6 +1286,13 @@ const ExplorerMap = ({
 
       if (feature.source === 'open-spaces') {
         onOpenSpaceSelect?.(feature)
+        setPopupInfo(null)
+        setSelectedFeature(null)
+        return
+      }
+
+      if (feature.source === 'parcel-sales') {
+        onSalesParcelSelect?.(feature)
         setPopupInfo(null)
         setSelectedFeature(null)
         return
@@ -1470,7 +1508,7 @@ const ExplorerMap = ({
           'businesses-categories-layer',
           'survey-opinions-layer',
           'stalls-opinions-layer',
-          'properties-sales-layer',
+          'parcel-sales-fill',
           'land-parcels-fill',
           'open-spaces-fill',
           'network-layer',
@@ -1491,7 +1529,6 @@ const ExplorerMap = ({
           'climate-wind-fill',
           'greenery-access-layer',
           'greenery-destination-layer',
-          'ecology-heat-volume',
           'ecology-heat-hit',
           'ecology-heat-primary-outline',
           'ecology-heat-compare-outline',
@@ -1932,43 +1969,99 @@ const ExplorerMap = ({
               )
             })()}
             
-            {/* Property Sales - Bubble chart */}
-            {shouldRenderCategory('propertySales') && propertiesData && (
-              <Source
-                id="properties-sales"
-                type="geojson"
-                data={propertiesData}
-              >
+            {shouldRenderCategory('parcelSales') && salesData && (
+              <Source id="parcel-sales" type="geojson" data={salesData}>
                 <Layer
-                  id="properties-sales-layer"
-                  type="circle"
+                  id="parcel-sales-fill"
+                  type="fill"
                   paint={{
-                    'circle-radius': [
+                    'fill-color': salesMapView === 'pricePerSqm'
+                      ? [
+                          'interpolate',
+                          ['linear'],
+                          ['coalesce', ['get', 'avg_rate_per_m2'], 0],
+                          0, '#312e81',
+                          10000, '#4338ca',
+                          25000, '#7c3aed',
+                          45000, '#ec4899',
+                          75000, '#f97316',
+                          120000, '#facc15'
+                        ]
+                      : salesMapView === 'daysOnMarket'
+                        ? [
+                            'interpolate',
+                            ['linear'],
+                            ['coalesce', ['get', 'avg_days_on_market'], 0],
+                            0, '#22c55e',
+                            30, '#84cc16',
+                            90, '#facc15',
+                            180, '#fb923c',
+                            365, '#dc2626'
+                          ]
+                        : salesMapView === 'turnover'
+                          ? [
+                              'interpolate',
+                              ['linear'],
+                              ['coalesce', ['get', 'sales_count'], 0],
+                              0, '#0f172a',
+                              1, '#2563eb',
+                              3, '#06b6d4',
+                              6, '#8b5cf6',
+                              10, '#f97316',
+                              15, '#f43f5e'
+                            ]
+                          : [
+                              'interpolate',
+                              ['linear'],
+                              ['coalesce', ['get', 'total_sale_price'], 0],
+                              0, '#1d4ed8',
+                              1000000, '#06b6d4',
+                              5000000, '#10b981',
+                              10000000, '#fde047',
+                              25000000, '#f97316',
+                              50000000, '#dc2626',
+                              100000000, '#7f1d1d'
+                            ],
+                    'fill-opacity': [
                       'interpolate',
                       ['linear'],
-                      ['coalesce', ['get', 'transfer_count'], 1],
-                      1, 8,
-                      3, 14,
-                      5, 20,
-                      10, 28,
-                      15, 36,
-                      20, 44
-                    ],
-                    'circle-color': [
+                      ['coalesce', ['get', 'sales_count'], 1],
+                      1, 0.34,
+                      3, 0.46,
+                      8, 0.58,
+                      15, 0.7
+                    ]
+                  }}
+                />
+                <Layer
+                  id="parcel-sales-outline"
+                  type="line"
+                  paint={{
+                    'line-color': 'rgba(15, 23, 42, 0.42)',
+                    'line-width': [
                       'interpolate',
                       ['linear'],
-                      ['coalesce', ['get', 'total_value'], 0],
-                      0, '#dbeafe',
-                      1000000, '#93c5fd',
-                      5000000, '#60a5fa',
-                      10000000, '#3b82f6',
-                      20000000, '#2563eb',
-                      50000000, '#1d4ed8',
-                      100000000, '#1e40af'
+                      ['coalesce', ['get', 'sales_count'], 1],
+                      1, 0.35,
+                      3, 0.55,
+                      8, 0.9,
+                      15, 1.2
                     ],
-                    'circle-opacity': 0.75,
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': '#ffffff'
+                    'line-opacity': 0.32
+                  }}
+                />
+              </Source>
+            )}
+
+            {shouldRenderCategory('parcelSales') && selectedSalesHighlight.features.length > 0 && (
+              <Source id="parcel-sales-selected" type="geojson" data={selectedSalesHighlight}>
+                <Layer
+                  id="parcel-sales-selected-outline"
+                  type="line"
+                  paint={{
+                    'line-color': '#f8fafc',
+                    'line-width': 3,
+                    'line-opacity': 0.95
                   }}
                 />
               </Source>
@@ -2835,20 +2928,7 @@ const ExplorerMap = ({
                   filter={ecologyMetricFilter}
                   paint={{
                     'fill-color': ecologyMetricPaint,
-                    'fill-opacity': 0.12
-                  }}
-                />
-                <Layer
-                  id="ecology-heat-volume"
-                  type="fill-extrusion"
-                  minzoom={13}
-                  filter={ecologyMetricFilter}
-                  paint={{
-                    'fill-extrusion-color': ecologyMetricPaint,
-                    'fill-extrusion-height': ecologyHeatVolumeHeight,
-                    'fill-extrusion-base': 0.45,
-                    'fill-extrusion-opacity': 0.97,
-                    'fill-extrusion-vertical-gradient': true
+                    'fill-opacity': 0.72
                   }}
                 />
                 <Layer
@@ -3377,98 +3457,6 @@ const ExplorerMap = ({
             />
           </Source>
         )}
-        
-        {/* 3D Buildings — composite tileset from dark-v11 */}
-        {(() => {
-          const isEnvironmentView = dashboardMode === 'environment'
-          const isHeatView = activeCategory === 'urbanHeatConcrete'
-          const buildingBaseExpr = isHeatView
-            ? ['+', ['coalesce', ['get', 'min_height'], 0], ECOLOGY_BUILDING_LIFT_M]
-            : ['coalesce', ['get', 'min_height'], 0]
-          const buildingHeightExpr = isHeatView
-            ? ['+', ['max', 10, ['coalesce', ['get', 'height'], 6]], ECOLOGY_BUILDING_LIFT_M]
-            : ['coalesce', ['get', 'height'], 4]
-          const buildingMaskSpec = {
-            id: '3d-building-footprint-mask',
-            source: 'composite',
-            'source-layer': 'building',
-            type: 'fill',
-            minzoom: 14,
-            filter: ['==', ['get', 'extrude'], 'true'],
-            paint: {
-              'fill-color': '#120d0b',
-              'fill-opacity': isHeatView
-                ? [
-                    'interpolate', ['linear'], ['zoom'],
-                    14, 0.78,
-                    16, 0.84,
-                    18, 0.9
-                  ]
-                : 0
-            }
-          }
-          const buildingPedestalSpec = {
-            id: '3d-building-pedestal',
-            source: 'composite',
-            'source-layer': 'building',
-            type: 'fill-extrusion',
-            minzoom: 14,
-            filter: ['==', ['get', 'extrude'], 'true'],
-            paint: {
-              'fill-extrusion-color': [
-                'interpolate', ['linear'], ['coalesce', ['get', 'height'], 0],
-                0, '#0f1218',
-                20, '#161c26',
-                60, '#20293a',
-                120, '#2d3950',
-                200, '#42536d'
-              ],
-              'fill-extrusion-base': ['coalesce', ['get', 'min_height'], 0],
-              'fill-extrusion-height': ['+', ['coalesce', ['get', 'min_height'], 0], ECOLOGY_BUILDING_LIFT_M],
-              'fill-extrusion-opacity': isHeatView ? 1 : 0,
-              'fill-extrusion-vertical-gradient': true
-            }
-          }
-          const spec = {
-            id: '3d-buildings',
-            source: 'composite',
-            'source-layer': 'building',
-            type: 'fill-extrusion',
-            minzoom: 14,
-            filter: ['==', ['get', 'extrude'], 'true'],
-            paint: {
-              'fill-extrusion-color': isHeatView
-                ? [
-                    'interpolate', ['linear'], ['coalesce', ['get', 'height'], 0],
-                    0, '#121418',
-                    20, '#1b222d',
-                    60, '#2b3444',
-                    120, '#425167',
-                    200, '#647a94'
-                  ]
-                : [
-                    'interpolate', ['linear'], ['coalesce', ['get', 'height'], 0],
-                    0, '#1c1c1e',
-                    20, '#242426',
-                    60, '#303032',
-                    120, '#3c3c3e',
-                    200, '#48484a'
-                  ],
-              'fill-extrusion-height': buildingHeightExpr,
-              'fill-extrusion-base': buildingBaseExpr,
-              'fill-extrusion-opacity': isHeatView ? 1 : (isEnvironmentView ? 1 : 0.72),
-              'fill-extrusion-vertical-gradient': true
-            }
-          }
-          return (
-            <>
-              <Layer {...buildingMaskSpec} />
-              <Layer {...buildingPedestalSpec} />
-              <Layer {...spec} />
-            </>
-          )
-        })()}
-
         {/* Popup */}
         {popupInfo && (
           <Popup
@@ -3535,8 +3523,103 @@ const ExplorerMap = ({
 
               {(dashboardMode === 'business' || dashboardMode === 'landParcels') && (
                 <>
+                  {(popupInfo.feature.source === 'parcel-sales' || businessMode === 'parcelSales') && (() => {
+                    const props = popupInfo.feature.properties || {}
+                    const records = parseSalesRecords(props.sales_records)
+                    const latestRecord = records[0] || null
+                    const salesCount = Number(props.sales_count) || records.length || 0
+                    const avgDays = Number(props.avg_days_on_market)
+                    const areaM2 = Number(props.area_m2)
+                    const streetLabel = [props.street_name, props.street_type].filter(Boolean).join(' ').trim()
+                    const ownershipLabel = props.is_city_owned ? 'City owned' : (props.owner_type || 'Private / unknown')
+                    const categoryList = Array.isArray(props.sale_categories) ? props.sale_categories.filter(Boolean) : []
+
+                    return (
+                      <div className="sales-map-popup">
+                        <div className="sales-map-popup__hero">
+                          <div>
+                            <span className="sales-map-popup__eyebrow">Sales Parcel</span>
+                            <h3>{props.address || props.prty_nmbr || streetLabel || 'CBD Sales Parcel'}</h3>
+                            <p className="sales-map-popup__subhead">
+                              {[streetLabel || null, props.zoning || null].filter(Boolean).join(' · ') || 'Sales market summary'}
+                            </p>
+                          </div>
+                          <div className="sales-map-popup__badge">
+                            <strong>{salesCount.toLocaleString()}</strong>
+                            <span>sales</span>
+                          </div>
+                        </div>
+
+                        <div className="sales-map-popup__stats">
+                          <div className="sales-map-popup__stat">
+                            <span>Total value</span>
+                            <strong>{formatRandCompact(props.total_sale_price)}</strong>
+                          </div>
+                          <div className="sales-map-popup__stat">
+                            <span>Avg sale</span>
+                            <strong>{formatRandCompact(props.avg_sale_price)}</strong>
+                          </div>
+                          <div className="sales-map-popup__stat">
+                            <span>Avg price / m2</span>
+                            <strong>{formatRandCompact(props.avg_rate_per_m2)}</strong>
+                          </div>
+                          <div className="sales-map-popup__stat">
+                            <span>Avg days to sell</span>
+                            <strong>{Number.isFinite(avgDays) ? `${avgDays.toFixed(0)} days` : '—'}</strong>
+                          </div>
+                        </div>
+
+                        <div className="sales-map-popup__meta">
+                          <div className="sales-map-popup__meta-item">
+                            <span>Latest sale</span>
+                            <strong>{formatPopupDate(latestRecord?.sale_date || props.latest_sale_date)}</strong>
+                          </div>
+                          <div className="sales-map-popup__meta-item">
+                            <span>Parcel area</span>
+                            <strong>{Number.isFinite(areaM2) ? `${areaM2.toLocaleString(undefined, { maximumFractionDigits: 0 })} m2` : '—'}</strong>
+                          </div>
+                          <div className="sales-map-popup__meta-item">
+                            <span>Ownership</span>
+                            <strong>{ownershipLabel}</strong>
+                          </div>
+                          <div className="sales-map-popup__meta-item">
+                            <span>Property no.</span>
+                            <strong>{props.prty_nmbr || '—'}</strong>
+                          </div>
+                        </div>
+
+                        {categoryList.length > 0 && (
+                          <div className="sales-map-popup__tags">
+                            {categoryList.slice(0, 4).map((category) => (
+                              <span key={category} className="sales-map-popup__tag">
+                                {formatPropertyCategory(category)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {latestRecord && (
+                          <div className="sales-map-popup__highlight">
+                            <span className="sales-map-popup__section-title">Latest Transaction</span>
+                            <div className="sales-map-popup__highlight-row">
+                              <strong>{formatRandCompact(latestRecord.sale_price)}</strong>
+                              <span>{formatPopupDate(latestRecord.sale_date)}</span>
+                            </div>
+                            <p className="sales-map-popup__highlight-meta">
+                              {[
+                                latestRecord.property || latestRecord.address || null,
+                                Number.isFinite(Number(latestRecord.rate_per_m2)) ? `${formatRandCompact(latestRecord.rate_per_m2)}/m2` : null,
+                                Number.isFinite(Number(latestRecord.days_on_market)) ? `${Number(latestRecord.days_on_market).toFixed(0)} days on market` : null
+                              ].filter(Boolean).join(' · ')}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+
                   {/* Business Liveliness Mode */}
-                  {businessMode === 'liveliness' && (
+                  {popupInfo.feature.source !== 'parcel-sales' && businessMode === 'liveliness' && (
                     <>
                       <h3>{getBusinessName(popupInfo.feature.properties)}</h3>
                       {popupInfo.feature.properties.primaryType && (
@@ -3561,7 +3644,7 @@ const ExplorerMap = ({
                   )}
                   
                   {/* Vendor Opinions Mode */}
-                  {businessMode === 'opinions' && (
+                  {popupInfo.feature.source !== 'parcel-sales' && businessMode === 'opinions' && (
                     <>
                       <h3>{getBusinessName(popupInfo.feature.properties) || popupInfo.feature.properties.business_name || 'Vendor'}</h3>
                       {popupInfo.feature.properties.stake_big_change && (
@@ -3574,7 +3657,7 @@ const ExplorerMap = ({
                   )}
                   
                   {/* Review Ratings Mode */}
-                  {businessMode === 'ratings' && (
+                  {popupInfo.feature.source !== 'parcel-sales' && businessMode === 'ratings' && (
                     <>
                       <h3>{getBusinessName(popupInfo.feature.properties)}</h3>
                       {popupInfo.feature.properties.rating && (
@@ -3590,7 +3673,7 @@ const ExplorerMap = ({
                   )}
                   
                   {/* Amenities Mode */}
-                  {businessMode === 'amenities' && (
+                  {popupInfo.feature.source !== 'parcel-sales' && businessMode === 'amenities' && (
                     <>
                       <h3>{getBusinessName(popupInfo.feature.properties)}</h3>
                       {popupInfo.feature.properties.primaryType && (
@@ -3685,7 +3768,7 @@ const ExplorerMap = ({
                   )}
                   
                   {/* Categories Mode */}
-                  {businessMode === 'categories' && (
+                  {popupInfo.feature.source !== 'parcel-sales' && businessMode === 'categories' && (
                     <>
                       <h3>{getBusinessName(popupInfo.feature.properties)}</h3>
                       {popupInfo.feature.properties.primaryType && (
@@ -3697,31 +3780,6 @@ const ExplorerMap = ({
                     </>
                   )}
                   
-                  {/* Property Sales Mode */}
-                  {businessMode === 'property' && (
-                    <>
-                      <h3>Property Sale</h3>
-                      {popupInfo.feature.properties.address && (
-                        <p><strong>Address:</strong> {popupInfo.feature.properties.address}</p>
-                      )}
-                      {popupInfo.feature.properties.property_category && (
-                        <p><strong>Category:</strong> {popupInfo.feature.properties.property_category}</p>
-                      )}
-                      {popupInfo.feature.properties.transfer_count && (
-                        <p><strong>Number of Transfers:</strong> {popupInfo.feature.properties.transfer_count}</p>
-                      )}
-                      {popupInfo.feature.properties.total_value && (
-                        <p><strong>Total Value:</strong> R{(popupInfo.feature.properties.total_value / 1000000).toFixed(2)}M</p>
-                      )}
-                      {popupInfo.feature.properties.avg_price && (
-                        <p><strong>Average Price:</strong> R{(popupInfo.feature.properties.avg_price / 1000000).toFixed(2)}M</p>
-                      )}
-                      {popupInfo.feature.properties.property_type && (
-                        <p><strong>Type:</strong> {popupInfo.feature.properties.property_type}</p>
-                      )}
-                    </>
-                  )}
-
                   {popupInfo.feature.source === 'open-spaces' && (() => {
                     const props = popupInfo.feature.properties || {}
                     return (
@@ -3741,7 +3799,7 @@ const ExplorerMap = ({
                     )
                   })()}
 
-                  {businessMode === 'parcels' && popupInfo.feature.source !== 'open-spaces' && (
+                  {businessMode === 'parcels' && popupInfo.feature.source !== 'open-spaces' && popupInfo.feature.source !== 'parcel-sales' && (
                     <>
                       <h3>{popupInfo.feature.properties.address || popupInfo.feature.properties.prty_nmbr || 'Land Parcel'}</h3>
                       <p><strong>Zoning:</strong> {popupInfo.feature.properties.zoning}</p>

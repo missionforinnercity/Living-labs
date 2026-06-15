@@ -249,6 +249,231 @@ const formatRandCompact = (value) => {
   return `${sign}R${Math.round(absolute)}`
 }
 
+const SALES_VIEW_OPTIONS = [
+  { id: 'saleValue', label: 'Sale Value', metric: 'total_sale_price', description: 'Total recorded sale value by parcel' },
+  { id: 'pricePerSqm', label: 'Sale Price / m2', metric: 'avg_rate_per_m2', description: 'Average sale price intensity per square metre' },
+  { id: 'daysOnMarket', label: 'Time To Sell', metric: 'avg_days_on_market', description: 'Average days on market before sale' },
+  { id: 'turnover', label: 'Turnover', metric: 'sales_count', description: 'Sales concentration and repeat market activity' }
+]
+
+const SALES_MONTH_LABELS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+const SALES_MAP_LEGENDS = {
+  saleValue: {
+    title: 'Parcel Sale Value',
+    subtitle: 'Lower to higher total recorded value',
+    gradient: 'linear-gradient(90deg, #1d4ed8 0%, #06b6d4 22%, #10b981 44%, #fde047 68%, #f97316 86%, #b91c1c 100%)',
+    scale: ['Low', 'Active', 'Strong', 'Premium'],
+    items: [
+      { color: '#1d4ed8', label: 'Lower-value parcels' },
+      { color: '#10b981', label: 'Mid-market activity' },
+      { color: '#f97316', label: 'High-value clusters' },
+      { color: '#b91c1c', label: 'Top-end sale value' }
+    ],
+    note: 'Use this lens to see where the biggest total parcel value is changing hands.'
+  },
+  pricePerSqm: {
+    title: 'Sale Price / m2',
+    subtitle: 'Cheaper to more intense pricing',
+    gradient: 'linear-gradient(90deg, #312e81 0%, #7c3aed 25%, #ec4899 50%, #f97316 76%, #facc15 100%)',
+    scale: ['Value', 'Mid', 'Hotspot', 'Peak'],
+    items: [
+      { color: '#312e81', label: 'Lower price intensity' },
+      { color: '#7c3aed', label: 'Emerging premium pockets' },
+      { color: '#ec4899', label: 'High-value frontage' },
+      { color: '#facc15', label: 'Peak rand per m2' }
+    ],
+    note: 'Best for spotting streets where space commands the strongest pricing.'
+  },
+  daysOnMarket: {
+    title: 'Time To Sell',
+    subtitle: 'Fast-moving to slower stock',
+    gradient: 'linear-gradient(90deg, #22c55e 0%, #84cc16 22%, #facc15 48%, #fb923c 72%, #dc2626 100%)',
+    scale: ['Fast', 'Balanced', 'Slow', 'Very slow'],
+    items: [
+      { color: '#22c55e', label: 'Fast turnover' },
+      { color: '#facc15', label: 'Typical time to sell' },
+      { color: '#fb923c', label: 'Slower absorption' },
+      { color: '#dc2626', label: 'Long time on market' }
+    ],
+    note: 'Green parcels move quickly; warmer tones indicate stickier stock.'
+  },
+  turnover: {
+    title: 'Sales Turnover',
+    subtitle: 'Fewer to more recorded transactions',
+    gradient: 'linear-gradient(90deg, #0f172a 0%, #2563eb 18%, #06b6d4 38%, #8b5cf6 62%, #f97316 82%, #f43f5e 100%)',
+    scale: ['Quiet', 'Trading', 'Busy', 'Very active'],
+    items: [
+      { color: '#2563eb', label: 'Low repeat trading' },
+      { color: '#06b6d4', label: 'Steady market activity' },
+      { color: '#8b5cf6', label: 'Strong turnover pockets' },
+      { color: '#f43f5e', label: 'Most active parcels' }
+    ],
+    note: 'This lens highlights parcels with repeated sales activity, not necessarily higher value.'
+  }
+}
+
+const parseSalesRecords = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+const toOptionalNumber = (value) => {
+  if (value === '' || value === null || value === undefined) return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+const salesYearFromRecord = (record) => {
+  const explicitYear = Number(record?.sale_year)
+  if (Number.isFinite(explicitYear) && explicitYear > 1900) return explicitYear
+  const saleDate = String(record?.sale_date || '')
+  const match = saleDate.match(/^(\d{4})-\d{2}-\d{2}$/)
+  return match ? Number(match[1]) : null
+}
+
+const salesMonthFromRecord = (record) => {
+  const saleDate = String(record?.sale_date || '')
+  const match = saleDate.match(/^\d{4}-(\d{2})-\d{2}$/)
+  if (!match) return null
+  const month = Number(match[1])
+  return Number.isFinite(month) && month >= 1 && month <= 12 ? month : null
+}
+
+const SALES_STREET_TYPE_PATTERN = [
+  'street',
+  'st',
+  'road',
+  'rd',
+  'avenue',
+  'ave',
+  'lane',
+  'ln',
+  'mall',
+  'boulevard',
+  'blvd',
+  'square',
+  'place',
+  'pl',
+  'terrace',
+  'close',
+  'court',
+  'way',
+  'drive',
+  'dr'
+].join('|')
+
+const cleanStreetName = (value) => {
+  const raw = String(value || '').trim()
+  if (!raw) return 'Unknown Street'
+
+  const normalized = raw
+    .replace(/\bCAPE TOWN CITY CENTRE\b.*$/i, '')
+    .replace(/,/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const routeMatches = [...normalized.matchAll(new RegExp(`([A-Za-z'’.-]+(?:\\s+[A-Za-z'’.-]+){0,3}\\s+(?:${SALES_STREET_TYPE_PATTERN}))`, 'gi'))]
+    .map((match) => match[1]?.trim())
+    .filter(Boolean)
+
+  const preferredRoute = routeMatches.find((route) => !/^\d/.test(route))
+  if (preferredRoute) {
+    return titleCase(
+      preferredRoute
+        .replace(/\bSt$/i, 'Street')
+        .replace(/\bRd$/i, 'Road')
+        .replace(/\bAve$/i, 'Avenue')
+        .replace(/\bLn$/i, 'Lane')
+        .replace(/\bBlvd$/i, 'Boulevard')
+        .replace(/\bDr$/i, 'Drive')
+        .replace(/\bPl$/i, 'Place')
+        .trim()
+    )
+  }
+
+  return titleCase(
+    normalized
+      .replace(/^\s*\d+(?:\s*[-/]\s*\d+)?[A-Z/-]*\s+/i, '')
+      .replace(/\s+\d+(?:\s*[-/]\s*\d+)?(?:[A-Z/-]+)?\s+/g, ' ')
+      .trim()
+  )
+}
+
+const getSalesStreetName = (record, parcelProps = {}) => {
+  const parcelStreet = [parcelProps.street_name || parcelProps.str_name, parcelProps.street_type].filter(Boolean).join(' ').trim()
+  return cleanStreetName(parcelStreet || record?.address || parcelProps.address || parcelProps.prty_nmbr)
+}
+
+const averageValues = (values) => {
+  const finite = values.filter(Number.isFinite)
+  return finite.length ? finite.reduce((sum, value) => sum + value, 0) / finite.length : null
+}
+
+const splitChartLabel = (value, maxChars = 16, maxLines = 3) => {
+  const words = String(value || '').split(/\s+/).filter(Boolean)
+  if (!words.length) return ['—']
+
+  const lines = []
+  let current = words[0]
+
+  for (let index = 1; index < words.length; index += 1) {
+    const next = words[index]
+    if (`${current} ${next}`.length <= maxChars) {
+      current = `${current} ${next}`
+    } else {
+      lines.push(current)
+      current = next
+      if (lines.length === maxLines - 1) break
+    }
+  }
+
+  if (lines.length < maxLines) {
+    const consumedWords = lines.join(' ').split(/\s+/).filter(Boolean).length
+    const remainingWords = words.slice(consumedWords)
+    if (remainingWords.length) {
+      const remainder = remainingWords.join(' ')
+      lines.push(remainder.length > maxChars && lines.length === maxLines - 1
+        ? `${remainder.slice(0, Math.max(8, maxChars - 1)).trim()}…`
+        : remainder)
+    }
+  }
+
+  return lines.slice(0, maxLines)
+}
+
+const SalesYAxisTick = ({ x, y, payload }) => {
+  const lines = splitChartLabel(payload?.value, 16, 3)
+  return (
+    <text x={x} y={y} textAnchor="end" fill="rgba(255,255,255,0.62)" fontSize="11">
+      {lines.map((line, index) => (
+        <tspan key={`${payload?.value}-${index}`} x={x} dy={index === 0 ? '-0.45em' : '1.05em'}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  )
+}
+
+const SalesXAxisTick = ({ x, y, payload }) => {
+  const lines = splitChartLabel(payload?.value, 12, 2)
+  return (
+    <text x={x} y={y} textAnchor="middle" fill="rgba(255,255,255,0.52)" fontSize="10">
+      {lines.map((line, index) => (
+        <tspan key={`${payload?.value}-${index}`} x={x} dy={index === 0 ? '0.9em' : '1.0em'}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  )
+}
+
 const titleCase = (value) => String(value || '')
   .replace(/[_-]+/g, ' ')
   .replace(/\s+/g, ' ')
@@ -482,7 +707,7 @@ const buildOpenSpaceOpportunityScore = (feature, {
 }
 
 const DASHBOARD_MODES = [
-  { id: 'business', label: 'Business Analytics' },
+  { id: 'business', label: 'Retail' },
   { id: 'walkability', label: 'Active Mobility' },
   { id: 'lighting', label: 'Street Lighting' },
   { id: 'climate', label: 'Climate' },
@@ -501,11 +726,11 @@ const LAYER_CATEGORIES = [
   { id: 'businessRatings', label: 'Business Ratings', dashboard: 'business', dataKey: 'businesses' },
   { id: 'amenities', label: 'Amenities', dashboard: 'business', dataKey: 'businesses' },
   { id: 'businessCategories', label: 'Business Categories', dashboard: 'business', dataKey: 'businesses' },
-  { id: 'propertySales', label: 'Property Sales', dashboard: 'business', dataKey: 'properties' },
   { id: 'cityEvents', label: 'City Events', dashboard: 'business', dataKey: 'eventsData' },
   // Land parcel layers
   { id: 'landParcels', label: 'Land Parcels', dashboard: 'landParcels', dataKey: 'landParcels' },
   { id: 'openSpaces', label: 'Open Spaces', dashboard: 'landParcels', dataKey: 'openSpaces' },
+  { id: 'parcelSales', label: 'Sales', dashboard: 'landParcels', dataKey: 'parcelSales' },
   // Walkability layers
   { id: 'activeMobility', label: 'Walking, Running & Cycling', dashboard: 'walkability', dataKey: 'activeMobility' },
   { id: 'roadSteepness', label: 'Road Steepness', dashboard: 'walkability', dataKey: 'roadSteepness' },
@@ -558,7 +783,7 @@ const UnifiedDataExplorer = () => {
   const [map, setMap] = useState(null)
   
   // Business dashboard state
-  const [businessMode, setBusinessMode] = useState('liveliness') // 'liveliness', 'opinions', 'ratings', 'amenities', 'categories', 'property'
+  const [businessMode, setBusinessMode] = useState('liveliness') // 'liveliness', 'opinions', 'ratings', 'amenities', 'categories', 'events', 'parcels', 'parcelSales'
   const [businessLivelinessPanelExpanded, setBusinessLivelinessPanelExpanded] = useState(false)
   const [dayOfWeek, setDayOfWeek] = useState(new Date().getDay())
   const [hour, setHour] = useState(new Date().getHours())
@@ -570,10 +795,13 @@ const UnifiedDataExplorer = () => {
   const [businessRatingsSortOrder, setBusinessRatingsSortOrder] = useState('best')
   const [businessRatingsExpanded, setBusinessRatingsExpanded] = useState(false)
   const [businessFiltersInsightsExpanded, setBusinessFiltersInsightsExpanded] = useState(false)
-  const [parcelPanelMinimized, setParcelPanelMinimized] = useState(false)
+  const [parcelPanelMinimized, setParcelPanelMinimized] = useState(true)
   const [selectedOpenSpaceFeature, setSelectedOpenSpaceFeature] = useState(null)
+  const [selectedSalesParcelKey, setSelectedSalesParcelKey] = useState(null)
   const [parcelColorMode, setParcelColorMode] = useState('zoning')
   const [openSpaceColorMode, setOpenSpaceColorMode] = useState('zoning')
+  const [salesMapView, setSalesMapView] = useState('saleValue')
+  const [selectedSalesYear, setSelectedSalesYear] = useState('all')
   const [openSpaceScoringEnabled, setOpenSpaceScoringEnabled] = useState(false)
   const [openSpaceScoringStatus, setOpenSpaceScoringStatus] = useState('idle')
   const [openSpaceScoringProgress, setOpenSpaceScoringProgress] = useState(0)
@@ -717,7 +945,7 @@ const UnifiedDataExplorer = () => {
   const {
     businessesData,
     streetStallsData,
-    propertiesData,
+    parcelSalesData,
     landParcelsData,
     openSpacesData,
     surveyData,
@@ -962,6 +1190,234 @@ const UnifiedDataExplorer = () => {
     }
   }, [filteredLandParcelsData, landParcelsData])
 
+  const availableSalesYears = useMemo(() => {
+    const years = new Set()
+    ;(parcelSalesData?.features || []).forEach((feature) => {
+      parseSalesRecords(feature.properties?.sales_records).forEach((record) => {
+        const year = salesYearFromRecord(record)
+        if (Number.isFinite(year)) years.add(year)
+      })
+    })
+    return [...years].sort((a, b) => a - b)
+  }, [parcelSalesData])
+
+  const filteredSalesData = useMemo(() => {
+    if (!parcelSalesData?.features) return parcelSalesData
+
+    const features = parcelSalesData.features
+      .map((feature) => {
+        const props = feature.properties || {}
+        const filteredRecords = parseSalesRecords(props.sales_records)
+          .filter((record) => {
+            if (selectedSalesYear === 'all') return true
+            return salesYearFromRecord(record) === Number(selectedSalesYear)
+          })
+          .map((record) => ({
+            ...record,
+            sale_year: salesYearFromRecord(record),
+            month: salesMonthFromRecord(record),
+            street_name: getSalesStreetName(record, props)
+          }))
+
+        if (!filteredRecords.length) return null
+
+        const salePrices = filteredRecords.map((record) => toOptionalNumber(record.sale_price)).filter(Number.isFinite)
+        const ratesPerSqm = filteredRecords.map((record) => toOptionalNumber(record.rate_per_m2)).filter(Number.isFinite)
+        const daysOnMarket = filteredRecords.map((record) => toOptionalNumber(record.days_on_market)).filter(Number.isFinite)
+        const latestRecord = [...filteredRecords]
+          .sort((a, b) => String(b.sale_date || '').localeCompare(String(a.sale_date || '')))[0]
+        const saleCategories = [...new Set(filteredRecords.map((record) => record.sale_category).filter(Boolean))]
+        const streetRollup = {}
+        filteredRecords.forEach((record) => {
+          const streetName = record.street_name
+          streetRollup[streetName] = (streetRollup[streetName] || 0) + 1
+        })
+        const dominantStreetName = Object.entries(streetRollup)
+          .sort((a, b) => b[1] - a[1])[0]?.[0] || cleanStreetName(props.address)
+
+        return {
+          ...feature,
+          properties: {
+            ...props,
+            sales_count: filteredRecords.length,
+            total_sale_price: salePrices.reduce((sum, value) => sum + value, 0),
+            avg_sale_price: averageValues(salePrices),
+            avg_rate_per_m2: averageValues(ratesPerSqm),
+            avg_days_on_market: averageValues(daysOnMarket),
+            max_days_on_market: daysOnMarket.length ? Math.max(...daysOnMarket) : null,
+            latest_sale_date: latestRecord?.sale_date || props.latest_sale_date || null,
+            latest_sale_year: latestRecord?.sale_year || (selectedSalesYear === 'all' ? props.latest_sale_year : Number(selectedSalesYear)),
+            sale_categories: saleCategories,
+            sales_records: JSON.stringify(filteredRecords),
+            sales_record_count: filteredRecords.length,
+            street_name: dominantStreetName
+          }
+        }
+      })
+      .filter(Boolean)
+
+    const totalSalesRows = features.reduce((sum, feature) => sum + (Number(feature.properties?.sales_count) || 0), 0)
+    const totalSalePrice = features.reduce((sum, feature) => sum + (Number(feature.properties?.total_sale_price) || 0), 0)
+
+    return {
+      ...parcelSalesData,
+      features,
+      metadata: {
+        ...(parcelSalesData.metadata || {}),
+        filteredFeatures: features.length,
+        totalSalesRows,
+        totalSalePrice,
+        selectedSalesYear
+      }
+    }
+  }, [parcelSalesData, selectedSalesYear])
+
+  const salesInsights = useMemo(() => {
+    const featureRecords = (filteredSalesData?.features || []).map((feature) => {
+      const props = feature.properties || {}
+      return parseSalesRecords(props.sales_records).map((record) => ({
+        ...record,
+        sale_price: toOptionalNumber(record.sale_price),
+        rate_per_m2: toOptionalNumber(record.rate_per_m2),
+        days_on_market: toOptionalNumber(record.days_on_market),
+        sale_year: salesYearFromRecord(record),
+        month: salesMonthFromRecord(record),
+        street_name: getSalesStreetName(record, props),
+        parcel_key: props.sl_land_prcl_key || props.fid,
+        parcel_address: props.address,
+        zoning: props.zoning
+      }))
+    })
+
+    const records = featureRecords.flat()
+    const byStreet = new Map()
+    const monthly = SALES_MONTH_LABELS.map((label, index) => ({
+      name: label,
+      month: index + 1,
+      sales: 0,
+      totalValue: 0,
+      avgDays: null,
+      avgRatePerSqm: null
+    }))
+
+    records.forEach((record) => {
+      const streetName = record.street_name || 'Unknown Street'
+      if (!byStreet.has(streetName)) {
+        byStreet.set(streetName, {
+          name: streetName,
+          salesCount: 0,
+          totalSalePrice: 0,
+          salePrices: [],
+          rateValues: [],
+          dayValues: [],
+          parcelKeys: new Set()
+        })
+      }
+      const rollup = byStreet.get(streetName)
+      rollup.salesCount += 1
+      if (Number.isFinite(record.sale_price)) {
+        rollup.totalSalePrice += record.sale_price
+        rollup.salePrices.push(record.sale_price)
+      }
+      if (Number.isFinite(record.rate_per_m2)) rollup.rateValues.push(record.rate_per_m2)
+      if (Number.isFinite(record.days_on_market)) rollup.dayValues.push(record.days_on_market)
+      if (record.parcel_key) rollup.parcelKeys.add(record.parcel_key)
+
+      if (Number.isFinite(record.month) && monthly[record.month - 1]) {
+        monthly[record.month - 1].sales += 1
+        monthly[record.month - 1].totalValue += Number.isFinite(record.sale_price) ? record.sale_price : 0
+      }
+    })
+
+    const streetStats = [...byStreet.values()].map((street) => ({
+      name: street.name,
+      salesCount: street.salesCount,
+      totalSalePrice: street.totalSalePrice,
+      avgSalePrice: averageValues(street.salePrices),
+      avgRatePerSqm: averageValues(street.rateValues),
+      avgDaysOnMarket: averageValues(street.dayValues),
+      parcelCount: street.parcelKeys.size || 1,
+      turnoverIndex: street.salesCount / Math.max(1, street.parcelKeys.size || 1)
+    }))
+
+    const salesValues = records.map((record) => record.sale_price).filter(Number.isFinite)
+    const rateValues = records.map((record) => record.rate_per_m2).filter(Number.isFinite)
+    const dayValues = records.map((record) => record.days_on_market).filter(Number.isFinite)
+    const monthlyMean = monthly.reduce((sum, item) => sum + item.sales, 0) / Math.max(1, monthly.length)
+    const peakMonth = [...monthly].sort((a, b) => b.sales - a.sales)[0] || monthly[0]
+    const lowMonth = [...monthly].sort((a, b) => a.sales - b.sales)[0] || monthly[0]
+
+    const salesByStreet = [...streetStats]
+      .sort((a, b) => b.salesCount - a.salesCount)
+      .slice(0, 8)
+    const valueByStreet = [...streetStats]
+      .filter((street) => Number.isFinite(street.avgRatePerSqm))
+      .sort((a, b) => (b.avgRatePerSqm || 0) - (a.avgRatePerSqm || 0))
+      .slice(0, 8)
+    const speedByStreet = [...streetStats]
+      .filter((street) => Number.isFinite(street.avgDaysOnMarket))
+      .sort((a, b) => (b.avgDaysOnMarket || 0) - (a.avgDaysOnMarket || 0))
+      .slice(0, 8)
+    const fastestByStreet = [...streetStats]
+      .filter((street) => Number.isFinite(street.avgDaysOnMarket))
+      .sort((a, b) => (a.avgDaysOnMarket || 0) - (b.avgDaysOnMarket || 0))
+      .slice(0, 8)
+    const turnoverByStreet = [...streetStats]
+      .sort((a, b) => (b.turnoverIndex || 0) - (a.turnoverIndex || 0))
+      .slice(0, 8)
+    const categoryRollup = records.reduce((acc, record) => {
+      const key = titleCase(record.sale_category || 'Unknown')
+      acc[key] = (acc[key] || 0) + 1
+      return acc
+    }, {})
+    const categoryChart = Object.entries(categoryRollup)
+      .map(([name, count], index) => ({
+        name,
+        count,
+        color: ['#67dcea', '#8ad8ff', '#f4bf3a', '#95a3b8', '#5eead4', '#c4b5fd'][index % 6]
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6)
+
+    const yearLabel = selectedSalesYear === 'all' ? 'All years' : String(selectedSalesYear)
+
+    return {
+      yearLabel,
+      summary: {
+        parcelCount: filteredSalesData?.features?.length || 0,
+        salesCount: records.length,
+        avgSalePrice: averageValues(salesValues),
+        avgRatePerSqm: averageValues(rateValues),
+        avgDaysOnMarket: averageValues(dayValues),
+        monthlyMean,
+        peakMonth,
+        lowMonth
+      },
+      streetLeaders: {
+        fastestStreet: fastestByStreet[0] || null,
+        slowestStreet: speedByStreet[0] || null,
+        highestValueStreet: valueByStreet[0] || null,
+        highestVolumeStreet: salesByStreet[0] || null,
+        highestTurnoverStreet: turnoverByStreet[0] || null
+      },
+      monthly,
+      salesByStreet,
+      valueByStreet,
+      speedByStreet,
+      fastestByStreet,
+      categoryChart,
+      turnoverByStreet
+    }
+  }, [filteredSalesData, selectedSalesYear])
+
+  const selectedSalesFeature = useMemo(() => {
+    if (!selectedSalesParcelKey) return null
+    return (filteredSalesData?.features || []).find((feature) => {
+      const props = feature.properties || {}
+      return String(props.sl_land_prcl_key || props.fid || '') === String(selectedSalesParcelKey)
+    }) || null
+  }, [filteredSalesData, selectedSalesParcelKey])
+
   const openSpaceInsights = useMemo(() => {
     const features = openSpacesData?.features || []
     const summary = features.reduce((acc, feature) => {
@@ -1003,6 +1459,20 @@ const UnifiedDataExplorer = () => {
   }, [openSpacesData])
 
   const openSpaceScoringRequested = dashboardMode === 'landParcels' && activeCategory === 'openSpaces' && openSpaceScoringEnabled
+  const selectedSalesLegend = SALES_MAP_LEGENDS[salesMapView] || SALES_MAP_LEGENDS.saleValue
+
+  useEffect(() => {
+    if (selectedSalesYear === 'all') return
+    if (!availableSalesYears.includes(Number(selectedSalesYear))) {
+      setSelectedSalesYear('all')
+    }
+  }, [availableSalesYears, selectedSalesYear])
+
+  useEffect(() => {
+    if (!selectedSalesParcelKey) return
+    if (selectedSalesFeature) return
+    setSelectedSalesParcelKey(null)
+  }, [selectedSalesFeature, selectedSalesParcelKey])
 
   useEffect(() => {
     if (!openSpaceScoringRequested) return
@@ -1752,7 +2222,6 @@ const UnifiedDataExplorer = () => {
         businessRatings: 'ratings',
         amenities: 'amenities',
         businessCategories: 'categories',
-        propertySales: 'property',
         cityEvents: 'events'
       }
       if (modeMap[categoryId]) {
@@ -1762,7 +2231,7 @@ const UnifiedDataExplorer = () => {
         setOpinionSource('both')
       }
     } else if (category.dashboard === 'landParcels') {
-      setBusinessMode('parcels')
+      setBusinessMode(categoryId === 'parcelSales' ? 'parcelSales' : 'parcels')
     } else if (category.dashboard === 'walkability') {
       const modeMap = {
         activeMobility: 'activity',
@@ -1918,8 +2387,6 @@ const UnifiedDataExplorer = () => {
     let features = []
     if (activeCategory === 'cityEvents') {
       features = filteredEventsData?.features || []
-    } else if (activeCategory === 'propertySales') {
-      features = propertiesData?.features || []
     } else if (activeCategory === 'vendorOpinions') {
       features = streetStallsData?.features || []
     } else {
@@ -1964,7 +2431,7 @@ const UnifiedDataExplorer = () => {
       await generateReport(map, layerStack, {
         businessesData,
         streetStallsData,
-        propertiesData,
+        salesData: parcelSalesData,
         landParcelsData: filteredLandParcelsData,
         openSpacesData,
         eventsData: filteredEventsData,
@@ -1987,7 +2454,7 @@ const UnifiedDataExplorer = () => {
     } finally {
       setIsExporting(false)
     }
-  }, [map, layerStack, businessesData, streetStallsData, propertiesData, filteredLandParcelsData, openSpacesData, filteredEventsData, pedestrianData, cyclingData, networkData, transitData, roadSteepnessData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
+  }, [map, layerStack, businessesData, streetStallsData, parcelSalesData, filteredLandParcelsData, openSpacesData, filteredEventsData, pedestrianData, cyclingData, networkData, transitData, roadSteepnessData, lightingSegments, streetLights, missionInterventions, temperatureData, greeneryAndSkyview, treeCanopyData, parksData, trafficData, dashboardMode, reportLightMode])
 
   // Resize drag handlers
   const startSidebarDrag = useCallback((e) => {
@@ -2208,7 +2675,6 @@ const UnifiedDataExplorer = () => {
                     ratings: 'businessRatings',
                     amenities: 'amenities',
                     categories: 'businessCategories',
-                    property: 'propertySales',
                     events: 'cityEvents'
                   }
                   if (categoryMap[mode]) {
@@ -2221,7 +2687,19 @@ const UnifiedDataExplorer = () => {
                 onHourChange={setHour}
                 businessesData={businessesData}
                 streetStallsData={streetStallsData}
-                propertiesData={propertiesData}
+                salesData={filteredSalesData}
+                availableSalesYears={availableSalesYears}
+                selectedSalesYear={selectedSalesYear}
+                onSelectedSalesYearChange={setSelectedSalesYear}
+                salesMapView={salesMapView}
+                onSalesMapViewChange={setSalesMapView}
+                salesInsights={salesInsights}
+                salesLegend={selectedSalesLegend}
+                selectedSalesFeature={selectedSalesFeature}
+                onSelectedSalesFeatureChange={(feature) => {
+                  const props = feature?.properties || {}
+                  setSelectedSalesParcelKey(props.sl_land_prcl_key || props.fid || null)
+                }}
                 landParcelsData={filteredLandParcelsData}
                 parcelFilters={parcelFilters}
                 onParcelFiltersChange={setParcelFilters}
@@ -2251,15 +2729,27 @@ const UnifiedDataExplorer = () => {
 
             {dashboardMode === 'landParcels' && (
               <BusinessAnalytics
-                businessMode="parcels"
-                onModeChange={() => selectCategory('landParcels')}
+                businessMode={activeCategory === 'parcelSales' ? 'parcelSales' : 'parcels'}
+                onModeChange={(mode) => selectCategory(mode === 'parcelSales' ? 'parcelSales' : 'landParcels')}
                 dayOfWeek={dayOfWeek}
                 hour={hour}
                 onDayChange={setDayOfWeek}
                 onHourChange={setHour}
                 businessesData={businessesData}
                 streetStallsData={streetStallsData}
-                propertiesData={propertiesData}
+                salesData={filteredSalesData}
+                availableSalesYears={availableSalesYears}
+                selectedSalesYear={selectedSalesYear}
+                onSelectedSalesYearChange={setSelectedSalesYear}
+                salesMapView={salesMapView}
+                onSalesMapViewChange={setSalesMapView}
+                salesInsights={salesInsights}
+                salesLegend={selectedSalesLegend}
+                selectedSalesFeature={selectedSalesFeature}
+                onSelectedSalesFeatureChange={(feature) => {
+                  const props = feature?.properties || {}
+                  setSelectedSalesParcelKey(props.sl_land_prcl_key || props.fid || null)
+                }}
                 landParcelsData={filteredLandParcelsData}
                 openSpacesData={openSpacesData}
                 parcelFilters={parcelFilters}
@@ -2620,7 +3110,9 @@ const UnifiedDataExplorer = () => {
               businessesData={businessesData}
               streetStallsData={streetStallsData}
               surveyData={surveyData}
-              propertiesData={propertiesData}
+              salesData={filteredSalesData}
+              salesMapView={salesMapView}
+              selectedSalesFeature={selectedSalesFeature}
               landParcelsData={filteredLandParcelsData}
               openSpacesData={openSpacesData}
               openSpacesPriorityData={openSpacesPriorityData}
@@ -2664,6 +3156,10 @@ const UnifiedDataExplorer = () => {
               onOpenSpaceSelect={(feature) => {
                 setSelectedOpenSpaceFeature(feature)
                 setParcelPanelMinimized(false)
+              }}
+              onSalesParcelSelect={(feature) => {
+                const props = feature?.properties || {}
+                setSelectedSalesParcelKey(props.sl_land_prcl_key || props.fid || null)
               }}
               visibleLayers={visibleLayers}
               layerStack={layerStack}
@@ -2858,19 +3354,31 @@ const UnifiedDataExplorer = () => {
             </div>
           )}
 
-          {dashboardMode === 'landParcels' && (activeCategory === 'landParcels' || activeCategory === 'openSpaces') && (
+          {dashboardMode === 'landParcels' && (activeCategory === 'landParcels' || activeCategory === 'openSpaces' || activeCategory === 'parcelSales') && (
             <div
-              className={`bottom-panel parcel-insights-panel ${parcelPanelMinimized ? 'parcel-insights-panel--minimized' : ''}`}
-              style={{ right: `${effectiveSidebarWidth + 32}px` }}
+              className={`bottom-panel parcel-insights-panel ${activeCategory === 'parcelSales' ? 'sales-insights-panel' : ''} ${parcelPanelMinimized ? 'parcel-insights-panel--minimized' : ''}`}
+              style={{
+                left: '16px',
+                right: 'auto',
+                width: 'calc(100% - 32px)'
+              }}
             >
               <div className="panel-header">
-                <h3>{activeCategory === 'openSpaces' ? 'Open Space Intervention Fit' : 'Parcel Planning Intelligence'}</h3>
+                <h3>{
+                  activeCategory === 'openSpaces'
+                    ? 'Open Space Intervention Fit'
+                    : activeCategory === 'parcelSales'
+                      ? 'CBD Sales Market Intelligence'
+                      : 'Parcel Planning Intelligence'
+                }</h3>
                 <div className="panel-header-actions">
                   <div className="parcel-panel-meta">
                     {activeCategory === 'openSpaces' && selectedOpenSpaceScore
                       ? `${selectedOpenSpaceScore.name} · intervention score ${Number.isFinite(selectedOpenSpaceScore.interventionScore) ? selectedOpenSpaceScore.interventionScore.toFixed(0) : '—'}`
                       : activeCategory === 'openSpaces'
                         ? `${(openSpaceInsights.summary.count || 0).toLocaleString()} open spaces · ${(openSpaceInsights.summary.totalAreaM2 / 10000).toFixed(1)} ha`
+                        : activeCategory === 'parcelSales'
+                          ? `${salesInsights.summary.salesCount.toLocaleString()} sales · ${salesInsights.yearLabel} · ${SALES_VIEW_OPTIONS.find((item) => item.id === salesMapView)?.label || 'Sale Value'}`
                         : `${(parcelInsights.summary.count || 0).toLocaleString()} parcels · ${(openSpaceInsights.summary.count || 0).toLocaleString()} open spaces`}
                   </div>
                   {activeCategory === 'openSpaces' && (
@@ -2944,6 +3452,33 @@ const UnifiedDataExplorer = () => {
                           <strong>{Number.isFinite(selectedOpenSpaceScore?.interventionScore) ? `${selectedOpenSpaceScore.interventionScore.toFixed(0)}/100` : '—'}</strong>
                         </div>
                       </>
+                    ) : activeCategory === 'parcelSales' ? (
+                      <>
+                        <div className="route-history-chip route-history-chip--sales">
+                          <span>Selected Year</span>
+                          <strong>{salesInsights.yearLabel}</strong>
+                        </div>
+                        <div className="route-history-chip route-history-chip--sales">
+                          <span>Sales Count</span>
+                          <strong>{salesInsights.summary.salesCount.toLocaleString()}</strong>
+                        </div>
+                        <div className="route-history-chip route-history-chip--sales">
+                          <span>Avg Days To Sell</span>
+                          <strong>{Number.isFinite(salesInsights.summary.avgDaysOnMarket) ? `${salesInsights.summary.avgDaysOnMarket.toFixed(0)} days` : '—'}</strong>
+                        </div>
+                        <div className="route-history-chip route-history-chip--sales">
+                          <span>Avg Sale Price / m2</span>
+                          <strong>{formatRandCompact(salesInsights.summary.avgRatePerSqm)}</strong>
+                        </div>
+                        <div className="route-history-chip route-history-chip--sales route-history-chip--sales-accent">
+                          <span>Peak Month</span>
+                          <strong>{salesInsights.summary.peakMonth?.name || '—'}</strong>
+                        </div>
+                        <div className="route-history-chip route-history-chip--sales">
+                          <span>Turnover Leader</span>
+                          <strong>{salesInsights.streetLeaders.highestTurnoverStreet?.name || '—'}</strong>
+                        </div>
+                      </>
                     ) : (
                       <>
                         <div className="route-history-chip">
@@ -2974,7 +3509,129 @@ const UnifiedDataExplorer = () => {
                     )}
                   </div>
                   <div className="charts-container parcel-charts">
-                    {activeCategory === 'openSpaces' ? (
+                    {activeCategory === 'parcelSales' ? (
+                      <>
+                        <div className="chart-panel sales-chart-panel sales-seasonality-panel">
+                          <div className="sales-panel-headline">
+                            <span>Seasonality</span>
+                            <strong>{Number.isFinite(salesInsights.summary.monthlyMean) ? `${((salesInsights.summary.peakMonth?.sales || 0) / Math.max(1, salesInsights.summary.monthlyMean) * 100).toFixed(0)}% of mean at peak` : 'No monthly pattern yet'}</strong>
+                          </div>
+                          <ResponsiveContainer width="100%" height={230}>
+                            <BarChart data={salesInsights.monthly} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                              <XAxis dataKey="name" stroke="rgba(255,255,255,0.42)" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                              <YAxis stroke="rgba(255,255,255,0.4)" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                              <Tooltip formatter={(value) => [`${value} sales`, 'Monthly sales']} />
+                              <Bar dataKey="sales" radius={[5, 5, 0, 0]}>
+                                {salesInsights.monthly.map((entry) => {
+                                  const isPeak = entry.name === salesInsights.summary.peakMonth?.name
+                                  const isLow = entry.name === salesInsights.summary.lowMonth?.name
+                                  return (
+                                    <Cell
+                                      key={entry.name}
+                                      fill={isPeak ? '#67dcea' : isLow ? '#f4bf3a' : '#95a3b8'}
+                                      fillOpacity={isPeak ? 1 : isLow ? 0.95 : 0.72}
+                                    />
+                                  )
+                                })}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="chart-panel sales-chart-panel">
+                          <h4>Street Sales Volume</h4>
+                          <ResponsiveContainer width="100%" height={310}>
+                            <BarChart data={salesInsights.salesByStreet} layout="vertical" barCategoryGap={10} margin={{ top: 8, right: 12, left: 56, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                              <XAxis type="number" stroke="rgba(255,255,255,0.42)" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                              <YAxis dataKey="name" type="category" width={128} stroke="rgba(255,255,255,0.55)" tick={<SalesYAxisTick />} axisLine={false} tickLine={false} interval={0} />
+                              <Tooltip formatter={(value) => [`${value} sales`, 'Sales']} />
+                              <Bar dataKey="salesCount" fill="#67dcea" radius={[0, 6, 6, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="chart-panel sales-chart-panel">
+                          <h4>Highest Sale Price / m2 Streets</h4>
+                          <ResponsiveContainer width="100%" height={310}>
+                            <BarChart data={salesInsights.valueByStreet} layout="vertical" barCategoryGap={10} margin={{ top: 8, right: 12, left: 56, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                              <XAxis type="number" stroke="rgba(255,255,255,0.42)" tick={{ fontSize: 11 }} tickFormatter={formatRandCompact} axisLine={false} tickLine={false} />
+                              <YAxis dataKey="name" type="category" width={128} stroke="rgba(255,255,255,0.55)" tick={<SalesYAxisTick />} axisLine={false} tickLine={false} interval={0} />
+                              <Tooltip formatter={(value) => [formatRandCompact(value), 'Avg sale price / m2']} />
+                              <Bar dataKey="avgRatePerSqm" fill="#8ad8ff" radius={[0, 6, 6, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="chart-panel sales-chart-panel">
+                          <h4>Slowest Streets To Sell</h4>
+                          <ResponsiveContainer width="100%" height={310}>
+                            <BarChart data={salesInsights.speedByStreet} layout="vertical" barCategoryGap={10} margin={{ top: 8, right: 12, left: 56, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                              <XAxis type="number" stroke="rgba(255,255,255,0.42)" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                              <YAxis dataKey="name" type="category" width={128} stroke="rgba(255,255,255,0.55)" tick={<SalesYAxisTick />} axisLine={false} tickLine={false} interval={0} />
+                              <Tooltip formatter={(value) => [`${Number(value).toFixed(0)} days`, 'Avg days on market']} />
+                              <Bar dataKey="avgDaysOnMarket" fill="#f4bf3a" radius={[0, 6, 6, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="chart-panel sales-chart-panel">
+                          <h4>Fastest Streets To Sell</h4>
+                          <ResponsiveContainer width="100%" height={310}>
+                            <BarChart data={salesInsights.fastestByStreet} layout="vertical" barCategoryGap={10} margin={{ top: 8, right: 12, left: 56, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                              <XAxis type="number" stroke="rgba(255,255,255,0.42)" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                              <YAxis dataKey="name" type="category" width={128} stroke="rgba(255,255,255,0.55)" tick={<SalesYAxisTick />} axisLine={false} tickLine={false} interval={0} />
+                              <Tooltip formatter={(value) => [`${Number(value).toFixed(0)} days`, 'Avg days on market']} />
+                              <Bar dataKey="avgDaysOnMarket" fill="#5eead4" radius={[0, 6, 6, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="chart-panel sales-chart-panel">
+                          <h4>Sales Mix By Category</h4>
+                          <ResponsiveContainer width="100%" height={310}>
+                            <BarChart data={salesInsights.categoryChart} margin={{ top: 8, right: 12, left: -12, bottom: 24 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                              <XAxis dataKey="name" stroke="rgba(255,255,255,0.42)" tick={<SalesXAxisTick />} height={58} axisLine={false} tickLine={false} interval={0} />
+                              <YAxis stroke="rgba(255,255,255,0.42)" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                              <Tooltip formatter={(value) => [`${value} sales`, 'Transactions']} />
+                              <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                                {salesInsights.categoryChart.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="chart-panel sales-chart-panel sales-insight-list-panel">
+                          <h4>Street Leaders</h4>
+                          <div className="sales-street-leader-list">
+                            <div className="sales-street-leader-item">
+                              <span>Fastest street to sell</span>
+                              <strong>{salesInsights.streetLeaders.fastestStreet?.name || '—'}</strong>
+                              <em>{Number.isFinite(salesInsights.streetLeaders.fastestStreet?.avgDaysOnMarket) ? `${salesInsights.streetLeaders.fastestStreet.avgDaysOnMarket.toFixed(0)} days avg` : 'No days-on-market data'}</em>
+                            </div>
+                            <div className="sales-street-leader-item">
+                              <span>Longest time to sell</span>
+                              <strong>{salesInsights.streetLeaders.slowestStreet?.name || '—'}</strong>
+                              <em>{Number.isFinite(salesInsights.streetLeaders.slowestStreet?.avgDaysOnMarket) ? `${salesInsights.streetLeaders.slowestStreet.avgDaysOnMarket.toFixed(0)} days avg` : 'No days-on-market data'}</em>
+                            </div>
+                            <div className="sales-street-leader-item">
+                              <span>Highest sale price per m2</span>
+                              <strong>{salesInsights.streetLeaders.highestValueStreet?.name || '—'}</strong>
+                              <em>{formatRandCompact(salesInsights.streetLeaders.highestValueStreet?.avgRatePerSqm)} avg intensity</em>
+                            </div>
+                            <div className="sales-street-leader-item">
+                              <span>Most sales by quantity</span>
+                              <strong>{salesInsights.streetLeaders.highestVolumeStreet?.name || '—'}</strong>
+                              <em>{(salesInsights.streetLeaders.highestVolumeStreet?.salesCount || 0).toLocaleString()} sales</em>
+                            </div>
+                            <div className="sales-street-leader-item">
+                              <span>Highest turnover street</span>
+                              <strong>{salesInsights.streetLeaders.highestTurnoverStreet?.name || '—'}</strong>
+                              <em>{Number.isFinite(salesInsights.streetLeaders.highestTurnoverStreet?.turnoverIndex) ? `${salesInsights.streetLeaders.highestTurnoverStreet.turnoverIndex.toFixed(1)} sales per parcel` : 'No turnover data'}</em>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : activeCategory === 'openSpaces' ? (
                       <>
                         <div className="chart-panel parcel-selected-panel">
                           <h4>Selected Plot Details</h4>
