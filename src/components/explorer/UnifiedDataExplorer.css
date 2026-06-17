@@ -956,16 +956,18 @@
 }
 
 .sentiment-bottom-panel {
-  position: absolute;
-  left: 16px;
+  position: fixed;
+  left: 32px;
+  right: 32px;
   bottom: 16px;
-  height: min(480px, 46vh);
+  height: min(500px, 48vh);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-top: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 18px;
+  border-radius: 22px;
   background:
-    radial-gradient(circle at top left, rgba(148, 163, 184, 0.12), transparent 34%),
-    linear-gradient(160deg, rgba(148, 163, 184, 0.16), rgba(31, 41, 55, 0.32));
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.12), transparent 26%),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.07), transparent 30%),
+    linear-gradient(180deg, rgba(86, 86, 86, 0.98), rgba(67, 67, 67, 0.99));
   backdrop-filter: blur(34px) saturate(1.06);
   -webkit-backdrop-filter: blur(34px) saturate(1.06);
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.30);
@@ -988,25 +990,21 @@
 }
 
 .sentiment-bottom-panel.sentiment-bottom-panel--minimized {
-  display: none !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  pointer-events: none;
+  height: 68px;
 }
 
 .sentiment-bottom-header {
   min-height: 72px;
   flex-shrink: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.09), transparent 24%),
+    linear-gradient(180deg, rgba(86, 86, 86, 0.98), rgba(67, 67, 67, 0.99));
 }
 
 .sentiment-bottom-panel--expanded .sentiment-bottom-header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: rgba(17, 24, 39, 0.92);
-  backdrop-filter: blur(24px) saturate(1.08);
-  -webkit-backdrop-filter: blur(24px) saturate(1.08);
+  position: relative;
+  z-index: 1;
 }
 
 .sentiment-bottom-header h3 {
@@ -1207,19 +1205,20 @@
 
 .sentiment-lens-panel {
   box-sizing: border-box;
-  width: calc(100% - 1.8rem);
-  margin: 0.85rem 0.9rem 0.35rem;
-  padding: 0.72rem 0.78rem;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-top-color: rgba(255, 255, 255, 0.24);
+  width: calc(100% - 1.5rem);
+  margin: 0.75rem;
+  padding: 0.9rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.22);
   background:
-    radial-gradient(circle at top right, rgba(0, 229, 160, 0.10), transparent 36%),
-    linear-gradient(155deg, rgba(200, 210, 220, 0.14), rgba(71, 85, 105, 0.16));
-  backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
-  -webkit-backdrop-filter: blur(44px) saturate(1.05) brightness(1.12);
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.11), transparent 28%),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.055), transparent 38%),
+    linear-gradient(180deg, rgba(86, 86, 86, 0.96), rgba(67, 67, 67, 0.98));
+  backdrop-filter: blur(34px) saturate(1.04);
+  -webkit-backdrop-filter: blur(34px) saturate(1.04);
   box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.24),
+    0 16px 34px rgba(0, 0, 0, 0.20),
     0 1px 0 rgba(255, 255, 255, 0.08) inset;
   z-index: 80;
   color: rgba(248, 250, 252, 0.86);
@@ -1234,38 +1233,38 @@
 }
 
 .sentiment-lens-header span {
-  color: rgba(255, 255, 255, 0.42);
-  font-size: 0.58rem;
-  font-weight: 800;
+  color: rgba(125, 211, 252, 0.82);
+  font-size: 0.64rem;
+  font-weight: 750;
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 
 .sentiment-lens-header strong {
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.9rem;
   font-weight: 750;
 }
 
 .sentiment-lens-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.28rem;
-  padding: 0.22rem;
-  border-radius: 10px;
+  gap: 0.35rem;
+  padding: 0.24rem;
+  border-radius: 12px;
   background: rgba(15, 23, 42, 0.42);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .sentiment-lens-toggle button {
   min-width: 0;
-  padding: 0.45rem 0.35rem;
+  padding: 0.55rem 0.4rem;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: rgba(255, 255, 255, 0.54);
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.64rem;
+  font-size: 0.68rem;
   font-weight: 750;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1285,10 +1284,10 @@
 }
 
 .sentiment-lens-copy {
-  margin: 0.52rem 0 0.62rem;
-  color: rgba(255, 255, 255, 0.48);
-  font-size: 0.66rem;
-  line-height: 1.38;
+  margin: 0.68rem 0 0.8rem;
+  color: rgba(203, 213, 225, 0.68);
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
 .sentiment-map-legend {
@@ -1310,21 +1309,21 @@
 }
 
 .sentiment-map-legend-header span {
-  color: rgba(255, 255, 255, 0.42);
-  font-size: 0.58rem;
-  font-weight: 800;
+  color: rgba(125, 211, 252, 0.82);
+  font-size: 0.64rem;
+  font-weight: 750;
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 
 .sentiment-map-legend-header strong {
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.9rem;
   font-weight: 750;
 }
 
 .sentiment-map-legend-gradient {
-  height: 9px;
+  height: 10px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: linear-gradient(90deg, #991b1b 0%, #ef4444 10%, #fb923c 25%, #fde047 40%, #bef264 55%, #4ade80 70%, #22d3ee 90%, #e0f2fe 100%);
@@ -1333,25 +1332,25 @@
 .sentiment-map-legend-scale {
   display: flex;
   justify-content: space-between;
-  margin-top: 0.32rem;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.58rem;
+  margin-top: 0.4rem;
+  color: rgba(203, 213, 225, 0.62);
+  font-size: 0.62rem;
   font-weight: 700;
 }
 
 .sentiment-map-legend-items {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.34rem 0.5rem;
-  margin-top: 0.62rem;
+  gap: 0.42rem 0.6rem;
+  margin-top: 0.75rem;
 }
 
 .sentiment-map-legend-items div {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  color: rgba(255, 255, 255, 0.66);
-  font-size: 0.68rem;
+  color: rgba(226, 232, 240, 0.76);
+  font-size: 0.72rem;
 }
 
 .sentiment-map-legend-items i {
@@ -1363,10 +1362,10 @@
 }
 
 .sentiment-map-legend p {
-  margin: 0.58rem 0 0;
-  color: rgba(255, 255, 255, 0.42);
-  font-size: 0.64rem;
-  line-height: 1.35;
+  margin: 0.72rem 0 0;
+  color: rgba(203, 213, 225, 0.62);
+  font-size: 0.7rem;
+  line-height: 1.4;
 }
 
 .sales-map-legend {
@@ -1457,31 +1456,45 @@
 .sentiment-retail-summary {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.45rem;
-  margin-top: 0.62rem;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
 }
 
 .sentiment-retail-summary div {
-  padding: 0.5rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  min-height: 76px;
+  padding: 0.72rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(15, 23, 42, 0.34);
 }
 
 .sentiment-retail-summary span {
   display: block;
-  color: rgba(255, 255, 255, 0.42);
-  font-size: 0.58rem;
+  color: rgba(125, 211, 252, 0.82);
+  font-size: 0.62rem;
   font-weight: 750;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 
 .sentiment-retail-summary strong {
   display: block;
-  margin-top: 0.22rem;
+  margin-top: 0.35rem;
   color: #fff;
-  font-size: 0.88rem;
+  font-size: 1.05rem;
+}
+
+@media (max-width: 980px) {
+  .sentiment-bottom-panel {
+    left: 16px;
+    right: 16px;
+    height: min(520px, 54vh);
+  }
+
+  .sentiment-lens-panel {
+    width: calc(100% - 1.2rem);
+    margin: 0.6rem;
+  }
 }
 
 .service-requests-sidebar-panel {

@@ -30,6 +30,11 @@ const formatScore = (value) => {
 
 const compact = (value) => Number(value || 0).toLocaleString()
 
+const truncateStreetName = (value, limit = 18) => {
+  const text = String(value || '')
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
+}
+
 const sentimentColor = (value) => {
   const score = Number(value)
   if (!Number.isFinite(score)) return '#64748b'
@@ -93,7 +98,8 @@ const SentimentAnalytics = ({
   error,
   variant = 'sidebar',
   analyticsMinimized = false,
-  onOpenAnalytics
+  onOpenAnalytics,
+  sentimentPerspective = 'public'
 }) => {
   const [activeView, setActiveView] = useState('overview')
   const [primaryStreet, setPrimaryStreet] = useState('')
@@ -109,8 +115,6 @@ const SentimentAnalytics = ({
   const categories = analytics?.categories || []
   const comments = analytics?.impactComments || []
   const words = analytics?.words || []
-  const sources = analytics?.sources || []
-  const engines = analytics?.engines || []
   const daily = analytics?.daily || []
   const distribution = analytics?.sentimentDistribution || []
   const streetWeeks = analytics?.streetWeeks || []
@@ -160,21 +164,108 @@ const SentimentAnalytics = ({
   const attentionStreets = useMemo(() => [...streets].sort((a, b) => Number(b.attention_score || 0) - Number(a.attention_score || 0)), [streets])
   const bestStreets = useMemo(() => [...streets].sort((a, b) => fairScore(b) - fairScore(a)), [streets])
   const worstStreets = useMemo(() => [...streets].sort((a, b) => fairScore(a) - fairScore(b)), [streets])
+  const sampledStreets = useMemo(() => (
+    streets.filter((street) => Number(street.comment_count || 0) >= 5)
+  ), [streets])
+  const attentionPriorityStreets = useMemo(() => (
+    [...sampledStreets]
+      .filter((street) => (
+        Number(street.sentiment_percentile || 0) <= 55
+        || Number(street.avg_sentiment || 0) < 0
+        || Number(street.negative_count || 0) >= 5
+      ))
+      .sort((a, b) => (
+        Number(b.attention_score || 0) - Number(a.attention_score || 0)
+        || Number(a.sentiment_percentile || 0) - Number(b.sentiment_percentile || 0)
+        || Number(b.negative_count || 0) - Number(a.negative_count || 0)
+      ))
+  ), [sampledStreets])
+  const healthyStreets = useMemo(() => (
+    [...sampledStreets]
+      .filter((street) => Number(street.sentiment_percentile || 0) >= 55 && Number(street.avg_sentiment || 0) >= 0)
+      .sort((a, b) => (
+        Number(b.sentiment_percentile || 0) - Number(a.sentiment_percentile || 0)
+        || Number(b.comment_count || 0) - Number(a.comment_count || 0)
+      ))
+  ), [sampledStreets])
+  const highestPriorityStreet = attentionPriorityStreets[0] || null
+  const strongestReliableStreet = healthyStreets[0] || null
+  const streetStandingData = useMemo(() => (
+    [...sampledStreets]
+      .map((street) => ({
+        ...street,
+        comment_count: Number(street.comment_count || 0),
+        sentiment_percentile: Number(street.sentiment_percentile || 0),
+        negative_count: Number(street.negative_count || 0),
+        negative_share: Number(street.comment_count || 0) > 0
+          ? (Number(street.negative_count || 0) / Number(street.comment_count || 0)) * 100
+          : 0
+      }))
+      .sort((a, b) => a.sentiment_percentile - b.sentiment_percentile || b.comment_count - a.comment_count)
+  ), [sampledStreets])
+  const streetBurdenData = useMemo(() => (
+    [...sampledStreets]
+      .map((street) => ({
+        ...street,
+        comment_count: Number(street.comment_count || 0),
+        sentiment_percentile: Number(street.sentiment_percentile || 0),
+        negative_count: Number(street.negative_count || 0),
+        negative_share: Number(street.comment_count || 0) > 0
+          ? (Number(street.negative_count || 0) / Number(street.comment_count || 0)) * 100
+          : 0
+      }))
+      .filter((street) => street.negative_count > 0)
+      .sort((a, b) => b.negative_share - a.negative_share || b.negative_count - a.negative_count || b.comment_count - a.comment_count)
+      .slice(0, 10)
+  ), [sampledStreets])
   const selectedDetailStreet = detailStreet || primaryStreet || worstStreet?.street_name || ''
   const detailMonthly = useMemo(() => streetMonthly.filter((row) => row.street_name === selectedDetailStreet), [selectedDetailStreet, streetMonthly])
-  const detailSources = useMemo(() => streetSources.filter((row) => row.street_name === selectedDetailStreet).slice(0, 10), [selectedDetailStreet, streetSources])
   const detailThemes = useMemo(() => streetThemes.filter((row) => row.street_name === selectedDetailStreet).slice(0, 12), [selectedDetailStreet, streetThemes])
-  const detailBusinesses = useMemo(() => streetBusinesses.filter((row) => row.street_name === selectedDetailStreet), [selectedDetailStreet, streetBusinesses])
+  const detailBusinesses = useMemo(() => (
+    streetBusinesses
+      .filter((row) => row.street_name === selectedDetailStreet)
+      .map((business) => ({
+        ...business,
+        comment_count: Number(business.comment_count || 0),
+        negative_count: Number(business.negative_count || 0),
+        positive_count: Number(business.positive_count || 0),
+        avg_sentiment: Number(business.avg_sentiment || 0),
+        avg_stars: business.avg_stars === null || business.avg_stars === undefined ? null : Number(business.avg_stars),
+        negative_share: Number(business.comment_count || 0) > 0
+          ? Number(business.negative_count || 0) / Number(business.comment_count || 0)
+          : 0,
+        positive_share: Number(business.comment_count || 0) > 0
+          ? Number(business.positive_count || 0) / Number(business.comment_count || 0)
+          : 0
+      }))
+      .filter((business) => business.comment_count >= 3)
+  ), [selectedDetailStreet, streetBusinesses])
+  const showBusinessSentiment = sentimentPerspective === 'retail'
   const complaintBusinesses = useMemo(() => (
     [...detailBusinesses]
-      .filter((business) => Number(business.negative_count || 0) > 0)
-      .sort((a, b) => Number(b.negative_count || 0) - Number(a.negative_count || 0) || Number(a.avg_sentiment || 0) - Number(b.avg_sentiment || 0))
+      .filter((business) => (
+        business.negative_count >= 2
+        || (business.negative_count >= 1 && business.negative_share >= 0.5)
+      ))
+      .sort((a, b) => (
+        b.negative_share - a.negative_share
+        || b.negative_count - a.negative_count
+        || a.avg_sentiment - b.avg_sentiment
+      ))
       .slice(0, 8)
   ), [detailBusinesses])
   const positiveBusinesses = useMemo(() => (
     [...detailBusinesses]
-      .filter((business) => Number(business.positive_count || 0) > 0)
-      .sort((a, b) => Number(b.positive_count || 0) - Number(a.positive_count || 0) || Number(b.avg_sentiment || 0) - Number(a.avg_sentiment || 0))
+      .filter((business) => (
+        business.positive_count >= 2
+        && business.positive_share >= 0.5
+        && business.avg_sentiment >= 0.2
+      ))
+      .sort((a, b) => (
+        b.positive_share - a.positive_share
+        || b.positive_count - a.positive_count
+        || b.avg_sentiment - a.avg_sentiment
+      ))
       .slice(0, 8)
   ), [detailBusinesses])
   const detailComments = useMemo(() => streetComments.filter((row) => row.street_name === selectedDetailStreet), [selectedDetailStreet, streetComments])
@@ -225,22 +316,6 @@ const SentimentAnalytics = ({
     setDetailCommentPage((page) => Math.min(page, detailCommentPageCount))
   }, [detailCommentPageCount])
   const negativeComments = Number(distribution.find((item) => item.label === 'Negative')?.comment_count || 0)
-  const positiveComments = Number(distribution.find((item) => item.label === 'Positive')?.comment_count || 0)
-  const neutralComments = Number(distribution.find((item) => item.label === 'Neutral')?.comment_count || 0)
-  const geminiRows = engines.find((item) => String(item.engine).toLowerCase().includes('gemini'))?.comment_count || 0
-  const heatmapWeeks = useMemo(() => (
-    [...new Set(streetWeeks.map((row) => row.week))].sort((a, b) => Number(a) - Number(b))
-  ), [streetWeeks])
-  const heatmapRows = useMemo(() => {
-    const topStreetNames = new Set(streets.slice(0, 18).map((street) => street.street_name))
-    const byStreet = new Map()
-    streetWeeks.forEach((row) => {
-      if (!topStreetNames.has(row.street_name)) return
-      if (!byStreet.has(row.street_name)) byStreet.set(row.street_name, {})
-      byStreet.get(row.street_name)[row.week] = row
-    })
-    return [...byStreet.entries()].map(([streetName, weeks]) => ({ streetName, weeks }))
-  }, [streetWeeks, streets])
   const isControls = variant === 'controls'
 
   if (isControls) {
@@ -313,8 +388,7 @@ const SentimentAnalytics = ({
                 ['streets', 'Problem Streets'],
                 ['alerts', 'Drops'],
                 ['detail', 'Street Detail'],
-                ['evidence', 'Evidence'],
-                ['data', 'Sources']
+                ['evidence', 'Evidence']
               ].map(([id, label]) => (
                 <button
                   key={id}
@@ -340,7 +414,7 @@ const SentimentAnalytics = ({
                 </button>
                 <button className="sentiment-workflow-card" onClick={() => setActiveView('detail')}>
                   <strong>Open one street</strong>
-                  <span>Trend, themes, sources and comments for a selected street.</span>
+                  <span>Trend, themes and comments for a selected street.</span>
                 </button>
               </div>
 
@@ -484,9 +558,50 @@ const SentimentAnalytics = ({
                 {bestStreet && <span>Best percentile: <strong style={{ color: percentileColor(bestStreet.sentiment_percentile) }}>{bestStreet.street_name}</strong> P{Number(bestStreet.sentiment_percentile || 0).toFixed(0)}</span>}
                 {mostActiveStreet && <span>Most active: <strong>{mostActiveStreet.street_name}</strong> {compact(mostActiveStreet.comment_count)} posts</span>}
               </div>
-              <div className="subsection-header"><h4>Problem Streets</h4></div>
+              <p className="sentiment-street-explainer">
+                Low percentile means weaker overall sentiment. The attention list below only includes streets with weaker sentiment or meaningful negative volume, so strong streets no longer appear there just because they are busy.
+              </p>
+              <div className="sentiment-overview-grid sentiment-overview-grid--compact">
+                <div className="sentiment-mini-chart sentiment-list-panel">
+                  <h4>Where To Focus First</h4>
+                  {highestPriorityStreet ? (
+                    <>
+                      <div className="sentiment-priority-callout">
+                        <strong>{highestPriorityStreet.street_name}</strong>
+                        <small>
+                          P{Number(highestPriorityStreet.sentiment_percentile || 0).toFixed(0)} · {compact(highestPriorityStreet.negative_count)} negative from {compact(highestPriorityStreet.comment_count)} comments
+                        </small>
+                      </div>
+                      <p className="sentiment-muted">
+                        Highest priority blends weak sentiment with enough evidence volume to act on confidently.
+                      </p>
+                    </>
+                  ) : (
+                    <div className="sentiment-empty">No clear weak streets with enough comments yet.</div>
+                  )}
+                </div>
+                <div className="sentiment-mini-chart sentiment-list-panel">
+                  <h4>Strongest Reliable Street</h4>
+                  {strongestReliableStreet ? (
+                    <>
+                      <div className="sentiment-priority-callout sentiment-priority-callout--positive">
+                        <strong>{strongestReliableStreet.street_name}</strong>
+                        <small>
+                          P{Number(strongestReliableStreet.sentiment_percentile || 0).toFixed(0)} · {compact(strongestReliableStreet.comment_count)} comments
+                        </small>
+                      </div>
+                      <p className="sentiment-muted">
+                        This is the strongest street among places with enough comments to trust the ranking.
+                      </p>
+                    </>
+                  ) : (
+                    <div className="sentiment-empty">No strong streets have enough comments yet.</div>
+                  )}
+                </div>
+              </div>
+              <div className="subsection-header"><h4>Needs Attention First</h4></div>
               <div className="sentiment-street-table">
-                {attentionStreets.slice(0, 24).map((street) => (
+                {attentionPriorityStreets.slice(0, 12).map((street) => (
                   <button
                     key={street.street_name}
                     className="sentiment-street-row sentiment-street-row--button"
@@ -500,13 +615,14 @@ const SentimentAnalytics = ({
                       <i style={{ width: `${Math.min(100, Number(street.attention_score || 0))}%`, background: percentileColor(street.sentiment_percentile) }} />
                     </div>
                     <strong style={{ color: percentileColor(street.sentiment_percentile) }}>P{Number(street.sentiment_percentile || 0).toFixed(0)}</strong>
-                    <small>{compact(street.negative_count)}/{compact(street.comment_count)}</small>
+                    <small>{compact(street.negative_count)} neg / {compact(street.comment_count)}</small>
                   </button>
                 ))}
               </div>
-              <div className="subsection-header"><h4>Best Performing Streets</h4></div>
+              {!attentionPriorityStreets.length && <div className="sentiment-empty">No weak streets with enough evidence are available yet.</div>}
+              <div className="subsection-header"><h4>Performing Well</h4></div>
               <div className="sentiment-street-table">
-                {bestStreets.slice(0, 12).map((street) => (
+                {healthyStreets.slice(0, 12).map((street) => (
                   <button
                     key={`best-${street.street_name}`}
                     className="sentiment-street-row sentiment-street-row--button"
@@ -520,33 +636,80 @@ const SentimentAnalytics = ({
                       <i style={{ width: `${Math.min(100, Number(street.sentiment_percentile || 0))}%`, background: percentileColor(street.sentiment_percentile) }} />
                     </div>
                     <strong style={{ color: percentileColor(street.sentiment_percentile) }}>P{Number(street.sentiment_percentile || 0).toFixed(0)}</strong>
-                    <small>{compact(street.comment_count)}</small>
+                    <small>{compact(street.comment_count)} comments</small>
                   </button>
                 ))}
               </div>
-              {heatmapRows.length > 0 && (
+              {!healthyStreets.length && <div className="sentiment-empty">No high-performing streets with enough evidence are available yet.</div>}
+              {streetStandingData.length > 0 && (
                 <>
-                  <div className="subsection-header"><h4>Street x Week Heatmap</h4></div>
-                  <div className="sentiment-week-heatmap">
-                    <div className="sentiment-week-head">
-                      <span>Street</span>
-                      {heatmapWeeks.map((week) => <strong key={week}>W{week}</strong>)}
+                  <div className="subsection-header"><h4>Street Standing</h4></div>
+                  <div className="sentiment-overview-grid sentiment-overview-grid--compact">
+                    <div className="sentiment-mini-chart">
+                      <h4>Reliable Ranking By Percentile</h4>
+                      <ResponsiveContainer width="100%" height={340}>
+                        <BarChart data={streetStandingData} layout="vertical" margin={{ top: 8, right: 18, bottom: 8, left: 8 }}>
+                          <CartesianGrid stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                          <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" fontSize={11} />
+                          <YAxis
+                            type="category"
+                            dataKey="street_name"
+                            width={120}
+                            stroke="#94a3b8"
+                            fontSize={10}
+                            tickFormatter={(value) => truncateStreetName(value)}
+                          />
+                          <Tooltip
+                            contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8 }}
+                            labelFormatter={(label) => label}
+                            formatter={(value, name, item) => {
+                              if (name === 'sentiment_percentile') return [`P${Number(value).toFixed(0)}`, 'Percentile']
+                              if (name === 'comment_count') return [compact(value), 'Comments']
+                              return [value, name]
+                            }}
+                          />
+                          <Bar dataKey="sentiment_percentile" name="sentiment_percentile" radius={[0, 6, 6, 0]}>
+                            {streetStandingData.map((street) => (
+                              <Cell key={`standing-${street.street_name}`} fill={percentileColor(street.sentiment_percentile)} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <p className="sentiment-matrix-caption">
+                        This is the cleanest overall ranking. Lower bars are weaker streets; higher bars are stronger streets, using only streets with enough comments to trust the comparison.
+                      </p>
                     </div>
-                    {heatmapRows.map((row) => (
-                      <div key={row.streetName} className="sentiment-week-row">
-                        <span>{row.streetName}</span>
-                        {heatmapWeeks.map((week) => {
-                          const cell = row.weeks[week]
-                          return (
-                            <i
-                              key={week}
-                              title={cell ? `${row.streetName} W${week}: ${formatScore(cell.avg_sentiment)} (${cell.comment_count} comments)` : 'No posts'}
-                              style={{ background: cell ? sentimentColor(cell.avg_sentiment) : 'rgba(255,255,255,0.05)', opacity: cell ? 0.9 : 0.35 }}
-                            />
-                          )
-                        })}
-                      </div>
-                    ))}
+                    <div className="sentiment-mini-chart">
+                      <h4>Highest Complaint Burden</h4>
+                      <ResponsiveContainer width="100%" height={340}>
+                        <BarChart data={streetBurdenData} layout="vertical" margin={{ top: 8, right: 18, bottom: 8, left: 8 }}>
+                          <CartesianGrid stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                          <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" fontSize={11} tickFormatter={(value) => `${Number(value).toFixed(0)}%`} />
+                          <YAxis
+                            type="category"
+                            dataKey="street_name"
+                            width={120}
+                            stroke="#94a3b8"
+                            fontSize={10}
+                            tickFormatter={(value) => truncateStreetName(value)}
+                          />
+                          <Tooltip
+                            contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8 }}
+                            labelFormatter={(label) => label}
+                            formatter={(value, name, item) => {
+                              if (name === 'negative_share') return [`${Number(value).toFixed(1)}%`, 'Negative share']
+                              if (name === 'negative_count') return [compact(value), 'Negative comments']
+                              if (name === 'comment_count') return [compact(value), 'Comments']
+                              return [value, name]
+                            }}
+                          />
+                          <Bar dataKey="negative_share" name="negative_share" fill="rgba(239,68,68,0.78)" radius={[0, 6, 6, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <p className="sentiment-matrix-caption">
+                        This shows where the complaint share is heaviest. It helps separate streets that are broadly weak from streets where the negative tone is especially concentrated.
+                      </p>
+                    </div>
                   </div>
                 </>
               )}
@@ -607,7 +770,7 @@ const SentimentAnalytics = ({
                 {selectedDetailStreet && (
                   <div className="sentiment-detail-title">
                     <strong>{selectedDetailStreet}</strong>
-                    <small>Monthly trend, complaint themes, sources and comments</small>
+                    <small>Monthly trend, complaint themes and comments</small>
                   </div>
                 )}
               </div>
@@ -641,48 +804,44 @@ const SentimentAnalytics = ({
                       ))}
                       {!detailThemes.length && <div className="sentiment-empty">No themes found for this street.</div>}
                     </div>
-                    <div className="sentiment-mini-chart sentiment-list-panel">
-                      <h4>Source Mix</h4>
-                      {detailSources.map((item) => (
-                        <div key={item.source} className={`sentiment-breakdown-row ${Number(item.source_priority) === 1 ? 'priority' : ''}`}>
-                          <span>{String(item.source).replace(/_/g, ' ')}</span>
-                          <strong>{compact(item.comment_count)}</strong>
-                          <small style={{ color: sentimentColor(item.avg_sentiment) }}>{formatScore(item.avg_sentiment)}</small>
-                        </div>
-                      ))}
-                      {!detailSources.length && <div className="sentiment-empty">No source breakdown found for this street.</div>}
-                    </div>
                   </div>
 
-                  <div className="subsection-header"><h4>Business Sentiment</h4></div>
-                  <div className="sentiment-business-grid">
-                    <div className="sentiment-business-panel">
-                      <h4>Most Complaints</h4>
-                      <div className="sentiment-business-list">
-                        {complaintBusinesses.map((business) => (
-                          <BusinessSentimentRow
-                            key={`complaint-${business.street_name}-${business.place_name}`}
-                            business={business}
-                            mode="negative"
-                          />
-                        ))}
+                  {showBusinessSentiment && (
+                    <>
+                      <div className="subsection-header"><h4>Business Sentiment</h4></div>
+                      <p className="sentiment-street-explainer">
+                        Business sentiment is only shown for the retail lens and only includes businesses with at least 3 matched Google Maps reviews on this street.
+                      </p>
+                      <div className="sentiment-business-grid">
+                        <div className="sentiment-business-panel">
+                          <h4>Most Complaints</h4>
+                          <div className="sentiment-business-list">
+                            {complaintBusinesses.map((business) => (
+                              <BusinessSentimentRow
+                                key={`complaint-${business.street_name}-${business.place_name}`}
+                                business={business}
+                                mode="negative"
+                              />
+                            ))}
+                          </div>
+                          {!complaintBusinesses.length && <div className="sentiment-empty">No complaint-heavy businesses with enough matched reviews were found for this street.</div>}
+                        </div>
+                        <div className="sentiment-business-panel">
+                          <h4>Doing Well</h4>
+                          <div className="sentiment-business-list">
+                            {positiveBusinesses.map((business) => (
+                              <BusinessSentimentRow
+                                key={`positive-${business.street_name}-${business.place_name}`}
+                                business={business}
+                                mode="positive"
+                              />
+                            ))}
+                          </div>
+                          {!positiveBusinesses.length && <div className="sentiment-empty">No strong retail businesses with enough matched reviews were found for this street.</div>}
+                        </div>
                       </div>
-                      {!complaintBusinesses.length && <div className="sentiment-empty">No complaint-heavy businesses found for this street.</div>}
-                    </div>
-                    <div className="sentiment-business-panel">
-                      <h4>Doing Well</h4>
-                      <div className="sentiment-business-list">
-                        {positiveBusinesses.map((business) => (
-                          <BusinessSentimentRow
-                            key={`positive-${business.street_name}-${business.place_name}`}
-                            business={business}
-                            mode="positive"
-                          />
-                        ))}
-                      </div>
-                      {!positiveBusinesses.length && <div className="sentiment-empty">No positive business leaders found for this street.</div>}
-                    </div>
-                  </div>
+                    </>
+                  )}
 
                   <div className="subsection-header"><h4>Drill Into Comments</h4></div>
                   <div className="sentiment-comment-filters">
@@ -776,18 +935,6 @@ const SentimentAnalytics = ({
             <div className="analytics-section">
               <div className="sentiment-overview-grid">
                 <div className="sentiment-mini-chart">
-                  <h4>Source Mix</h4>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={sources.slice(0, 8)} layout="vertical" margin={{ left: 12, right: 18 }}>
-                      <CartesianGrid stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                      <XAxis type="number" stroke="#94a3b8" fontSize={11} />
-                      <YAxis type="category" dataKey="source" width={116} stroke="#94a3b8" fontSize={10} tickFormatter={(value) => String(value).replace(/_/g, ' ').slice(0, 20)} />
-                      <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8 }} />
-                      <Bar dataKey="comment_count" fill="#38bdf8" radius={[0, 6, 6, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="sentiment-mini-chart">
                   <h4>Daily Post Volume</h4>
                   <ResponsiveContainer width="100%" height={240}>
                     <ComposedChart data={daily}>
@@ -848,40 +995,6 @@ const SentimentAnalytics = ({
             </div>
           )}
 
-          {activeView === 'data' && (
-            <div className="analytics-section">
-              <div className="sentiment-overview-grid">
-                <div className="sentiment-mini-chart sentiment-list-panel">
-                  <h4>Source Breakdown</h4>
-                  {sources.map((item) => (
-                    <div key={item.source} className="sentiment-breakdown-row">
-                      <span>{String(item.source).replace(/_/g, ' ')}</span>
-                      <strong>{compact(item.comment_count)}</strong>
-                      <small style={{ color: sentimentColor(item.avg_sentiment) }}>{formatScore(item.avg_sentiment)}</small>
-                    </div>
-                  ))}
-                </div>
-                <div className="sentiment-mini-chart sentiment-list-panel">
-                  <h4>Scoring Engine</h4>
-                  {engines.map((item) => (
-                    <div key={item.engine} className="sentiment-breakdown-row">
-                      <span>{String(item.engine).replace(/_/g, ' ')}</span>
-                      <strong>{compact(item.comment_count)}</strong>
-                      <small style={{ color: sentimentColor(item.avg_sentiment) }}>{formatScore(item.avg_sentiment)}</small>
-                    </div>
-                  ))}
-                </div>
-                <div className="sentiment-mini-chart sentiment-list-panel sentiment-extreme-panel">
-                  <h4>Most Positive Post</h4>
-                  {(extremePositive[0] || strongestPositive[0]) ? <CommentCard comment={extremePositive[0] || strongestPositive[0]} /> : <div className="sentiment-empty">No positive post found.</div>}
-                </div>
-                <div className="sentiment-mini-chart sentiment-list-panel sentiment-extreme-panel">
-                  <h4>Most Negative Post</h4>
-                  {(extremeNegative[0] || strongestNegative[0]) ? <CommentCard comment={extremeNegative[0] || strongestNegative[0]} /> : <div className="sentiment-empty">No negative post found.</div>}
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>

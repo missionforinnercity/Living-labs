@@ -2257,6 +2257,17 @@ const UnifiedDataExplorer = () => {
     } else if (category.dashboard === 'climate') {
     } else if (category.dashboard === 'hospitality') {
       setHospitalityMapMode(categoryId === 'airbnbZones' ? 'zones' : 'points')
+    } else if (category.dashboard === 'sentiment') {
+      setSentimentPanelExpanded(false)
+      setSelectedServiceRequestSegment(null)
+
+      if (categoryId === 'streetSentiment') {
+        setSentimentPanelOpen(true)
+        setSentimentPanelMinimized(true)
+      } else if (categoryId === 'serviceRequests') {
+        setSentimentPanelOpen(false)
+        setSentimentPanelMinimized(true)
+      }
     }
     
     // Switch to the appropriate dashboard
@@ -3088,6 +3099,7 @@ const UnifiedDataExplorer = () => {
               analytics={sentimentAnalytics}
               segmentsData={sentimentSegments}
               selectedMonth={selectedSentimentMonth}
+              sentimentPerspective={sentimentPerspective}
               onMonthChange={(month) => {
                 setSelectedSentimentMonth(month)
                 selectCategory('streetSentiment')
@@ -3287,9 +3299,9 @@ const UnifiedDataExplorer = () => {
             />
           </Suspense>
 
-          {dashboardMode === 'sentiment' && sentimentPanelOpen && !sentimentPanelMinimized && (
+          {dashboardMode === 'sentiment' && sentimentPanelOpen && (
             <div
-              className={`bottom-panel sentiment-bottom-panel ${sentimentPanelExpanded ? 'sentiment-bottom-panel--expanded' : ''}`}
+              className={`bottom-panel sentiment-bottom-panel ${sentimentPanelExpanded ? 'sentiment-bottom-panel--expanded' : ''} ${sentimentPanelMinimized ? 'sentiment-bottom-panel--minimized' : ''}`}
               style={sentimentPanelExpanded ? undefined : { right: `${effectiveSidebarWidth + 32}px` }}
             >
               <div className="panel-header sentiment-bottom-header">
@@ -3312,26 +3324,42 @@ const UnifiedDataExplorer = () => {
                           : 'Loading comments')}
                   </div>
                   <button
-                    onClick={() => setSentimentPanelExpanded((value) => !value)}
+                    onClick={() => {
+                      if (sentimentPanelMinimized) {
+                        setSentimentPanelMinimized(false)
+                        setSentimentPanelExpanded(false)
+                        return
+                      }
+                      setSentimentPanelExpanded((value) => !value)
+                    }}
                     className="close-btn sentiment-expand-btn"
-                    title={sentimentPanelExpanded ? 'Return to map panel' : 'Expand sentiment analytics'}
+                    title={
+                      sentimentPanelMinimized
+                        ? 'Restore sentiment analytics'
+                        : sentimentPanelExpanded
+                          ? 'Return to map panel'
+                          : 'Expand sentiment analytics'
+                    }
                   >
-                    {sentimentPanelExpanded ? '↙' : '↗'}
+                    {sentimentPanelMinimized ? '▢' : sentimentPanelExpanded ? '↙' : '↗'}
                   </button>
                   <button
                     onClick={() => {
-                      setSentimentPanelExpanded(false)
-                      setSentimentPanelOpen(false)
-                      setSentimentPanelMinimized(true)
+                      if (sentimentPanelMinimized) {
+                        setSentimentPanelOpen(false)
+                      } else {
+                        setSentimentPanelExpanded(false)
+                        setSentimentPanelMinimized(true)
+                      }
                     }}
                     className="close-btn"
-                    title="Hide sentiment analytics"
+                    title={sentimentPanelMinimized ? 'Hide sentiment analytics' : 'Minimize sentiment analytics'}
                   >
-                    ✕
+                    {sentimentPanelMinimized ? '✕' : '–'}
                   </button>
                 </div>
               </div>
-              {activeCategory === 'serviceRequests' ? (
+              {!sentimentPanelMinimized && activeCategory === 'serviceRequests' ? (
                 <ServiceRequestsAnalytics
                   analytics={serviceRequestAnalytics}
                   requestsData={serviceRequests}
@@ -3339,11 +3367,12 @@ const UnifiedDataExplorer = () => {
                   error={serviceRequestsError}
                   variant="bottom"
                 />
-              ) : (
+              ) : !sentimentPanelMinimized ? (
                 <SentimentAnalytics
                   analytics={sentimentAnalytics}
                   segmentsData={sentimentSegments}
                   selectedMonth={selectedSentimentMonth}
+                  sentimentPerspective={sentimentPerspective}
                   onMonthChange={(month) => {
                     setSelectedSentimentMonth(month)
                     selectCategory('streetSentiment')
@@ -3352,7 +3381,7 @@ const UnifiedDataExplorer = () => {
                   error={sentimentError}
                   variant="bottom"
                 />
-              )}
+              ) : null}
             </div>
           )}
 
