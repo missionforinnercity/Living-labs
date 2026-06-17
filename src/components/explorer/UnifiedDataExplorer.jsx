@@ -109,6 +109,20 @@ const formatPercent = (value) => {
   return Number.isFinite(numeric) ? `${numeric.toFixed(0)}%` : '—'
 }
 
+const formatCompactCount = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '—'
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: numeric >= 1000 ? 1 : 0
+  }).format(numeric)
+}
+
+const formatSpeedMps = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${numeric.toFixed(1)} m/s` : '—'
+}
+
 const average = (values) => {
   const finite = values.filter(Number.isFinite)
   return finite.length ? finite.reduce((sum, value) => sum + value, 0) / finite.length : null
@@ -842,8 +856,7 @@ const UnifiedDataExplorer = () => {
   const [transitView, setTransitView] = useState('combined') // 'combined', 'bus', 'train'
   const [selectedWalkabilityMonth, setSelectedWalkabilityMonth] = useState(null)
   const [selectedRouteSegment, setSelectedRouteSegment] = useState(null)
-  const [compareRouteSegment, setCompareRouteSegment] = useState(null)
-  const [routePanelMinimized, setRoutePanelMinimized] = useState(false)
+  const [routePanelMinimized, setRoutePanelMinimized] = useState(true)
   
   // Lighting dashboard state
   const [lightIntensityRaster, setLightIntensityRaster] = useState(null)
@@ -964,7 +977,6 @@ const UnifiedDataExplorer = () => {
     trainStationData,
     roadSteepnessData,
     selectedRouteHistory,
-    compareRouteHistory,
     effectiveSelectedMonth
   } = useExplorerWalkabilityData({
     dashboardMode,
@@ -973,7 +985,7 @@ const UnifiedDataExplorer = () => {
     enableOpenSpaceScoring: dashboardMode === 'landParcels' && activeCategory === 'openSpaces' && openSpaceScoringEnabled,
     selectedMonth: selectedWalkabilityMonth,
     selectedRouteSegment,
-    compareRouteSegment
+    compareRouteSegment: null
   })
 
   const {
@@ -2501,64 +2513,142 @@ const UnifiedDataExplorer = () => {
     window.addEventListener('mouseup', onUp)
   }, [eventsPanelHeight])
 
-  const routeCompareData = useMemo(() => {
-    if (!selectedRouteHistory) return null
+  const mobilityOverview = useMemo(() => {
+    const pedestrianFeatures = pedestrianData?.features || []
+    const cyclingFeatures = cyclingData?.features || []
+    if (!pedestrianFeatures.length && !cyclingFeatures.length) return null
 
-    const monthLookup = new Map(
-      (walkabilityMonths.length ? walkabilityMonths : selectedRouteHistory.monthly || []).map(item => [
-        item.key || item.month,
-        {
-          month: item.key || item.month,
-          monthLabel: item.label || item.monthLabel,
-          aTrips: 0,
-          bTrips: 0,
-          aPeople: 0,
-          bPeople: 0
+    const sumField = (features, key) => features.reduce((sum, feature) => sum + (Number(feature.properties?.[key]) || 0), 0)
+    const weightedAverageField = (features, valueKey, weightKey = 'total_trip_count') => {
+      const weighted = features.reduce((sum, feature) => {
+        const value = Number(feature.properties?.[valueKey])
+        const weight = Number(feature.properties?.[weightKey]) || 0
+        if (!Number.isFinite(value) || weight <= 0) return sum
+        return sum + (value * weight)
+      }, 0)
+      const totalWeight = sumField(features, weightKey)
+      return totalWeight > 0 ? weighted / totalWeight : 0
+    }
+
+    const walkingTrips = sumField(pedestrianFeatures, 'total_trip_count')
+    const cyclingTrips = sumField(cyclingFeatures, 'total_trip_count')
+    const totalTrips = walkingTrips + cyclingTrips
+    const walkingPeople = sumField(pedestrianFeatures, 'total_people_count')
+    const cyclingPeople = sumField(cyclingFeatures, 'total_people_count')
+    const totalPeople = walkingPeople + cyclingPeople
+    const activeSegments = new Set([
+      ...pedestrianFeatures.map((feature) => feature.properties?.edge_uid),
+      ...cyclingFeatures.map((feature) => feature.properties?.edge_uid)
+    ].filter((value) => value != null)).size
+    const totalCommute = sumField(pedestrianFeatures, 'commute') + sumField(cyclingFeatures, 'commute')
+    const totalLeisure = sumField(pedestrianFeatures, 'recreation') + sumField(cyclingFeatures, 'recreation')
+    const monthlyMap = new Map()
+    const daypartMap = new Map()
+
+    ;(stravaAggregated?.features || []).forEach((feature) => {
+      Object.entries(feature.properties?.monthly_stats || {}).forEach(([monthKey, monthValue]) => {
+        const monthBucket = monthlyMap.get(monthKey) || {
+          month: monthKey,
+          monthLabel: walkabilityMonths.find((item) => item.key === monthKey)?.label || monthKey,
+          walkingTrips: 0,
+          cyclingTrips: 0,
+          totalTrips: 0,
+          totalPeople: 0
         }
-      ])
-    )
-    ;(selectedRouteHistory.monthly || []).forEach(item => {
-      const existing = monthLookup.get(item.month) || {
-        month: item.month,
-        monthLabel: item.monthLabel,
-        aTrips: 0,
-        bTrips: 0,
-        aPeople: 0,
-        bPeople: 0
-      }
-      existing.aTrips = item.totalTrips
-      existing.aPeople = item.totalPeople
-      monthLookup.set(item.month, existing)
+
+        Object.entries(monthValue?.dayparts || {}).forEach(([daypartKey, daypartValue]) => {
+          const pedTrips = Number(daypartValue?.ped?.total_trip_count) || 0
+          const cycleTrips = Number(daypartValue?.ride?.total_trip_count) || 0
+          const pedPeople = Number(daypartValue?.ped?.total_people_count) || 0
+          const cyclePeople = Number(daypartValue?.ride?.total_people_count) || 0
+
+          monthBucket.walkingTrips += pedTrips
+          monthBucket.cyclingTrips += cycleTrips
+          monthBucket.totalTrips += pedTrips + cycleTrips
+          monthBucket.totalPeople += pedPeople + cyclePeople
+
+          const normalizedDaypart = String(daypartKey || '').toLowerCase().includes('morning')
+            ? 'Morning'
+            : String(daypartKey || '').toLowerCase().includes('afternoon') || String(daypartKey || '').toLowerCase().includes('midday')
+              ? 'Afternoon'
+              : String(daypartKey || '').toLowerCase().includes('evening') || String(daypartKey || '').toLowerCase().includes('night')
+                ? 'Evening'
+                : 'Other'
+          const daypartBucket = daypartMap.get(normalizedDaypart) || {
+            label: normalizedDaypart,
+            walkingTrips: 0,
+            cyclingTrips: 0,
+            totalTrips: 0
+          }
+          daypartBucket.walkingTrips += pedTrips
+          daypartBucket.cyclingTrips += cycleTrips
+          daypartBucket.totalTrips += pedTrips + cycleTrips
+          daypartMap.set(normalizedDaypart, daypartBucket)
+        })
+
+        monthlyMap.set(monthKey, monthBucket)
+      })
     })
-    ;(compareRouteHistory?.monthly || []).forEach(item => {
-      const existing = monthLookup.get(item.month) || {
-        month: item.month,
-        monthLabel: item.monthLabel,
-        aTrips: 0,
-        bTrips: 0,
-        aPeople: 0,
-        bPeople: 0
-      }
-      existing.bTrips = item.totalTrips
-      existing.bPeople = item.totalPeople
-      monthLookup.set(item.month, existing)
-    })
+
+    const monthly = [...monthlyMap.values()].sort((a, b) => a.month.localeCompare(b.month))
+    const strongestMonth = monthly.reduce((best, item) => (!best || item.totalTrips > best.totalTrips ? item : best), null)
+    const daypartTotals = ['Morning', 'Afternoon', 'Evening', 'Other']
+      .map((label) => daypartMap.get(label))
+      .filter(Boolean)
+    const strongestDaypart = daypartTotals.reduce((best, item) => (!best || item.totalTrips > best.totalTrips ? item : best), null)
+    const topWalking = [...pedestrianFeatures]
+      .sort((a, b) => (Number(b.properties?.total_trip_count) || 0) - (Number(a.properties?.total_trip_count) || 0))[0]
+    const topCycling = [...cyclingFeatures]
+      .sort((a, b) => (Number(b.properties?.total_trip_count) || 0) - (Number(a.properties?.total_trip_count) || 0))[0]
 
     return {
-      monthly: [...monthLookup.values()].sort((a, b) => a.month.localeCompare(b.month)),
-      gender: [
-        { label: 'Male', a: selectedRouteHistory.summary.male, b: compareRouteHistory?.summary.male || 0 },
-        { label: 'Female', a: selectedRouteHistory.summary.female, b: compareRouteHistory?.summary.female || 0 },
-        { label: 'Unspecified', a: selectedRouteHistory.summary.unspecified, b: compareRouteHistory?.summary.unspecified || 0 }
+      totalTrips,
+      totalPeople,
+      activeSegments,
+      avgTripsPerSegment: activeSegments > 0 ? totalTrips / activeSegments : 0,
+      walkingTrips,
+      cyclingTrips,
+      walkingShare: totalTrips > 0 ? (walkingTrips / totalTrips) * 100 : 0,
+      cyclingShare: totalTrips > 0 ? (cyclingTrips / totalTrips) * 100 : 0,
+      totalCommute,
+      totalLeisure,
+      commuteShare: totalTrips > 0 ? (totalCommute / totalTrips) * 100 : 0,
+      leisureShare: totalTrips > 0 ? (totalLeisure / totalTrips) * 100 : 0,
+      avgWalkSpeed: weightedAverageField(pedestrianFeatures, 'avg_speed'),
+      avgCycleSpeed: weightedAverageField(cyclingFeatures, 'forward_average_speed_meters_per_second'),
+      popularWalking: pedestrianFeatures.filter((feature) => feature.properties?.popular_corridor_flag === 1).length,
+      popularCycling: cyclingFeatures.filter((feature) => feature.properties?.popular_corridor_flag === 1).length,
+      strongestMonth,
+      strongestDaypart,
+      monthly,
+      daypartTotals,
+      topWalking,
+      topCycling
+    }
+  }, [cyclingData, pedestrianData, stravaAggregated, walkabilityMonths])
+
+  const selectedRouteProfile = useMemo(() => {
+    if (!selectedRouteHistory) return null
+    return {
+      purpose: [
+        { name: 'Walk Leisure', value: selectedRouteHistory.summary.walkingLeisure, fill: '#f4c546' },
+        { name: 'Walk Commute', value: selectedRouteHistory.summary.walkingCommute, fill: '#d2a72a' },
+        { name: 'Cycle Leisure', value: selectedRouteHistory.summary.cyclingLeisure, fill: '#8edee8' },
+        { name: 'Cycle Commute', value: selectedRouteHistory.summary.cyclingCommute, fill: '#62d6e8' }
+      ].filter((item) => item.value > 0),
+      demographics: [
+        { label: 'Male', value: selectedRouteHistory.summary.male },
+        { label: 'Female', value: selectedRouteHistory.summary.female },
+        { label: 'Unspecified', value: selectedRouteHistory.summary.unspecified }
       ],
       ages: [
-        { label: '18-34', a: selectedRouteHistory.summary.age18to34, b: compareRouteHistory?.summary.age18to34 || 0 },
-        { label: '35-54', a: selectedRouteHistory.summary.age35to54, b: compareRouteHistory?.summary.age35to54 || 0 },
-        { label: '55-64', a: selectedRouteHistory.summary.age55to64, b: compareRouteHistory?.summary.age55to64 || 0 },
-        { label: '65+', a: selectedRouteHistory.summary.age65plus, b: compareRouteHistory?.summary.age65plus || 0 }
+        { label: '18-34', value: selectedRouteHistory.summary.age18to34 },
+        { label: '35-54', value: selectedRouteHistory.summary.age35to54 },
+        { label: '55-64', value: selectedRouteHistory.summary.age55to64 },
+        { label: '65+', value: selectedRouteHistory.summary.age65plus }
       ]
     }
-  }, [selectedRouteHistory, compareRouteHistory, walkabilityMonths])
+  }, [selectedRouteHistory])
 
   const selectedServiceRequestDetails = useMemo(() => {
     if (!selectedServiceRequestSegment) return null
@@ -3191,13 +3281,7 @@ const UnifiedDataExplorer = () => {
               selectedSegment={selectedSegment}
               onSegmentSelect={setSelectedSegment}
               onRouteSegmentClick={(segment) => {
-                if (!selectedRouteSegment || Number(selectedRouteSegment.edge_uid) === Number(segment.edge_uid)) {
-                  setSelectedRouteSegment(segment)
-                } else if (!compareRouteSegment || Number(compareRouteSegment.edge_uid) === Number(segment.edge_uid)) {
-                  setCompareRouteSegment(segment)
-                } else {
-                  setCompareRouteSegment(segment)
-                }
+                setSelectedRouteSegment(segment)
                 setRoutePanelMinimized(false)
               }}
             />
@@ -3916,238 +4000,202 @@ const UnifiedDataExplorer = () => {
             </div>
           )}
 
-          {dashboardMode === 'walkability' && selectedRouteSegment && selectedRouteHistory && (
+          {dashboardMode === 'walkability' && walkabilityMode === 'activity' && mobilityOverview && (
             <div
               className={`bottom-panel route-history-panel ${routePanelMinimized ? 'route-history-panel--minimized' : ''}`}
-              style={{ right: `${effectiveSidebarWidth + 32}px` }}
             >
-              <div className="panel-header">
-                <h3>Route Compare: A {selectedRouteHistory.edgeUid}{compareRouteHistory ? ` vs B ${compareRouteHistory.edgeUid}` : ''}</h3>
+              <div className="panel-header route-history-header">
+                <div>
+                  <span className="route-history-kicker">{selectedRouteHistory ? 'Selected Corridor' : 'Study Area Overview'}</span>
+                  <h3>{selectedRouteHistory ? `Edge ${selectedRouteHistory.edgeUid}` : 'Walking, Running & Cycling Overview'}</h3>
+                  <p>{selectedRouteHistory ? 'Corridor-specific movement behaviour for the current study area.' : `General active-mobility patterns for ${walkabilityMonths.find((m) => m.key === selectedWalkabilityMonth)?.label ?? 'the average month'}. Click any corridor on the map to inspect route-specific detail.`}</p>
+                </div>
                 <div className="panel-header-actions">
                   <button onClick={() => setRoutePanelMinimized(value => !value)} className="close-btn" title={routePanelMinimized ? 'Expand panel' : 'Minimize panel'}>
                     {routePanelMinimized ? '▢' : '–'}
                   </button>
-                  <button onClick={() => { setCompareRouteSegment(null) }} className="close-btn" title="Clear route B">B</button>
-                  <button onClick={() => { setSelectedRouteSegment(null); setCompareRouteSegment(null); setRoutePanelMinimized(false) }} className="close-btn">✕</button>
+                  {selectedRouteSegment && (
+                    <button onClick={() => { setSelectedRouteSegment(null); setRoutePanelMinimized(false) }} className="close-btn" title="Clear selected corridor">✕</button>
+                  )}
                 </div>
               </div>
               {!routePanelMinimized && (
-              <>
+              <div className="route-history-body">
               <div className="route-history-meta">
                 <div className="route-history-chip">
-                  <span>Route A Trips</span>
-                  <strong>{selectedRouteHistory.summary.totalTrips.toLocaleString()}</strong>
+                  <span>Total observed trips</span>
+                  <strong>{formatCompactCount(selectedRouteHistory ? selectedRouteHistory.summary.totalTrips : mobilityOverview.totalTrips)}</strong>
                 </div>
                 <div className="route-history-chip">
-                  <span>Route B Trips</span>
-                  <strong>{compareRouteHistory ? compareRouteHistory.summary.totalTrips.toLocaleString() : 'Select route B'}</strong>
+                  <span>{selectedRouteHistory ? 'Observed people' : 'Active corridors'}</span>
+                  <strong>{selectedRouteHistory ? formatCompactCount(selectedRouteHistory.summary.totalPeople) : formatCompactCount(mobilityOverview.activeSegments)}</strong>
                 </div>
                 <div className="route-history-chip">
-                  <span>Trip Delta</span>
-                  <strong>{compareRouteHistory ? (selectedRouteHistory.summary.totalTrips - compareRouteHistory.summary.totalTrips).toLocaleString() : '—'}</strong>
+                  <span>{selectedRouteHistory ? 'Strongest month' : 'Peak month'}</span>
+                  <strong>{selectedRouteHistory ? (selectedRouteHistory.summary.strongestMonth || '—') : (mobilityOverview.strongestMonth?.monthLabel || '—')}</strong>
                 </div>
                 <div className="route-history-chip">
-                  <span>People Delta</span>
-                  <strong>{compareRouteHistory ? (selectedRouteHistory.summary.totalPeople - compareRouteHistory.summary.totalPeople).toLocaleString() : '—'}</strong>
+                  <span>{selectedRouteHistory ? 'Dominant daypart' : 'Peak daypart'}</span>
+                  <strong>{selectedRouteHistory ? (selectedRouteHistory.daypartTotals?.[0]?.label || '—') : (mobilityOverview.strongestDaypart?.label || '—')}</strong>
                 </div>
                 <div className="route-history-chip">
-                  <span>Map Time Window</span>
+                  <span>Study window</span>
                   <strong>{walkabilityMonths.find(m => m.key === selectedWalkabilityMonth)?.label ?? 'All months avg'}</strong>
                 </div>
               </div>
-              <div className="charts-container route-history-charts">
-                <div className="chart-panel">
-                  <h4>Monthly Trip Comparison</h4>
+              <div className="route-history-summary-grid">
+                <div className="route-summary-card">
+                  <span>{selectedRouteHistory ? 'Walking / running trips' : 'Walking / running share'}</span>
+                  <strong>{selectedRouteHistory ? formatCompactCount(selectedRouteHistory.summary.walkingTrips) : formatPercent(mobilityOverview.walkingShare)}</strong>
+                  <small>{selectedRouteHistory ? `${formatSpeedMps(average(selectedRouteHistory.monthly.map((item) => item.walkingAvgSpeed)))} avg speed` : `${formatCompactCount(mobilityOverview.popularWalking)} highlighted corridors`}</small>
+                </div>
+                <div className="route-summary-card route-summary-card--cyan">
+                  <span>{selectedRouteHistory ? 'Cycling trips' : 'Cycling share'}</span>
+                  <strong>{selectedRouteHistory ? formatCompactCount(selectedRouteHistory.summary.cyclingTrips) : formatPercent(mobilityOverview.cyclingShare)}</strong>
+                  <small>{selectedRouteHistory ? `${formatSpeedMps(average(selectedRouteHistory.monthly.map((item) => item.cyclingAvgSpeed)))} avg speed` : `${formatCompactCount(mobilityOverview.popularCycling)} highlighted corridors`}</small>
+                </div>
+                <div className="route-summary-card">
+                  <span>{selectedRouteHistory ? 'Commute share' : 'Commute-led trips'}</span>
+                  <strong>{formatPercent(selectedRouteHistory ? ((selectedRouteHistory.summary.walkingCommute + selectedRouteHistory.summary.cyclingCommute) / Math.max(1, selectedRouteHistory.summary.totalTrips)) * 100 : mobilityOverview.commuteShare)}</strong>
+                  <small>{selectedRouteHistory ? 'Of all corridor trips' : `${formatCompactCount(mobilityOverview.totalCommute)} commute trips observed`}</small>
+                </div>
+                <div className="route-summary-card">
+                  <span>{selectedRouteHistory ? 'Leisure share' : 'Trips per corridor'}</span>
+                  <strong>{selectedRouteHistory ? formatPercent(((selectedRouteHistory.summary.walkingLeisure + selectedRouteHistory.summary.cyclingLeisure) / Math.max(1, selectedRouteHistory.summary.totalTrips)) * 100) : formatCompactCount(mobilityOverview.avgTripsPerSegment)}</strong>
+                  <small>{selectedRouteHistory ? 'Of all corridor trips' : 'Average intensity across active links'}</small>
+                </div>
+              </div>
+              <div className="charts-container route-history-charts route-history-charts--single">
+                <div className="chart-panel chart-panel--wide">
+                  <h4>{selectedRouteHistory ? 'Monthly corridor activity' : 'Monthly study-area activity'}</h4>
                   <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={routeCompareData?.monthly || []}>
+                    <LineChart data={selectedRouteHistory ? selectedRouteHistory.monthly : mobilityOverview.monthly}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
                       <XAxis dataKey="monthLabel" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
                       <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
                       <Tooltip />
                       <Legend />
-                      <Line type="monotone" dataKey="aTrips" name="Route A" stroke="#f97316" strokeWidth={3} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="bTrips" name="Route B" stroke="#60a5fa" strokeWidth={3} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="walkingTrips" name="Walking / Running" stroke="#f4c546" strokeWidth={3} dot={{ r: 2 }} />
+                      <Line type="monotone" dataKey="cyclingTrips" name="Cycling" stroke="#74d9f7" strokeWidth={3} dot={{ r: 2 }} />
+                      <Line type="monotone" dataKey="totalTrips" name="Total" stroke="#d8dde6" strokeWidth={2} dot={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="chart-panel">
-                  <h4>Monthly People Comparison</h4>
+                  <h4>{selectedRouteHistory ? 'Purpose split' : 'Daypart demand'}</h4>
                   <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={routeCompareData?.monthly || []}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                      <XAxis dataKey="monthLabel" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="aPeople" name="Route A" fill="#f97316" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="bPeople" name="Route B" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
+                    {selectedRouteProfile?.purpose?.length ? (
+                      <PieChart>
+                        <Pie
+                          data={selectedRouteProfile.purpose}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={42}
+                          outerRadius={84}
+                          paddingAngle={2}
+                        >
+                          {selectedRouteProfile.purpose.map((item) => <Cell key={item.name} fill={item.fill} />)}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    ) : (
+                      <BarChart data={mobilityOverview.daypartTotals}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                        <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                        <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="walkingTrips" name="Walking / Running" fill="#f4c546" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="cyclingTrips" name="Cycling" fill="#74d9f7" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    )}
                   </ResponsiveContainer>
                 </div>
                 <div className="chart-panel">
-                  <h4>Monthly Mode Split</h4>
+                  <h4>{selectedRouteHistory ? 'Daypart distribution' : 'Mode mix'}</h4>
                   <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={selectedRouteHistory.monthly}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                      <XAxis dataKey="monthLabel" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="walkingTrips" name="Walking / Running" fill="#f97316" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="cyclingTrips" name="Cycling" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="chart-panel">
-                  <h4>Gender Distribution A vs B</h4>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={routeCompareData?.gender || []}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                      <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="a" name="Route A" fill="#f97316" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="b" name="Route B" fill="#60a5fa" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="chart-panel">
-                  <h4>Purpose Split</h4>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'Walk Leisure', value: selectedRouteHistory.summary.walkingLeisure },
-                          { name: 'Walk Commute', value: selectedRouteHistory.summary.walkingCommute },
-                          { name: 'Cycle Leisure', value: selectedRouteHistory.summary.cyclingLeisure },
-                          { name: 'Cycle Commute', value: selectedRouteHistory.summary.cyclingCommute }
-                        ].filter(item => item.value > 0)}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={38}
-                        outerRadius={82}
-                        paddingAngle={2}
-                      >
-                        {['#fdba74', '#f97316', '#93c5fd', '#2563eb'].map((color, index) => <Cell key={color + index} fill={color} />)}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="chart-panel">
-                  <h4>Daypart Distribution</h4>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={selectedRouteHistory.daypartTotals}>
+                    <BarChart data={selectedRouteHistory ? selectedRouteHistory.daypartTotals : [
+                      { label: 'Walking / Running', value: mobilityOverview.walkingTrips },
+                      { label: 'Cycling', value: mobilityOverview.cyclingTrips }
+                    ]}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
                       <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
                       <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
                       <Tooltip />
-                      <Legend />
-                      <Bar dataKey="walkingTrips" name="Walking / Running" fill="#fb923c" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="cyclingTrips" name="Cycling" fill="#60a5fa" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="chart-panel">
-                  <h4>Age Profile A vs B</h4>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={routeCompareData?.ages || []}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                      <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
-                      <Tooltip />
-                      <Bar dataKey="a" name="Route A" fill="#f97316" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="b" name="Route B" fill="#60a5fa" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="chart-panel chart-panel--radar">
-                  <h4>Route Profile A vs B</h4>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <RadarChart
-                      data={[
-                        {
-                          metric: 'Walk Trips',
-                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.walkingTrips), 0),
-                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.walkingTrips), 0)
-                        },
-                        {
-                          metric: 'Cycle Trips',
-                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.cyclingTrips), 0),
-                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.cyclingTrips), 0)
-                        },
-                        {
-                          metric: 'Walk Speed',
-                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.walkingAvgSpeed * 40), 0),
-                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.walkingAvgSpeed * 40), 0)
-                        },
-                        {
-                          metric: 'Cycle Speed',
-                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.cyclingAvgSpeed * 20), 0),
-                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.cyclingAvgSpeed * 20), 0)
-                        },
-                        {
-                          metric: 'Walk Commute',
-                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.walkingCommute), 0),
-                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.walkingCommute), 0)
-                        },
-                        {
-                          metric: 'Cycle Commute',
-                          value: Math.max(...selectedRouteHistory.monthly.map(item => item.cyclingCommute), 0),
-                          compare: Math.max(...(compareRouteHistory?.monthly || []).map(item => item.cyclingCommute), 0)
-                        }
-                      ]}
-                    >
-                      <PolarGrid stroke="rgba(255,255,255,0.12)" />
-                      <PolarAngleAxis dataKey="metric" tick={{ fill: 'rgba(255,255,255,0.72)', fontSize: 11 }} />
-                      <PolarRadiusAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
-                      <Radar
-                        name="Route A"
-                        dataKey="value"
-                        stroke="#f97316"
-                        fill="#f97316"
-                        fillOpacity={0.24}
-                      />
-                      {compareRouteHistory && (
-                        <Radar
-                          name="Route B"
-                          dataKey="compare"
-                          stroke="#60a5fa"
-                          fill="#60a5fa"
-                          fillOpacity={0.18}
-                        />
+                      {selectedRouteHistory ? (
+                        <>
+                          <Legend />
+                          <Bar dataKey="walkingTrips" name="Walking / Running" fill="#f4c546" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="cyclingTrips" name="Cycling" fill="#74d9f7" radius={[4, 4, 0, 0]} />
+                        </>
+                      ) : (
+                        <Bar dataKey="value" name="Observed trips" fill="#74d9f7" radius={[4, 4, 0, 0]} />
                       )}
-                      <Tooltip />
-                    </RadarChart>
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="chart-panel chart-panel--facts">
-                  <h4>Quick Reads A vs B</h4>
-                  <div className="route-facts-grid">
-                    <div className="route-fact route-fact--orange">
-                      <span>A Walk / Run Trips</span>
-                      <strong>{selectedRouteHistory.summary.walkingTrips.toLocaleString()}</strong>
+                <div className="chart-panel">
+                  <h4>{selectedRouteHistory ? 'Rider and walker profile' : 'Area insights'}</h4>
+                  {selectedRouteHistory ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={selectedRouteProfile?.demographics || []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                        <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                        <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Bar dataKey="value" name="People count" fill="#d8dde6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="route-insights-panel-body">
+                      <div className="route-insights-list">
+                        <div className="route-insight-row">
+                          <span>Peak month</span>
+                          <strong>{mobilityOverview.strongestMonth?.monthLabel || '—'}</strong>
+                        </div>
+                        <div className="route-insight-row">
+                          <span>Peak daypart</span>
+                          <strong>{mobilityOverview.strongestDaypart?.label || '—'}</strong>
+                        </div>
+                        <div className="route-insight-row">
+                          <span>Typical walk speed</span>
+                          <strong>{formatSpeedMps(mobilityOverview.avgWalkSpeed)}</strong>
+                        </div>
+                        <div className="route-insight-row">
+                          <span>Typical cycle speed</span>
+                          <strong>{formatSpeedMps(mobilityOverview.avgCycleSpeed)}</strong>
+                        </div>
+                        <div className="route-insight-row">
+                          <span>Top walking corridor</span>
+                          <strong>Edge {mobilityOverview.topWalking?.properties?.edge_uid || '—'}</strong>
+                        </div>
+                        <div className="route-insight-row">
+                          <span>Top cycling corridor</span>
+                          <strong>Edge {mobilityOverview.topCycling?.properties?.edge_uid || '—'}</strong>
+                        </div>
+                      </div>
                     </div>
-                    <div className="route-fact route-fact--blue">
-                      <span>B Walk / Run Trips</span>
-                      <strong>{compareRouteHistory ? compareRouteHistory.summary.walkingTrips.toLocaleString() : '—'}</strong>
-                    </div>
-                    <div className="route-fact route-fact--green">
-                      <span>A Cycling Trips</span>
-                      <strong>{selectedRouteHistory.summary.cyclingTrips.toLocaleString()}</strong>
-                    </div>
-                    <div className="route-fact route-fact--pink">
-                      <span>B Cycling Trips</span>
-                      <strong>{compareRouteHistory ? compareRouteHistory.summary.cyclingTrips.toLocaleString() : '—'}</strong>
-                    </div>
-                  </div>
+                  )}
                 </div>
+                {selectedRouteHistory && (
+                <div className="chart-panel">
+                  <h4>Age profile</h4>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={selectedRouteProfile?.ages || []}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="label" stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="rgba(255,255,255,0.65)" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="value" name="People count" fill="#74d9f7" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                )}
               </div>
-              </>
+              </div>
               )}
             </div>
           )}

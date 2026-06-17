@@ -87,7 +87,7 @@ const LENS_CONFIG = {
       { key: 'population_density', label: 'Population Density', format: 'density' },
       { key: 'avg_income', label: 'Average Income', format: 'currency' },
       { key: 'employed', label: 'Employed Residents', format: 'integer' },
-      { key: 'hh_count', label: 'Households', format: 'integer' },
+      { key: 'estimated_households', label: 'Estimated Households', format: 'integer' },
       { key: 'GreenBlue_Score', label: 'Nature Access Score', format: 'score' },
       { key: 'Green_Score', label: 'Green Space Score', format: 'score' },
       { key: 'Blue_Score', label: 'Blue Space Score', format: 'score' },
@@ -332,6 +332,33 @@ function averageMeaningfulFeatureValue(features, key, format = 'integer') {
   return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
+function sumFeatureValues(features, key) {
+  return features.reduce((sum, feature) => {
+    const value = Number(feature.properties?.[key])
+    return Number.isFinite(value) ? sum + value : sum
+  }, 0)
+}
+
+function weightedFeatureAverage(features, valueKey, weightKey) {
+  const totals = features.reduce((accumulator, feature) => {
+    const value = Number(feature.properties?.[valueKey])
+    const weight = Number(feature.properties?.[weightKey])
+    if (!Number.isFinite(value) || !Number.isFinite(weight) || weight <= 0) return accumulator
+    accumulator.weighted += value * weight
+    accumulator.weight += weight
+    return accumulator
+  }, { weighted: 0, weight: 0 })
+
+  return totals.weight > 0 ? totals.weighted / totals.weight : null
+}
+
+function averageLabelForLens(lensId) {
+  if (lensId === 'neighbourhoods') return 'avg neighbourhood'
+  if (lensId === 'suburbs') return 'avg suburb'
+  if (lensId === 'economy') return 'avg economic area'
+  return 'average area'
+}
+
 function buildFillColorExpression(metric, range) {
   const [min, max] = range
   const midpoint = min + ((max - min) * 0.5)
@@ -393,6 +420,7 @@ function enrichNeighbourhoodCollection(collection) {
       const properties = feature.properties || {}
       const areaKm2 = Number(properties.nb_area_sqm || 0) / 1e6
       const population = Number(properties.pop_total || 0)
+      const averageHouseholdSize = Number(properties.avg_hh_size || 0)
       return {
         ...feature,
         id: String(properties.neighbourhood),
@@ -400,7 +428,8 @@ function enrichNeighbourhoodCollection(collection) {
           ...properties,
           __featureId: String(properties.neighbourhood),
           display_name: properties.neighbourhood,
-          population_density: areaKm2 > 0 ? population / areaKm2 : 0
+          population_density: areaKm2 > 0 ? population / areaKm2 : 0,
+          estimated_households: averageHouseholdSize > 0 ? population / averageHouseholdSize : null
         }
       }
     })
@@ -750,7 +779,65 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
       })
   }, [activeFeatures, activeMetric.format, activeMetric.key, rankLowestFirst])
 
-  const focusFeature = selectedFeature || rankedFeatures[0] || null
+  const storyFocusFeature = selectedFeature || rankedFeatures[0] || null
+  const comparisonLabel = averageLabelForLens(activeLensId)
+
+  const citySummaryFeature = useMemo(() => {
+    if (!activeFeatures.length) return null
+
+    if (activeLensId === 'neighbourhoods') {
+      const totalPopulation = sumFeatureValues(activeFeatures, 'pop_total')
+      const totalAreaSqm = sumFeatureValues(activeFeatures, 'nb_area_sqm')
+      const totalAreaKm2 = totalAreaSqm / 1e6
+      const totalEmployed = sumFeatureValues(activeFeatures, 'employed')
+      const totalLights = sumFeatureValues(activeFeatures, 'total_lights')
+      const totalParkAreaSqm = sumFeatureValues(activeFeatures, 'park_area_sqm')
+      const estimatedHouseholds = sumFeatureValues(activeFeatures, 'estimated_households')
+
+      return {
+        id: '__city_summary_neighbourhoods__',
+        properties: {
+          display_name: 'Cape Town neighbourhood overview',
+          pop_total: totalPopulation,
+          population_density: totalAreaKm2 > 0 ? totalPopulation / totalAreaKm2 : null,
+          avg_income: weightedFeatureAverage(activeFeatures, 'avg_income', 'pop_total'),
+          employed: totalEmployed,
+          estimated_households: estimatedHouseholds > 0 ? estimatedHouseholds : null,
+          GreenBlue_Score: weightedFeatureAverage(activeFeatures, 'GreenBlue_Score', 'pop_total'),
+          Green_Score: weightedFeatureAverage(activeFeatures, 'Green_Score', 'pop_total'),
+          Blue_Score: weightedFeatureAverage(activeFeatures, 'Blue_Score', 'pop_total'),
+          lights_per_sqkm: totalAreaKm2 > 0 ? totalLights / totalAreaKm2 : null,
+          total_lights: totalLights,
+          park_area_sqm: totalParkAreaSqm
+        }
+      }
+    }
+
+    if (activeLensId === 'suburbs') {
+      const properties = { display_name: 'Cape Town suburb overview' }
+      activeLens.detailStats.forEach((stat) => {
+        properties[stat.key] = averageMeaningfulFeatureValue(activeFeatures, stat.key, stat.format)
+      })
+      return { id: '__city_summary_suburbs__', properties }
+    }
+
+    const totalJobs = sumFeatureValues(activeFeatures, 'tax_employment_latest')
+    const totalBusinesses = sumFeatureValues(activeFeatures, 'tax_establishments_latest')
+
+    return {
+      id: '__city_summary_economy__',
+      properties: {
+        display_name: 'Cape Town economic overview',
+        tax_employment_latest: totalJobs,
+        tax_establishments_latest: totalBusinesses,
+        tax_median_income_latest: weightedFeatureAverage(activeFeatures, 'tax_median_income_latest', 'tax_employment_latest'),
+        tax_jobs_per_establishment_latest: totalBusinesses > 0 ? totalJobs / totalBusinesses : null,
+        tax_female_fte_share: weightedFeatureAverage(activeFeatures, 'tax_female_fte_share', 'tax_employment_latest')
+      }
+    }
+  }, [activeFeatures, activeLens.detailStats, activeLensId])
+
+  const summarySubject = selectedFeature || citySummaryFeature
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return []
@@ -779,10 +866,10 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
 
   const selectedCookingRow = useMemo(() => {
     if (activeLensId !== 'suburbs') return null
-    const lookupName = normalizeName(focusFeature?.properties?.display_name)
+    const lookupName = normalizeName(storyFocusFeature?.properties?.display_name)
     if (!lookupName) return csvData.cooking[0] || null
     return csvData.cooking.find((row) => normalizeName(row.Suburb) === lookupName) || null
-  }, [activeLensId, focusFeature, csvData.cooking])
+  }, [activeLensId, storyFocusFeature, csvData.cooking])
 
   const waterChartData = useMemo(() => {
     return csvData.water
@@ -846,8 +933,8 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
   }, [csvData.electricity])
 
   const economyTrendData = useMemo(() => {
-    if (!focusFeature) return []
-    const properties = focusFeature.properties || {}
+    if (!storyFocusFeature) return []
+    const properties = storyFocusFeature.properties || {}
     const jobBase = Number(properties.tax_employment_2014 || 0)
     const businessBase = Number(properties.tax_establishments_2014 || 0)
     const incomeBase = Number(properties.tax_median_income_2014 || 0)
@@ -864,18 +951,18 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
         income: indexValue(Number(properties.tax_median_income_2025 || 0), incomeBase)
       }
     ]
-  }, [focusFeature])
+  }, [storyFocusFeature])
 
   const economyCompositionData = useMemo(() => {
-    if (!focusFeature) return []
-    const properties = focusFeature.properties || {}
+    if (!storyFocusFeature) return []
+    const properties = storyFocusFeature.properties || {}
     return [
       { name: 'Female jobs', value: smartPercentValue(Number(properties.tax_female_fte_share || 0)) },
       { name: 'Youth jobs', value: smartPercentValue(Number(properties.tax_youth_fte_share || 0)) },
       { name: 'Export-linked', value: smartPercentValue(Number(properties.tax_export_fte_share || 0)) },
       { name: 'Import-linked', value: smartPercentValue(Number(properties.tax_import_fte_share || 0)) }
     ]
-  }, [focusFeature])
+  }, [storyFocusFeature])
 
   const economyGrowthChartData = useMemo(() => {
     return [...activeFeatures]
@@ -889,8 +976,8 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
   }, [activeFeatures])
 
   const spotlightStats = useMemo(() => {
-    if (!focusFeature) return []
-    const properties = focusFeature.properties || {}
+    if (!summarySubject) return []
+    const properties = summarySubject.properties || {}
 
     if (activeLensId === 'neighbourhoods') {
       return [
@@ -916,7 +1003,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
       { label: 'Median Income', value: formatMetricValue('currency', Number(properties.tax_median_income_latest || 0)) },
       { label: 'Jobs per Business', value: formatMetricValue('decimal', Number(properties.tax_jobs_per_establishment_latest || 0)) }
     ]
-  }, [activeLensId, focusFeature])
+  }, [activeLensId, summarySubject])
 
   const fitFeatureOnMap = useCallback((feature) => {
     const map = mapRef.current
@@ -1519,7 +1606,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
           <div className="we-chart-card-head">
             <div>
               <div className="we-chart-card-kicker">Trend Story</div>
-              <h3>{focusFeature ? `${focusFeature.properties.display_name} growth index` : 'Growth index'}</h3>
+              <h3>{storyFocusFeature ? `${storyFocusFeature.properties.display_name} growth index` : 'Growth index'}</h3>
             </div>
             <StoryToggle
               value={economyStory}
@@ -1553,7 +1640,7 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
           <div className="we-chart-card-head">
             <div>
               <div className="we-chart-card-kicker">Workforce Mix</div>
-              <h3>{focusFeature ? `${focusFeature.properties.display_name} workforce profile` : 'Workforce profile'}</h3>
+              <h3>{storyFocusFeature ? `${storyFocusFeature.properties.display_name} workforce profile` : 'Workforce profile'}</h3>
             </div>
             <StoryToggle
               value={economyStory}
@@ -1760,8 +1847,8 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
         <div className="we-detail-head">
           <div>
             <div className="we-detail-kicker">{activeLens.badge}</div>
-            <h3>{focusFeature?.properties?.display_name || 'Select an area'}</h3>
-            <p>{focusFeature ? 'Pinned view with friendly labels and citywide comparison.' : 'Click on the map to inspect an area in more detail.'}</p>
+            <h3>{summarySubject?.properties?.display_name || 'Select an area'}</h3>
+            <p>{selectedFeature ? 'Pinned view with friendly labels and comparison against similar areas.' : 'Citywide summary shown by default. Click on the map to inspect a specific area.'}</p>
           </div>
           <div className="we-detail-actions">
             <button className="we-panel-toggle" onClick={() => setIsDetailMinimized((current) => !current)}>
@@ -1786,18 +1873,18 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
           <>
             <div className="we-detail-main-metric">
               <span>Main metric</span>
-              <strong>{focusFeature ? formatMetricValue(activeMetric.format, Number(focusFeature.properties?.[activeMetric.key])) : 'No data'}</strong>
+              <strong>{summarySubject ? formatMetricValue(activeMetric.format, Number(summarySubject.properties?.[activeMetric.key])) : 'No data'}</strong>
               <small>{activeMetric.label}</small>
             </div>
             <div className="we-detail-rows">
-              {focusFeature ? activeLens.detailStats.map((stat) => {
-                const rawValue = Number(focusFeature.properties?.[stat.key])
+              {summarySubject ? activeLens.detailStats.map((stat) => {
+                const rawValue = Number(summarySubject.properties?.[stat.key])
                 if (!Number.isFinite(rawValue)) return null
                 const average = averageLookup[stat.key]
                 const deltaPercent = Number.isFinite(average) && average !== 0 ? ((rawValue - average) / average) * 100 : null
-                const delta = deltaPercent !== null && Math.abs(deltaPercent) >= 2
+                const delta = selectedFeature && deltaPercent !== null && Math.abs(deltaPercent) >= 2
                   ? {
-                      label: `${deltaPercent > 0 ? '+' : ''}${DECIMAL_FORMATTER.format(deltaPercent)} vs city`,
+                      label: `${deltaPercent > 0 ? '+' : ''}${DECIMAL_FORMATTER.format(deltaPercent)} vs ${comparisonLabel}`,
                       positive: deltaPercent > 0
                     }
                   : null
@@ -1850,13 +1937,13 @@ export default function WardExplorer({ onEnterDashboard, isVisible = true }) {
               <div className="we-chart-card-head">
                 <div>
                   <div className="we-chart-card-kicker">Spotlight</div>
-                  <h3>{focusFeature?.properties?.display_name || 'Area spotlight'}</h3>
+                  <h3>{summarySubject?.properties?.display_name || 'Area spotlight'}</h3>
                 </div>
               </div>
               <p className="we-spotlight-copy">
-                {focusFeature
+                {selectedFeature
                   ? `This card keeps the selected area in focus while you flip through the map themes and bottom charts.`
-                  : 'Pick any area on the map and the spotlight card will update with its most useful summary values.'}
+                  : 'This default card summarizes the active lens citywide. Pick any area on the map to replace it with local values.'}
               </p>
               <div className="we-spotlight-grid">
                 {spotlightStats.map((stat) => (

@@ -30,6 +30,83 @@ import './Map.css'
 
 mapboxgl.accessToken = MAPBOX_TOKEN
 
+const ACTIVITY_LAYER_STYLES = {
+  pedestrian: {
+    label: 'Walking / running',
+    gradient: 'linear-gradient(90deg, rgba(94,42,10,0.88) 0%, rgba(196,86,28,0.9) 42%, rgba(248,162,84,0.95) 76%, rgba(255,217,167,0.98) 100%)',
+    baseColor: 'rgba(113, 48, 18, 0.42)',
+    glowColor: [
+      'interpolate', ['linear'], ['coalesce', ['get', 'trip_percentile'], 0],
+      0, '#5e2a0a',
+      20, '#8f3f13',
+      45, '#c4561c',
+      70, '#f28b3d',
+      100, '#ffd9a7'
+    ],
+    lineColor: [
+      'interpolate', ['linear'], ['coalesce', ['get', 'trip_percentile'], 0],
+      0, '#78350f',
+      22, '#a64516',
+      48, '#d26322',
+      74, '#f59d52',
+      100, '#ffe0b8'
+    ]
+  },
+  cycling: {
+    label: 'Cycling',
+    gradient: 'linear-gradient(90deg, rgba(8,54,67,0.88) 0%, rgba(18,120,139,0.9) 42%, rgba(72,194,207,0.95) 76%, rgba(189,246,245,0.98) 100%)',
+    baseColor: 'rgba(12, 78, 92, 0.4)',
+    glowColor: [
+      'interpolate', ['linear'], ['coalesce', ['get', 'trip_percentile'], 0],
+      0, '#083643',
+      20, '#0f5c6d',
+      45, '#12788b',
+      70, '#35b2c4',
+      100, '#bdf6f5'
+    ],
+    lineColor: [
+      'interpolate', ['linear'], ['coalesce', ['get', 'trip_percentile'], 0],
+      0, '#0b4552',
+      22, '#126a7a',
+      48, '#1b91a4',
+      74, '#55cbd8',
+      100, '#d4fbf7'
+    ]
+  }
+}
+
+const ACTIVITY_GLOW_WIDTH = [
+  'interpolate', ['linear'], ['coalesce', ['get', 'trip_percentile'], 0],
+  0, 5,
+  35, 8,
+  70, 12,
+  100, 16
+]
+
+const ACTIVITY_BASE_WIDTH = [
+  'interpolate', ['linear'], ['coalesce', ['get', 'trip_percentile'], 0],
+  0, 2.4,
+  35, 3.2,
+  70, 4.6,
+  100, 6.2
+]
+
+const ACTIVITY_LINE_WIDTH = [
+  'interpolate', ['linear'], ['coalesce', ['get', 'trip_percentile'], 0],
+  0, 1.1,
+  35, 1.8,
+  70, 2.8,
+  100, 4.2
+]
+
+const ACTIVITY_LINE_OPACITY = [
+  'interpolate', ['linear'], ['coalesce', ['get', 'trip_percentile'], 0],
+  0, 0.34,
+  24, 0.48,
+  58, 0.72,
+  100, 0.92
+]
+
 const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour, districtGeoJSON, selectedDistrictId, districtBounds, onDistrictClick, compareDistricts, showDistricts, walkabilityData: walkabilityIndexData, onSegmentClick, compareSegments, focusedSegment }) => {
   const mapContainer = useRef(null)
   const map = useRef(null)
@@ -40,7 +117,9 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
   const [walkabilityMode, setWalkabilityMode] = useState('activity') // 'activity', 'network', 'pedestrian', 'cycling'
   const [businessData, setBusinessData] = useState(null)
   const [isLoadingLayer, setIsLoadingLayer] = useState(null)
+  const [walkabilityLoadStage, setWalkabilityLoadStage] = useState(null)
   const [poiFilter, setPOIFilter] = useState('all') // Filter for POI types in Data Explorer
+  const deferredWalkabilityLoadRef = useRef(null)
 
   // Initialize map
   useEffect(() => {
@@ -431,138 +510,203 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
   // Load and update walkability layer
   useEffect(() => {
-    if (!activeLayers.walkability) {
-      // Remove walkability layers if they exist and map is loaded
-      if (mapLoaded && map.current) {
-        ['walkability-network-glow', 'walkability-network', 'walkability-pedestrian-glow', 'walkability-pedestrian', 'walkability-cycling-glow', 'walkability-cycling', 'walkability-arrows'].forEach(layerId => {
-          if (map.current.getLayer(layerId)) {
-            map.current.removeLayer(layerId)
-          }
-        })
-        ;['walkability-network-source', 'walkability-pedestrian-source', 'walkability-cycling-source'].forEach(sourceId => {
-          if (map.current.getSource(sourceId)) {
-            map.current.removeSource(sourceId)
-          }
-        })
+    const cleanupFns = []
+    let cancelled = false
+
+    const clearDeferredWalkabilityLoad = () => {
+      if (deferredWalkabilityLoadRef.current) {
+        clearTimeout(deferredWalkabilityLoadRef.current)
+        deferredWalkabilityLoadRef.current = null
       }
-      return
     }
 
-    if (!mapLoaded) return
+    const safelyRemoveWalkabilityLayers = () => {
+      if (!map.current) return
+
+      ;[
+        'walkability-network-glow',
+        'walkability-network',
+        'walkability-pedestrian-base',
+        'walkability-pedestrian-glow',
+        'walkability-pedestrian',
+        'walkability-cycling-base',
+        'walkability-cycling-glow',
+        'walkability-cycling',
+        'walkability-arrows'
+      ].forEach((layerId) => {
+        if (map.current.getLayer(layerId)) {
+          map.current.removeLayer(layerId)
+        }
+      })
+
+      ;[
+        'walkability-network-source',
+        'walkability-pedestrian-source',
+        'walkability-cycling-source'
+      ].forEach((sourceId) => {
+        if (map.current.getSource(sourceId)) {
+          map.current.removeSource(sourceId)
+        }
+      })
+    }
+
+    const bindLayerEvent = (eventName, layerId, handler) => {
+      if (!map.current?.getLayer(layerId)) return
+      map.current.on(eventName, layerId, handler)
+      cleanupFns.push(() => {
+        try {
+          map.current?.off(eventName, layerId, handler)
+        } catch (error) {
+          console.warn(`Failed to detach ${eventName} handler for ${layerId}:`, error)
+        }
+      })
+    }
+
+    if (!activeLayers.walkability) {
+      clearDeferredWalkabilityLoad()
+      setWalkabilityLoadStage(null)
+      if (mapLoaded && map.current) {
+        safelyRemoveWalkabilityLayers()
+      }
+      return () => {
+        cancelled = true
+        cleanupFns.forEach((fn) => fn())
+      }
+    }
+
+    if (!mapLoaded) {
+      return () => {
+        cancelled = true
+        cleanupFns.forEach((fn) => fn())
+      }
+    }
 
     const loadWalkability = async () => {
       try {
-        setIsLoadingLayer('walkability')
-        // Use cached data if already loaded
-        const data = netWalkData || await loadWalkabilityData()
-        if (!netWalkData) setNetWalkData(data)
-        
-        // Remove existing layers
-        ;['walkability-network-glow', 'walkability-network', 'walkability-pedestrian-glow', 'walkability-pedestrian', 'walkability-cycling-glow', 'walkability-cycling'].forEach(layerId => {
-          if (map.current.getLayer(layerId)) {
-            map.current.removeLayer(layerId)
-          }
-        })
+        clearDeferredWalkabilityLoad()
+        setWalkabilityLoadStage(null)
+        setIsLoadingLayer(walkabilityMode === 'activity' ? 'walking / running routes' : 'walkability')
 
-        const addPedestrianLayers = () => {
-          if (map.current.getSource('walkability-pedestrian-source')) {
-            map.current.removeSource('walkability-pedestrian-source')
+        const mergeWalkabilityData = (incomingData) => {
+          setNetWalkData((previousData) => ({
+            ...(previousData || {}),
+            ...(incomingData || {}),
+            peakStats: {
+              ...(previousData?.peakStats || {}),
+              ...(incomingData?.peakStats || {}),
+              pedestrian: incomingData?.peakStats?.pedestrian || previousData?.peakStats?.pedestrian,
+              cycling: incomingData?.peakStats?.cycling || previousData?.peakStats?.cycling
+            }
+          }))
+        }
+
+        const loadWalkabilitySlice = async (options) => {
+          const result = await loadWalkabilityData(options)
+          mergeWalkabilityData(result)
+          return result
+        }
+
+        safelyRemoveWalkabilityLayers()
+
+        const addActivityLayers = (sourceId, baseLayerId, glowLayerId, lineLayerId, featureCollection, styleKey) => {
+          if (!map.current || !featureCollection) return
+          const style = ACTIVITY_LAYER_STYLES[styleKey]
+
+          if (map.current.getSource(sourceId)) {
+            map.current.removeSource(sourceId)
           }
 
-          map.current.addSource('walkability-pedestrian-source', {
+          map.current.addSource(sourceId, {
             type: 'geojson',
-            data: data.pedestrian
+            data: featureCollection
           })
 
           map.current.addLayer({
-            id: 'walkability-pedestrian-glow',
+            id: baseLayerId,
             type: 'line',
-            source: 'walkability-pedestrian-source',
+            source: sourceId,
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round',
+              'line-round-limit': 1.6
+            },
             paint: {
-              'line-color': '#f97316',
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'total_trip_count'],
-                0, 7,
-                100, 12,
-                200, 18,
-                300, 24
-              ],
-              'line-opacity': 0.14,
-              'line-blur': 8,
+              'line-color': style.baseColor,
+              'line-width': ACTIVITY_BASE_WIDTH,
+              'line-opacity': 0.58,
+              'line-blur': 1.2
             }
           })
+
           map.current.addLayer({
-            id: 'walkability-pedestrian',
+            id: glowLayerId,
             type: 'line',
-            source: 'walkability-pedestrian-source',
+            source: sourceId,
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round',
+              'line-round-limit': 1.6
+            },
             paint: {
-              'line-color': '#fb923c',
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'total_trip_count'],
-                0, 1.5,
-                100, 3,
-                200, 4.5,
-                300, 6
-              ],
-              'line-opacity': 0.82
+              'line-color': style.glowColor,
+              'line-width': ACTIVITY_GLOW_WIDTH,
+              'line-opacity': 0.12,
+              'line-blur': 7
+            }
+          })
+
+          map.current.addLayer({
+            id: lineLayerId,
+            type: 'line',
+            source: sourceId,
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round',
+              'line-round-limit': 1.6
+            },
+            paint: {
+              'line-color': style.lineColor,
+              'line-width': ACTIVITY_LINE_WIDTH,
+              'line-blur': 0.25,
+              'line-opacity': ACTIVITY_LINE_OPACITY
             }
           })
         }
 
-        const addCyclingLayers = () => {
-          if (map.current.getSource('walkability-cycling-source')) {
-            map.current.removeSource('walkability-cycling-source')
-          }
+        const addPedestrianLayers = (featureCollection) => {
+          addActivityLayers(
+            'walkability-pedestrian-source',
+            'walkability-pedestrian-base',
+            'walkability-pedestrian-glow',
+            'walkability-pedestrian',
+            featureCollection,
+            'pedestrian'
+          )
+        }
 
-          map.current.addSource('walkability-cycling-source', {
-            type: 'geojson',
-            data: data.cycling
-          })
-
-          map.current.addLayer({
-            id: 'walkability-cycling-glow',
-            type: 'line',
-            source: 'walkability-cycling-source',
-            paint: {
-              'line-color': '#2563eb',
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'total_trip_count'],
-                0, 8,
-                100, 14,
-                200, 20,
-                400, 26
-              ],
-              'line-opacity': 0.16,
-              'line-blur': 8,
-            }
-          })
-          map.current.addLayer({
-            id: 'walkability-cycling',
-            type: 'line',
-            source: 'walkability-cycling-source',
-            paint: {
-              'line-color': '#60a5fa',
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'total_trip_count'],
-                0, 2,
-                100, 4,
-                200, 6,
-                400, 8
-              ],
-              'line-opacity': 0.82
-            }
-          })
+        const addCyclingLayers = (featureCollection) => {
+          addActivityLayers(
+            'walkability-cycling-source',
+            'walkability-cycling-base',
+            'walkability-cycling-glow',
+            'walkability-cycling',
+            featureCollection,
+            'cycling'
+          )
         }
 
         if (walkabilityMode === 'network') {
-          // Network centrality view
+          const networkData = netWalkData?.network
+            ? { network: netWalkData.network }
+            : await loadWalkabilitySlice({ includeNetwork: true, includeActivity: false })
+
           if (map.current.getSource('walkability-network-source')) {
             map.current.removeSource('walkability-network-source')
           }
 
           map.current.addSource('walkability-network-source', {
             type: 'geojson',
-            data: data.network
+            data: networkData.network
           })
 
           const betweennessExpression = createColorExpression(
@@ -604,7 +748,7 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
             }
           })
 
-          map.current.on('click', 'walkability-network', (e) => {
+          bindLayerEvent('click', 'walkability-network', (e) => {
             const props = e.features[0].properties
             new mapboxgl.Popup()
               .setLngLat(e.lngLat)
@@ -623,12 +767,90 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           })
 
         } else if (walkabilityMode === 'activity') {
-          addPedestrianLayers()
-          addCyclingLayers()
-        } else if (walkabilityMode === 'pedestrian') {
-          addPedestrianLayers()
+          const pedestrianData = netWalkData?.pedestrian
+            ? { pedestrian: netWalkData.pedestrian }
+            : await loadWalkabilitySlice({
+              includeNetwork: false,
+              includeActivity: true,
+              includePedestrian: true,
+              includeCycling: false
+            })
 
-          map.current.on('click', 'walkability-pedestrian', (e) => {
+          addPedestrianLayers(pedestrianData.pedestrian)
+          if (cancelled) return
+          setIsLoadingLayer(null)
+          setWalkabilityLoadStage({
+            title: 'Walking / running is ready',
+            detail: 'Adding cycling routes in the background...'
+          })
+
+          const renderCycling = async () => {
+            if (cancelled) return
+            setWalkabilityLoadStage({
+              title: 'Cycling routes loading',
+              detail: 'Walking / running is already visible.'
+            })
+            const cyclingData = netWalkData?.cycling
+              ? { cycling: netWalkData.cycling }
+              : await loadWalkabilitySlice({
+                includeNetwork: false,
+                includeActivity: true,
+                includePedestrian: false,
+                includeCycling: true
+              })
+
+            if (cancelled) return
+            addCyclingLayers(cyclingData.cycling)
+            setWalkabilityLoadStage(null)
+
+            bindLayerEvent('click', 'walkability-cycling', (e) => {
+              const props = e.features[0].properties
+              new mapboxgl.Popup()
+                .setLngLat(e.lngLat)
+                .setHTML(`
+                  <div style="padding: 8px;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 14px;">Cycling Activity</h3>
+                    <div style="font-size: 12px;">
+                      <strong>Total Trips:</strong> ${props.total_trip_count || 0}<br/>
+                      <strong>E-Bikes:</strong> ${props.ebike_ride_count || 0}
+                    </div>
+                  </div>
+                `)
+                .addTo(map.current)
+            })
+
+            bindLayerEvent('mouseenter', 'walkability-cycling', () => {
+              map.current.getCanvas().style.cursor = 'pointer'
+            })
+            bindLayerEvent('mouseleave', 'walkability-cycling', () => {
+              map.current.getCanvas().style.cursor = ''
+            })
+          }
+
+          deferredWalkabilityLoadRef.current = window.setTimeout(() => {
+            renderCycling().catch((error) => {
+              console.error('Error loading deferred cycling routes:', error)
+              if (!cancelled) {
+                setWalkabilityLoadStage({
+                  title: 'Walking / running is ready',
+                  detail: 'Cycling routes could not be added.'
+                })
+              }
+            })
+          }, 650)
+        } else if (walkabilityMode === 'pedestrian') {
+          const pedestrianData = netWalkData?.pedestrian
+            ? { pedestrian: netWalkData.pedestrian }
+            : await loadWalkabilitySlice({
+              includeNetwork: false,
+              includeActivity: true,
+              includePedestrian: true,
+              includeCycling: false
+            })
+
+          addPedestrianLayers(pedestrianData.pedestrian)
+
+          bindLayerEvent('click', 'walkability-pedestrian', (e) => {
             const props = e.features[0].properties
             new mapboxgl.Popup()
               .setLngLat(e.lngLat)
@@ -649,9 +871,18 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           })
 
         } else if (walkabilityMode === 'cycling') {
-          addCyclingLayers()
+          const cyclingData = netWalkData?.cycling
+            ? { cycling: netWalkData.cycling }
+            : await loadWalkabilitySlice({
+              includeNetwork: false,
+              includeActivity: true,
+              includePedestrian: false,
+              includeCycling: true
+            })
 
-          map.current.on('click', 'walkability-cycling', (e) => {
+          addCyclingLayers(cyclingData.cycling)
+
+          bindLayerEvent('click', 'walkability-cycling', (e) => {
             const props = e.features[0].properties
             new mapboxgl.Popup()
               .setLngLat(e.lngLat)
@@ -674,16 +905,16 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
 
         // Change cursor on hover
         ;['walkability-network', 'walkability-pedestrian', 'walkability-cycling'].forEach(layerId => {
-          map.current.on('mouseenter', layerId, () => {
+          bindLayerEvent('mouseenter', layerId, () => {
             map.current.getCanvas().style.cursor = 'pointer'
           })
-          map.current.on('mouseleave', layerId, () => {
+          bindLayerEvent('mouseleave', layerId, () => {
             map.current.getCanvas().style.cursor = ''
           })
         })
 
         if (walkabilityMode === 'activity') {
-          map.current.on('click', 'walkability-pedestrian', (e) => {
+          bindLayerEvent('click', 'walkability-pedestrian', (e) => {
             const props = e.features[0].properties
             new mapboxgl.Popup()
               .setLngLat(e.lngLat)
@@ -698,33 +929,27 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
               `)
               .addTo(map.current)
           })
-
-          map.current.on('click', 'walkability-cycling', (e) => {
-            const props = e.features[0].properties
-            new mapboxgl.Popup()
-              .setLngLat(e.lngLat)
-              .setHTML(`
-                <div style="padding: 8px;">
-                  <h3 style="margin: 0 0 8px 0; font-size: 14px;">Cycling Activity</h3>
-                  <div style="font-size: 12px;">
-                    <strong>Total Trips:</strong> ${props.total_trip_count || 0}<br/>
-                    <strong>E-Bikes:</strong> ${props.ebike_ride_count || 0}
-                  </div>
-                </div>
-              `)
-              .addTo(map.current)
-          })
         }
 
         console.log(`Loaded walkability data: ${walkabilityMode} mode`)
-        setIsLoadingLayer(null)
+        if (walkabilityMode !== 'activity') {
+          setIsLoadingLayer(null)
+          setWalkabilityLoadStage(null)
+        }
       } catch (error) {
         console.error('Error loading walkability data:', error)
         setIsLoadingLayer(null)
+        setWalkabilityLoadStage(null)
       }
     }
 
     loadWalkability()
+
+    return () => {
+      cancelled = true
+      clearDeferredWalkabilityLoad()
+      cleanupFns.forEach((fn) => fn())
+    }
   }, [mapLoaded, activeLayers.walkability, walkabilityMode])
 
   // Load and update business layer
@@ -1535,6 +1760,16 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
           <p>Loading {isLoadingLayer} layer...</p>
         </div>
       )}
+
+      {walkabilityLoadStage && activeLayers.walkability && (
+        <div className="walkability-loading-badge" role="status" aria-live="polite">
+          <div className="walkability-loading-spinner" />
+          <div>
+            <strong>{walkabilityLoadStage.title}</strong>
+            <span>{walkabilityLoadStage.detail}</span>
+          </div>
+        </div>
+      )}
       
       {/* Metric selector for shade layer */}
       {mapLoaded && activeLayers.shade && (
@@ -1681,21 +1916,37 @@ const Map = ({ mode, activeLayers, temporalState, explorerFilters, selectedTour,
             </>
           )}
           {activeLayers.walkability && (
-            <div className="legend-item">
-              <span className="legend-color" style={{
-                background: walkabilityMode === 'network' 
-                  ? 'linear-gradient(to right, #f7fbff, #084594)' 
-                  : 'linear-gradient(to right, #08519c, #6baed6, #fee391, #ec7014, #d62828, #6a040f)'
-              }}></span>
-              <span style={{fontSize: '11px'}}>
-                {walkabilityMode === 'activity'
-                  ? 'Active Mobility: Orange = walking/running, Blue = cycling'
-                  : walkabilityMode === 'network'
-                    ? 'Network Centrality'
-                    : walkabilityMode === 'pedestrian'
-                      ? 'Walking / Running: Orange intensity = trip volume'
-                      : 'Cycling: Blue intensity = trip volume'}
-              </span>
+            <div className="walkability-legend-block">
+              {walkabilityMode === 'network' ? (
+                <div className="legend-item">
+                  <span
+                    className="legend-color legend-color--wide"
+                    style={{ background: 'linear-gradient(to right, #f7fbff, #c6dbef, #6baed6, #2171b5, #08306b)' }}
+                  ></span>
+                  <span style={{ fontSize: '11px' }}>Network centrality intensity</span>
+                </div>
+              ) : (
+                <>
+                  {(walkabilityMode === 'activity' || walkabilityMode === 'pedestrian') && (
+                    <div className="walkability-legend-scale">
+                      <div className="walkability-legend-row">
+                        <span className="walkability-legend-mode">{ACTIVITY_LAYER_STYLES.pedestrian.label}</span>
+                        <span className="walkability-legend-volume">lighter to brighter = more trips</span>
+                      </div>
+                      <div className="legend-color legend-color--wide" style={{ background: ACTIVITY_LAYER_STYLES.pedestrian.gradient }}></div>
+                    </div>
+                  )}
+                  {(walkabilityMode === 'activity' || walkabilityMode === 'cycling') && (
+                    <div className="walkability-legend-scale">
+                      <div className="walkability-legend-row">
+                        <span className="walkability-legend-mode">{ACTIVITY_LAYER_STYLES.cycling.label}</span>
+                        <span className="walkability-legend-volume">lighter to brighter = more trips</span>
+                      </div>
+                      <div className="legend-color legend-color--wide" style={{ background: ACTIVITY_LAYER_STYLES.cycling.gradient }}></div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
           {activeLayers.business && (

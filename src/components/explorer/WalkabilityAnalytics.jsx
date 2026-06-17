@@ -47,6 +47,25 @@ const formatGrade = (value) => {
   return Number.isFinite(numeric) ? `${Math.abs(numeric).toFixed(1)}%` : '—'
 }
 
+const formatCompact = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '—'
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: numeric >= 1000 ? 1 : 0
+  }).format(numeric)
+}
+
+const formatPercent = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${numeric.toFixed(1)}%` : '—'
+}
+
+const formatSpeed = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${numeric.toFixed(1)} m/s` : '—'
+}
+
 const directionCopy = (feature) => {
   const props = feature?.properties || feature || {}
   const from = Number(props.uphill_from_elev_m)
@@ -114,6 +133,46 @@ const WalkabilityAnalytics = ({
     }
   }, [pedestrianData, cyclingData])
 
+  const activityStats = useMemo(() => {
+    const pedestrianFeatures = pedestrianData?.features || []
+    const cyclingFeatures = cyclingData?.features || []
+    const walkingTrips = pedestrianFeatures.reduce((sum, feature) => sum + (Number(feature.properties?.total_trip_count) || 0), 0)
+    const cyclingTrips = cyclingFeatures.reduce((sum, feature) => sum + (Number(feature.properties?.total_trip_count) || 0), 0)
+    const walkingPeople = pedestrianFeatures.reduce((sum, feature) => sum + (Number(feature.properties?.total_people_count) || 0), 0)
+    const cyclingPeople = cyclingFeatures.reduce((sum, feature) => sum + (Number(feature.properties?.total_people_count) || 0), 0)
+    const totalTrips = walkingTrips + cyclingTrips
+    const totalPeople = walkingPeople + cyclingPeople
+    const activeSegments = new Set([
+      ...pedestrianFeatures.map((feature) => feature.properties?.edge_uid),
+      ...cyclingFeatures.map((feature) => feature.properties?.edge_uid)
+    ].filter((value) => value != null)).size
+    const walkingShare = totalTrips > 0 ? (walkingTrips / totalTrips) * 100 : 0
+    const cyclingShare = totalTrips > 0 ? (cyclingTrips / totalTrips) * 100 : 0
+    const walkingCommute = pedestrianFeatures.reduce((sum, feature) => sum + (Number(feature.properties?.commute) || 0), 0)
+    const cyclingCommute = cyclingFeatures.reduce((sum, feature) => sum + (Number(feature.properties?.commute) || 0), 0)
+    const totalCommute = walkingCommute + cyclingCommute
+    const walkingLeisure = pedestrianFeatures.reduce((sum, feature) => sum + (Number(feature.properties?.recreation) || 0), 0)
+    const cyclingLeisure = cyclingFeatures.reduce((sum, feature) => sum + (Number(feature.properties?.recreation) || 0), 0)
+    const totalLeisure = walkingLeisure + cyclingLeisure
+    const weightedWalkSpeed = pedestrianFeatures.reduce((sum, feature) => sum + ((Number(feature.properties?.avg_speed) || 0) * (Number(feature.properties?.total_trip_count) || 0)), 0)
+    const weightedCycleSpeed = cyclingFeatures.reduce((sum, feature) => sum + ((Number(feature.properties?.forward_average_speed_meters_per_second) || Number(feature.properties?.avg_speed) || 0) * (Number(feature.properties?.total_trip_count) || 0)), 0)
+    const avgWalkSpeed = walkingTrips > 0 ? weightedWalkSpeed / walkingTrips : 0
+    const avgCycleSpeed = cyclingTrips > 0 ? weightedCycleSpeed / cyclingTrips : 0
+
+    return {
+      totalTrips,
+      totalPeople,
+      activeSegments,
+      avgTripsPerSegment: activeSegments > 0 ? totalTrips / activeSegments : 0,
+      walkingShare,
+      cyclingShare,
+      totalCommute,
+      totalLeisure,
+      avgWalkSpeed,
+      avgCycleSpeed
+    }
+  }, [cyclingData, pedestrianData])
+
   const steepnessStats = useMemo(() => {
     const features = roadSteepnessData?.features || []
     const valid = features
@@ -169,11 +228,49 @@ const WalkabilityAnalytics = ({
         </div>
 
         {walkabilityMode === 'activity' && (
-          <div className="month-slider-card">
-            <div className="month-slider-copy">
-              <span className="month-slider-label">Map time window</span>
-              <strong>{walkabilityMonths.length ? selectedMonthLabel : 'No month available'}</strong>
+          <div className="walkability-activity-shell">
+            <div className="walkability-activity-metrics">
+              <div className="walkability-activity-card">
+                <span className="walkability-activity-label">Active Corridors</span>
+                <strong>{formatCompact(activityStats.activeSegments)}</strong>
+                <small>Mapped walking and cycling links</small>
+              </div>
+              <div className="walkability-activity-card">
+                <span className="walkability-activity-label">Observed Trips</span>
+                <strong>{formatCompact(activityStats.totalTrips)}</strong>
+                <small>{formatCompact(activityStats.totalPeople)} people observed</small>
+              </div>
+              <div className="walkability-activity-card walkability-activity-card--accent">
+                <span className="walkability-activity-label">Walking / Running Share</span>
+                <strong>{formatPercent(activityStats.walkingShare)}</strong>
+                <small>{formatSpeed(activityStats.avgWalkSpeed)} typical pace</small>
+              </div>
+              <div className="walkability-activity-card walkability-activity-card--accent-alt">
+                <span className="walkability-activity-label">Cycling Share</span>
+                <strong>{formatPercent(activityStats.cyclingShare)}</strong>
+                <small>{formatSpeed(activityStats.avgCycleSpeed)} typical pace</small>
+              </div>
             </div>
+
+            <div className="month-slider-card month-slider-card--mobility">
+              <div className="month-slider-copy">
+                <span className="month-slider-label">Study window</span>
+                <strong>{walkabilityMonths.length ? selectedMonthLabel : 'No month available'}</strong>
+              </div>
+              <div className="walkability-activity-kpis">
+                <div>
+                  <span>Popular walk corridors</span>
+                  <strong>{popularRouteStats.walkingCount}</strong>
+                </div>
+                <div>
+                  <span>Popular cycle corridors</span>
+                  <strong>{popularRouteStats.cyclingCount}</strong>
+                </div>
+                <div>
+                  <span>Trips per corridor</span>
+                  <strong>{formatCompact(activityStats.avgTripsPerSegment)}</strong>
+                </div>
+              </div>
             <button
               className={`temporal-pill ${!selectedMonth ? 'active' : ''}`}
               onClick={() => onMonthChange?.(null)}
@@ -203,35 +300,54 @@ const WalkabilityAnalytics = ({
                 </button>
               ))}
             </div>
+            </div>
           </div>
         )}
 
         {walkabilityMode === 'activity' && (
-          <div className="temporal-insight-panel">
-            <h3>Routes Panel</h3>
-            <div className="temporal-mode-pills temporal-mode-pills--secondary">
+          <div className="temporal-insight-panel temporal-insight-panel--mobility">
+            <div className="temporal-insight-topline">
+              <h3>Study Area Snapshot</h3>
+              <span>{activityStats.totalCommute > activityStats.totalLeisure ? 'Commute-led movement' : 'Leisure-led movement'}</span>
+            </div>
+            <div className="temporal-mode-pills temporal-mode-pills--secondary walkability-segmented">
               <button className={`temporal-pill ${routeLayerMode === 'combined' ? 'active' : ''}`} onClick={() => onRouteLayerModeChange?.('combined')}>Both Modes</button>
               <button className={`temporal-pill ${routeLayerMode === 'walking' ? 'active' : ''}`} onClick={() => onRouteLayerModeChange?.('walking')}>Walking Only</button>
               <button className={`temporal-pill ${routeLayerMode === 'cycling' ? 'active' : ''}`} onClick={() => onRouteLayerModeChange?.('cycling')}>Cycling Only</button>
             </div>
-            <div className="temporal-mode-pills temporal-mode-pills--secondary temporal-mode-pills--top-routes">
+            <div className="temporal-mode-pills temporal-mode-pills--secondary temporal-mode-pills--top-routes walkability-top-routes-toggle">
               <button
                 className={`temporal-pill ${showPopularRoutesOnly ? 'active' : ''}`}
                 onClick={() => onShowPopularRoutesOnlyChange?.(!showPopularRoutesOnly)}
               >
                 {showPopularRoutesOnly ? 'Showing High-Use Routes' : 'Highlight High-Use Routes'}
               </button>
-              <span className="temporal-top-routes-note">
-                Walking: {popularRouteStats.walkingCount} highlighted corridors. Cycling: {popularRouteStats.cyclingCount}. Visually thick, light routes stay included, plus tied cutoff routes.
-              </span>
+            </div>
+            <div className="walkability-route-insight-grid">
+              <div className="walkability-route-insight">
+                <span>Trip purpose</span>
+                <strong>{activityStats.totalCommute >= activityStats.totalLeisure ? 'Commute' : 'Leisure'} dominant</strong>
+                <small>{formatCompact(Math.max(activityStats.totalCommute, activityStats.totalLeisure))} observed trips in the leading purpose group</small>
+              </div>
+              <div className="walkability-route-insight">
+                <span>Walking demand</span>
+                <strong>{formatCompact(activityStats.totalTrips * (activityStats.walkingShare / 100))}</strong>
+                <small>{formatPercent(activityStats.walkingShare)} of all active mobility trips</small>
+              </div>
+              <div className="walkability-route-insight">
+                <span>Cycling demand</span>
+                <strong>{formatCompact(activityStats.totalTrips * (activityStats.cyclingShare / 100))}</strong>
+                <small>{formatPercent(activityStats.cyclingShare)} of all active mobility trips</small>
+              </div>
             </div>
             <p>
-              Orange corridors show walking and running demand. Blue corridors show cycling demand. The map is filtered to the selected month, while route clicks open detailed bottom-panel explanations and stats.
+              The map uses soft gradient corridors instead of hard classes. The bottom panel opens with study-area insights by default and switches to corridor-specific detail when you click a segment.
             </p>
             {selectedSegment && (
-              <div className="temporal-selection-note">
-                <span>Selected edge</span>
-                <strong>{selectedSegment.edge_uid}</strong>
+              <div className="temporal-selection-note temporal-selection-note--mobility">
+                <span>Selected corridor</span>
+                <strong>Edge {selectedSegment.edge_uid}</strong>
+                <small>Detailed route behaviour is now focused on one segment at a time.</small>
               </div>
             )}
           </div>

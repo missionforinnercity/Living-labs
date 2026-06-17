@@ -3,6 +3,11 @@
  */
 
 const STRAVA_AGGREGATED_PATH = '/api/transport/strava-mobility'
+const WALKABILITY_NETWORK_PATH = '/data/processed/walkability/network_connectivity.geojson'
+
+let walkabilityNetworkPromise = null
+let stravaAggregatedPromise = null
+const stravaActivityLayerCache = new Map()
 
 function sumValues(values) {
   return values.reduce((sum, value) => sum + (Number(value) || 0), 0)
@@ -229,9 +234,6 @@ function buildActivityFeature(feature, statsEntries, mode, options = {}) {
 
 export function buildStravaActivityLayers(stravaData, options = {}) {
   const features = stravaData?.features ?? []
-  const availableMonths = sortStrings(new Set(features.flatMap(feature => (
-    Object.keys(feature.properties?.monthly_stats ?? {})
-  ))))
   const requestedMonths = options.months && options.months !== 'all'
     ? new Set(Array.isArray(options.months) ? options.months : [options.months])
     : null
@@ -245,14 +247,24 @@ export function buildStravaActivityLayers(stravaData, options = {}) {
   const cyclingFeatures = []
   let pedestrianTrips = 0
   let cyclingTrips = 0
+  const includePedestrian = options.includePedestrian !== false
+  const includeCycling = options.includeCycling !== false
+  const availableMonths = new Set()
+
+  if (options.averageMonthly && !requestedMonths) {
+    features.forEach(feature => {
+      Object.keys(feature.properties?.monthly_stats ?? {}).forEach(month => availableMonths.add(month))
+    })
+  }
+
   const averageDivisor = options.averageMonthly
-    ? Math.max(1, requestedMonths?.size || availableMonths.length || 1)
+    ? Math.max(1, requestedMonths?.size || availableMonths.size || 1)
     : 1
 
   features.forEach(feature => {
     const monthlyStats = feature.properties?.monthly_stats ?? {}
-    const pedEntries = []
-    const rideEntries = []
+    const pedEntries = includePedestrian ? [] : null
+    const rideEntries = includeCycling ? [] : null
 
     Object.entries(monthlyStats).forEach(([monthKey, monthValue]) => {
       if (requestedMonths && !requestedMonths.has(monthKey)) return
@@ -263,28 +275,36 @@ export function buildStravaActivityLayers(stravaData, options = {}) {
         selectedMonths.add(monthKey)
         selectedDayparts.add(daypartKey)
 
-        if (daypartValue?.ped) pedEntries.push({ ...daypartValue.ped, _month: monthKey, _daypart: daypartKey })
-        if (daypartValue?.ride) rideEntries.push({ ...daypartValue.ride, _month: monthKey, _daypart: daypartKey })
+        if (includePedestrian && daypartValue?.ped) {
+          pedEntries.push({ ...daypartValue.ped, _month: monthKey, _daypart: daypartKey })
+        }
+        if (includeCycling && daypartValue?.ride) {
+          rideEntries.push({ ...daypartValue.ride, _month: monthKey, _daypart: daypartKey })
+        }
       })
     })
 
-    const pedestrianFeature = buildActivityFeature(feature, pedEntries, 'ped', { averageDivisor })
-    if (pedestrianFeature) {
-      pedestrianTrips += pedestrianFeature.properties.total_trip_count
-      pedestrianFeatures.push(pedestrianFeature)
+    if (includePedestrian) {
+      const pedestrianFeature = buildActivityFeature(feature, pedEntries, 'ped', { averageDivisor })
+      if (pedestrianFeature) {
+        pedestrianTrips += pedestrianFeature.properties.total_trip_count
+        pedestrianFeatures.push(pedestrianFeature)
+      }
     }
 
-    const cyclingFeature = buildActivityFeature(feature, rideEntries, 'ride', { averageDivisor })
-    if (cyclingFeature) {
-      cyclingTrips += cyclingFeature.properties.total_trip_count
-      cyclingFeatures.push(cyclingFeature)
+    if (includeCycling) {
+      const cyclingFeature = buildActivityFeature(feature, rideEntries, 'ride', { averageDivisor })
+      if (cyclingFeature) {
+        cyclingTrips += cyclingFeature.properties.total_trip_count
+        cyclingFeatures.push(cyclingFeature)
+      }
     }
   })
 
   const months = sortStrings(selectedMonths)
   const dayparts = sortStrings(selectedDayparts)
-  const enrichedPedestrianFeatures = annotatePopularCorridors(pedestrianFeatures)
-  const enrichedCyclingFeatures = annotatePopularCorridors(cyclingFeatures)
+  const enrichedPedestrianFeatures = includePedestrian ? annotatePopularCorridors(pedestrianFeatures) : []
+  const enrichedCyclingFeatures = includeCycling ? annotatePopularCorridors(cyclingFeatures) : []
 
   const peakStats = {
     source: 'transport.strava_mobility',
@@ -304,14 +324,54 @@ export function buildStravaActivityLayers(stravaData, options = {}) {
   }
 
   return {
-    pedestrian: { type: 'FeatureCollection', features: enrichedPedestrianFeatures },
-    cycling: { type: 'FeatureCollection', features: enrichedCyclingFeatures },
+    pedestrian: includePedestrian ? { type: 'FeatureCollection', features: enrichedPedestrianFeatures } : null,
+    cycling: includeCycling ? { type: 'FeatureCollection', features: enrichedCyclingFeatures } : null,
     peakStats,
     meta: {
       months,
       dayparts
     }
   }
+}
+
+function getWalkabilityNetworkData() {
+  if (!walkabilityNetworkPromise) {
+    walkabilityNetworkPromise = fetch(WALKABILITY_NETWORK_PATH).then((response) => {
+      if (!response.ok) throw new Error('Failed to load walkability network data')
+      return response.json()
+    })
+  }
+  return walkabilityNetworkPromise
+}
+
+function getStravaAggregatedData() {
+  if (!stravaAggregatedPromise) {
+    stravaAggregatedPromise = fetch(STRAVA_AGGREGATED_PATH).then((response) => {
+      if (!response.ok) throw new Error('Failed to load Strava mobility data')
+      return response.json()
+    })
+  }
+  return stravaAggregatedPromise
+}
+
+function buildStravaActivityCacheKey(options = {}) {
+  const monthKey = Array.isArray(options.months) ? options.months.join(',') : options.months || 'all'
+  const daypartKey = Array.isArray(options.dayparts) ? options.dayparts.join(',') : options.dayparts || 'all'
+  return JSON.stringify({
+    months: monthKey,
+    dayparts: daypartKey,
+    averageMonthly: Boolean(options.averageMonthly),
+    includePedestrian: options.includePedestrian !== false,
+    includeCycling: options.includeCycling !== false
+  })
+}
+
+function getCachedStravaActivityLayers(stravaData, options = {}) {
+  const cacheKey = buildStravaActivityCacheKey(options)
+  if (!stravaActivityLayerCache.has(cacheKey)) {
+    stravaActivityLayerCache.set(cacheKey, buildStravaActivityLayers(stravaData, options))
+  }
+  return stravaActivityLayerCache.get(cacheKey)
 }
 
 export function getStravaAvailableMonths(stravaData) {
@@ -577,19 +637,21 @@ export async function loadBusinessData() {
 
 export async function loadWalkabilityData({
   includeNetwork = true,
-  includeActivity = true
+  includeActivity = true,
+  includePedestrian = true,
+  includeCycling = true
 } = {}) {
   const [network, stravaAggregated] = await Promise.all([
     includeNetwork
-      ? fetch('/data/processed/walkability/network_connectivity.geojson').then(r => r.json())
+      ? getWalkabilityNetworkData()
       : Promise.resolve(null),
     includeActivity
-      ? fetch(STRAVA_AGGREGATED_PATH).then(r => r.json())
+      ? getStravaAggregatedData()
       : Promise.resolve(null)
   ])
 
   const { pedestrian, cycling, peakStats, meta } = stravaAggregated
-    ? buildStravaActivityLayers(stravaAggregated)
+    ? getCachedStravaActivityLayers(stravaAggregated, { includePedestrian, includeCycling })
     : { pedestrian: null, cycling: null, peakStats: null, meta: null }
   
   return { 
