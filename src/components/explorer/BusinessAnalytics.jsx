@@ -224,16 +224,16 @@ const BusinessAnalytics = ({
   hideLayerControls = false
 }) => {
   const parcelZoningColors = {
-    Residential: '#60a5fa',
+    Residential: '#1d4ed8',
     Business: '#f97316',
-    'Mixed Use': '#a78bfa',
-    Community: '#22c55e',
+    'Mixed Use': '#7c3aed',
+    Community: '#10b981',
     'Open Space': '#84cc16',
-    Transport: '#94a3b8',
-    Utility: '#facc15',
-    'Limited Use': '#fb7185',
-    Other: '#38bdf8',
-    Unknown: '#64748b'
+    Transport: '#06b6d4',
+    Utility: '#fde047',
+    'Limited Use': '#f43f5e',
+    Other: '#0ea5e9',
+    Unknown: '#475569'
   }
   const parcelValueChangeColors = {
     'Rising fast': '#16a34a',

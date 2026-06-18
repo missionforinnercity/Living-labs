@@ -21,8 +21,6 @@
 
 .sentiment-analytics .analytics-section:last-child {
   border-bottom: none;
-  flex: 1;
-  overflow-y: auto;
 }
 
 .sentiment-analytics--bottom .analytics-section {
@@ -30,6 +28,17 @@
 }
 
 .sentiment-analytics--bottom > .analytics-section:last-child {
+  min-height: 0;
+}
+
+.sentiment-panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.sentiment-analytics--bottom > .sentiment-panel-content {
   flex: 1;
   min-height: 0;
   overflow: auto;

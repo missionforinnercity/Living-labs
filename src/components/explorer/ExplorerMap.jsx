@@ -34,17 +34,17 @@ const WIND_TUNNEL_FILTER = ['>=', ['coalesce', ['get', 'class_value'], 1], 3]
 const PARCEL_ZONING_COLOR_EXPRESSION = [
   'match',
   ['coalesce', ['get', 'zoning_group'], 'Unknown'],
-  'Residential', '#60a5fa',
+  'Residential', '#1d4ed8',
   'Business', '#f97316',
-  'Mixed Use', '#a78bfa',
-  'Community', '#22c55e',
+  'Mixed Use', '#7c3aed',
+  'Community', '#10b981',
   'Open Space', '#84cc16',
-  'Transport', '#94a3b8',
-  'Utility', '#facc15',
-  'Limited Use', '#fb7185',
-  'Other', '#38bdf8',
-  'Unknown', '#64748b',
-  '#38bdf8'
+  'Transport', '#06b6d4',
+  'Utility', '#fde047',
+  'Limited Use', '#f43f5e',
+  'Other', '#0ea5e9',
+  'Unknown', '#475569',
+  '#0ea5e9'
 ]
 const PARCEL_VALUE_CHANGE_COLOR_EXPRESSION = [
   'match',
@@ -60,14 +60,42 @@ const PARCEL_VALUE_CHANGE_COLOR_EXPRESSION = [
 const OPEN_SPACE_COLOR_EXPRESSION = [
   'match',
   ['coalesce', ['get', 'zoning_group'], 'Open Space'],
-  'Open Space', '#22c55e',
-  'Transport', '#38bdf8',
+  'Open Space', '#10b981',
+  'Transport', '#06b6d4',
   'Business', '#f97316',
   'Community', '#84cc16',
-  'Residential', '#60a5fa',
-  'Mixed Use', '#a78bfa',
-  'Unknown', '#94a3b8',
-  '#14b8a6'
+  'Residential', '#1d4ed8',
+  'Mixed Use', '#7c3aed',
+  'Unknown', '#475569',
+  '#0ea5e9'
+]
+const PARCEL_SURFACE_FILL_OPACITY = [
+  '+',
+  [
+    'interpolate',
+    ['linear'],
+    ['coalesce', ['get', 'area_m2'], 0],
+    0, 0.26,
+    500, 0.32,
+    2500, 0.4,
+    10000, 0.5,
+    30000, 0.62
+  ],
+  ['case', ['boolean', ['get', 'is_city_owned'], false], 0.06, 0]
+]
+const PARCEL_SURFACE_OUTLINE_WIDTH = [
+  '+',
+  [
+    'interpolate',
+    ['linear'],
+    ['coalesce', ['get', 'area_m2'], 0],
+    0, 0.28,
+    500, 0.38,
+    2500, 0.52,
+    10000, 0.74,
+    30000, 1
+  ],
+  ['case', ['boolean', ['get', 'is_city_owned'], false], 0.18, 0]
 ]
 const OPEN_SPACE_PRIORITY_COLOR_EXPRESSION = [
   'interpolate',
@@ -2076,31 +2104,16 @@ const ExplorerMap = ({
                     'fill-color': parcelColorMode === 'valueChange'
                       ? PARCEL_VALUE_CHANGE_COLOR_EXPRESSION
                       : PARCEL_ZONING_COLOR_EXPRESSION,
-                    'fill-opacity': [
-                      'case',
-                      ['boolean', ['get', 'is_city_owned'], false],
-                      0.72,
-                      0.46
-                    ]
+                    'fill-opacity': PARCEL_SURFACE_FILL_OPACITY
                   }}
                 />
                 <Layer
                   id="land-parcels-outline"
                   type="line"
                   paint={{
-                    'line-color': [
-                      'case',
-                      ['boolean', ['get', 'is_city_owned'], false],
-                      '#f8fafc',
-                      '#0f172a'
-                    ],
-                    'line-width': [
-                      'case',
-                      ['boolean', ['get', 'is_city_owned'], false],
-                      1.5,
-                      0.45
-                    ],
-                    'line-opacity': 0.78
+                    'line-color': 'rgba(15, 23, 42, 0.42)',
+                    'line-width': PARCEL_SURFACE_OUTLINE_WIDTH,
+                    'line-opacity': 0.32
                   }}
                 />
               </Source>
@@ -2115,31 +2128,16 @@ const ExplorerMap = ({
                     'fill-color': openSpaceColorMode === 'priority'
                       ? OPEN_SPACE_PRIORITY_COLOR_EXPRESSION
                       : OPEN_SPACE_COLOR_EXPRESSION,
-                    'fill-opacity': [
-                      'case',
-                      ['boolean', ['get', 'is_city_owned'], false],
-                      0.78,
-                      0.58
-                    ]
+                    'fill-opacity': PARCEL_SURFACE_FILL_OPACITY
                   }}
                 />
                 <Layer
                   id="open-spaces-outline"
                   type="line"
                   paint={{
-                    'line-color': [
-                      'case',
-                      ['boolean', ['get', 'is_city_owned'], false],
-                      '#f0fdf4',
-                      '#064e3b'
-                    ],
-                    'line-width': [
-                      'case',
-                      ['boolean', ['get', 'is_city_owned'], false],
-                      1.8,
-                      0.85
-                    ],
-                    'line-opacity': 0.86
+                    'line-color': 'rgba(15, 23, 42, 0.42)',
+                    'line-width': PARCEL_SURFACE_OUTLINE_WIDTH,
+                    'line-opacity': 0.32
                   }}
                 />
               </Source>

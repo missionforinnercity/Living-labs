@@ -401,8 +401,9 @@ const SentimentAnalytics = ({
             </div>
           </div>
 
+          <div className="analytics-section sentiment-panel-content">
           {activeView === 'overview' && (
-            <div className="analytics-section">
+            <>
               <div className="sentiment-workflow-grid">
                 <button className="sentiment-workflow-card" onClick={() => setActiveView('streets')}>
                   <strong>Find streets needing attention</strong>
@@ -520,11 +521,11 @@ const SentimentAnalytics = ({
                   </ResponsiveContainer>
                 </div>
               </div>
-            </div>
+            </>
           )}
 
           {activeView === 'topics' && (
-            <div className="analytics-section">
+            <>
               <div className="subsection-header"><h4>Common Topics</h4></div>
               <div className="sentiment-chart sentiment-chart-tall">
                 <ResponsiveContainer width="100%" height="100%">
@@ -548,11 +549,11 @@ const SentimentAnalytics = ({
                   </div>
                 ))}
               </div>
-            </div>
+            </>
           )}
 
           {activeView === 'streets' && (
-            <div className="analytics-section">
+            <>
               <div className="sentiment-insight-row">
                 {worstStreet && <span>Worst percentile: <strong style={{ color: percentileColor(worstStreet.sentiment_percentile) }}>{worstStreet.street_name}</strong> P{Number(worstStreet.sentiment_percentile || 0).toFixed(0)}</span>}
                 {bestStreet && <span>Best percentile: <strong style={{ color: percentileColor(bestStreet.sentiment_percentile) }}>{bestStreet.street_name}</strong> P{Number(bestStreet.sentiment_percentile || 0).toFixed(0)}</span>}
@@ -713,11 +714,11 @@ const SentimentAnalytics = ({
                   </div>
                 </>
               )}
-            </div>
+            </>
           )}
 
           {activeView === 'alerts' && (
-            <div className="analytics-section">
+            <>
               <div className="sentiment-insight-row">
                 <span>Monthly drops: <strong style={{ color: SENTIMENT_COLORS.negative }}>{streetDrops.length}</strong></span>
                 <span>Low anomalies: <strong style={{ color: SENTIMENT_COLORS.negative }}>{anomalies.filter((item) => item.direction === 'Low').length}</strong></span>
@@ -754,11 +755,11 @@ const SentimentAnalytics = ({
                   <div className="sentiment-empty">No significant anomalies detected.</div>
                 )}
               </div>
-            </div>
+            </>
           )}
 
           {activeView === 'detail' && (
-            <div className="analytics-section">
+            <>
               <div className="sentiment-detail-header">
                 <label>
                   <span>Street detail</span>
@@ -911,11 +912,11 @@ const SentimentAnalytics = ({
               ) : (
                 <div className="sentiment-empty">Choose a street to open its detail layer.</div>
               )}
-            </div>
+            </>
           )}
 
           {activeView === 'comments' && (
-            <div className="analytics-section">
+            <>
               <div className="subsection-header"><h4>Largest Positive Effects</h4></div>
               <div className="sentiment-comment-list">
                 {(extremePositive.length ? extremePositive : strongestPositive).map((comment, index) => (
@@ -928,11 +929,11 @@ const SentimentAnalytics = ({
                   <CommentCard key={`${comment.month_key}-neg-${index}`} comment={comment} />
                 ))}
               </div>
-            </div>
+            </>
           )}
 
           {activeView === 'evidence' && (
-            <div className="analytics-section">
+            <>
               <div className="sentiment-overview-grid">
                 <div className="sentiment-mini-chart">
                   <h4>Daily Post Volume</h4>
@@ -965,11 +966,11 @@ const SentimentAnalytics = ({
                   </span>
                 ))}
               </div>
-            </div>
+            </>
           )}
 
           {activeView === 'words' && (
-            <div className="analytics-section">
+            <>
               <div className="subsection-header"><h4>Words People Use</h4></div>
               <div className="sentiment-chart sentiment-chart-tall">
                 <ResponsiveContainer width="100%" height="100%">
@@ -992,9 +993,9 @@ const SentimentAnalytics = ({
                   </span>
                 ))}
               </div>
-            </div>
+            </>
           )}
-
+          </div>
         </>
       )}
     </div>
