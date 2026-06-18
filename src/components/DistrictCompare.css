@@ -30,7 +30,7 @@
   flex-direction: column;
   font-family: 'Inter', 'Helvetica Neue', sans-serif;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.1) transparent;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 /* ─── Header ─────────────────────────────────────────────────────────────── */
@@ -192,4 +192,3 @@
   text-align: center;
   letter-spacing: 0.02em;
 }
-

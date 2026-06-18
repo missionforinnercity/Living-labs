@@ -166,26 +166,27 @@
 .sidebar--dark {
   background: rgba(200, 210, 220, 0.10);
   border-right-color: rgba(255,255,255,0.10);
-  /* Visible scrollbar on dark background */
+  /* Keep the shared scrollbar visible against darker panel surfaces. */
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .sidebar--dark::-webkit-scrollbar {
-  width: 5px;
+  width: var(--scrollbar-size);
 }
 
 .sidebar--dark::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.03);
+  background: var(--scrollbar-track);
 }
 
 .sidebar--dark::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.18);
-  border-radius: 3px;
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--scrollbar-border);
 }
 
 .sidebar--dark::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.35);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* TemporalControls inside dark sidebar */

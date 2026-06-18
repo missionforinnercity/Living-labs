@@ -327,6 +327,10 @@
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
-.dsp-root::-webkit-scrollbar { width: 4px; }
-.dsp-root::-webkit-scrollbar-track { background: transparent; }
-.dsp-root::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.dsp-root::-webkit-scrollbar { width: var(--scrollbar-size); }
+.dsp-root::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+.dsp-root::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--scrollbar-border);
+}

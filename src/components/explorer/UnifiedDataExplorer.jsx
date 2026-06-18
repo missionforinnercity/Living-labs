@@ -2258,13 +2258,11 @@ const UnifiedDataExplorer = () => {
     } else if (category.dashboard === 'hospitality') {
       setHospitalityMapMode(categoryId === 'airbnbZones' ? 'zones' : 'points')
     } else if (category.dashboard === 'sentiment') {
+      const isCategoryChange = activeCategory !== categoryId
       setSentimentPanelExpanded(false)
-      setSelectedServiceRequestSegment(null)
 
-      if (categoryId === 'streetSentiment') {
-        setSentimentPanelOpen(true)
-        setSentimentPanelMinimized(true)
-      } else if (categoryId === 'serviceRequests') {
+      if (isCategoryChange) {
+        setSelectedServiceRequestSegment(null)
         setSentimentPanelOpen(false)
         setSentimentPanelMinimized(true)
       }

@@ -12,12 +12,16 @@
   font-family: 'Inter', system-ui, sans-serif;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.1) transparent;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
-.nd-root::-webkit-scrollbar { width: 4px; }
-.nd-root::-webkit-scrollbar-track { background: transparent; }
-.nd-root::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-.nd-root::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+.nd-root::-webkit-scrollbar { width: var(--scrollbar-size); }
+.nd-root::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+.nd-root::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--scrollbar-border);
+}
+.nd-root::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 /* ─── Header ─────────────────────────────────────────────────────────────── */
 .nd-header {

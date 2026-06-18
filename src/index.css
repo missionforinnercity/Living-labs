@@ -42,6 +42,13 @@
   /* ── Shadow ──────────────────────────────────────────── */
   --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.45);
   --shadow-float: 0 12px 48px rgba(0, 0, 0, 0.60);
+
+  /* ── Scrollbars ─────────────────────────────────────── */
+  --scrollbar-size: 10px;
+  --scrollbar-track: rgba(255, 255, 255, 0.04);
+  --scrollbar-thumb: rgba(116, 217, 247, 0.42);
+  --scrollbar-thumb-hover: rgba(116, 217, 247, 0.58);
+  --scrollbar-border: rgba(67, 67, 67, 0.99);
 }
 
 * {
@@ -57,6 +64,30 @@ body {
   overflow: hidden;
   background: #111118;
   color: #ffffff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--scrollbar-border);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 #root {

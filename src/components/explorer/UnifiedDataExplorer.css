@@ -727,21 +727,21 @@
   overflow-y: auto;
   padding: 0.75rem 1rem 1rem;
   scrollbar-width: thin;
-  scrollbar-color: rgba(116, 217, 247, 0.5) rgba(255, 255, 255, 0.05);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .route-history-body::-webkit-scrollbar {
-  width: 10px;
+  width: var(--scrollbar-size);
 }
 
 .route-history-body::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--scrollbar-track);
 }
 
 .route-history-body::-webkit-scrollbar-thumb {
-  background: rgba(116, 217, 247, 0.42);
+  background: var(--scrollbar-thumb);
   border-radius: 999px;
-  border: 2px solid rgba(67, 67, 67, 0.99);
+  border: 2px solid var(--scrollbar-border);
 }
 
 .route-history-header {
@@ -924,12 +924,17 @@
 }
 
 .route-insights-panel-body::-webkit-scrollbar {
-  width: 8px;
+  width: var(--scrollbar-size);
+}
+
+.route-insights-panel-body::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
 }
 
 .route-insights-panel-body::-webkit-scrollbar-thumb {
-  background: rgba(116, 217, 247, 0.35);
+  background: var(--scrollbar-thumb);
   border-radius: 999px;
+  border: 2px solid var(--scrollbar-border);
 }
 
 .parcel-insights-panel {
@@ -2215,10 +2220,17 @@
 }
 
 .bottom-panel.env-bottom-panel .charts-container::-webkit-scrollbar {
-  width: 4px; height: 4px;
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.bottom-panel.env-bottom-panel .charts-container::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
 }
 .bottom-panel.env-bottom-panel .charts-container::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.12); border-radius: 4px;
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--scrollbar-border);
 }
 
 @keyframes slideUp {
@@ -2908,20 +2920,21 @@
 
 /* Custom scrollbar for sidebar body */
 .explorer-sidebar-main::-webkit-scrollbar {
-  width: 4px;
+  width: var(--scrollbar-size);
 }
 
 .explorer-sidebar-main::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--scrollbar-track);
 }
 
 .explorer-sidebar-main::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--scrollbar-border);
 }
 
 .explorer-sidebar-main::-webkit-scrollbar-thumb:hover {
-  background: #00e5a0;
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Category Selector — legacy styles (kept for any residual usage) */

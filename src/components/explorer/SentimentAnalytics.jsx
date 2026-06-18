@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -108,6 +108,7 @@ const SentimentAnalytics = ({
   const [commentCategoryFilter, setCommentCategoryFilter] = useState('all')
   const [commentSourceFilter, setCommentSourceFilter] = useState('all')
   const [detailCommentPage, setDetailCommentPage] = useState(1)
+  const contentRef = useRef(null)
 
   const months = analytics?.months || []
   const streets = analytics?.streets || []
@@ -315,6 +316,11 @@ const SentimentAnalytics = ({
   useEffect(() => {
     setDetailCommentPage((page) => Math.min(page, detailCommentPageCount))
   }, [detailCommentPageCount])
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [activeView, selectedMonth, sentimentPerspective, variant])
+
   const negativeComments = Number(distribution.find((item) => item.label === 'Negative')?.comment_count || 0)
   const isControls = variant === 'controls'
 
@@ -401,7 +407,7 @@ const SentimentAnalytics = ({
             </div>
           </div>
 
-          <div className="analytics-section sentiment-panel-content">
+          <div ref={contentRef} className="analytics-section sentiment-panel-content">
           {activeView === 'overview' && (
             <>
               <div className="sentiment-workflow-grid">
