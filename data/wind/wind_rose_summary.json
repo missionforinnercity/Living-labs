@@ -1,0 +1,493 @@
+{
+  "wind_source": "open_meteo_era5_inflow",
+  "wind_export_dirs": [
+    "/home/anees/mission_projects/shadow_and_wind/past_weather_station _data/BatchExport_2026-04-20T10_56_24.498Z",
+    "/home/anees/mission_projects/shadow_and_wind/past_weather_station _data/BatchExport_2026-04-20T11_07_30.615Z",
+    "/home/anees/mission_projects/shadow_and_wind/past_weather_station _data/BatchExport_2026-04-20T11_08_11.760Z",
+    "/home/anees/mission_projects/shadow_and_wind/past_weather_station _data/BatchExport_2026-06-22T09_01_44.334Z",
+    "/home/anees/mission_projects/shadow_and_wind/past_weather_station _data/BatchExport_2026-06-22T09_09_07.289Z"
+  ],
+  "open_meteo_inflow": {
+    "latitude": -34.25,
+    "longitude": 18.583333,
+    "cache": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/era5_inflow.csv",
+    "record_count": 57816,
+    "start": "2019-01-01T00:00:00+00:00",
+    "end": "2025-08-05T23:00:00+00:00"
+  },
+  "selected_station": "open/NOAA-ISD/689120-99999",
+  "selected_station_metadata": {
+    "code": "689120-99999",
+    "name": "SLANGKOP",
+    "description": null,
+    "registered": null,
+    "timezone": "Africa/Johannesburg",
+    "geometry": {
+      "type": "Point",
+      "coordinates": [
+        18.317,
+        -34.15
+      ]
+    },
+    "additional_properties": null
+  },
+  "validation_stations": {
+    "open/GHCN-hourly/SFM00068819": {
+      "metadata": {
+        "code": "SFM00068819",
+        "name": "MOLTENO RESERVIOR",
+        "description": null,
+        "registered": null,
+        "timezone": "Africa/Johannesburg",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            18.4167,
+            -33.9333
+          ]
+        },
+        "additional_properties": null
+      },
+      "record_count": 26727,
+      "start": "2013-12-10T23:00:00+02:00",
+      "end": "2026-03-26T02:00:00+02:00"
+    },
+    "open/NOAA-ISD/688190-99999": {
+      "metadata": {
+        "code": "688190-99999",
+        "name": "MOLTENO RESERVIOR",
+        "description": null,
+        "registered": null,
+        "timezone": "Africa/Johannesburg",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            18.417,
+            -33.933
+          ]
+        },
+        "additional_properties": null
+      },
+      "record_count": 30051,
+      "start": "2013-12-10T23:00:00+02:00",
+      "end": "2025-08-24T23:00:00+02:00"
+    },
+    "open/NOAA-ISD/689120-99999": {
+      "metadata": {
+        "code": "689120-99999",
+        "name": "SLANGKOP",
+        "description": null,
+        "registered": null,
+        "timezone": "Africa/Johannesburg",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            18.317,
+            -34.15
+          ]
+        },
+        "additional_properties": null
+      },
+      "record_count": 48246,
+      "start": "1999-02-25T08:00:00+02:00",
+      "end": "2025-08-05T23:00:00+02:00"
+    }
+  },
+  "seasons": {
+    "annual": {
+      "observation_count": 57816,
+      "mean_speed_mps": 7.5253322801838785,
+      "mean_speed_kmh": 27.091196208661962,
+      "directions": {
+        "n": {
+          "count": 9041,
+          "probability": 0.15637539781375398,
+          "mean_speed_mps": 6.755849893694159,
+          "mean_speed_kmh": 24.321059617298975,
+          "energy_weight": 1.0564487146964316,
+          "normalized_energy_weight": 0.1403856567873197
+        },
+        "ne": {
+          "count": 999,
+          "probability": 0.01727895392278954,
+          "mean_speed_mps": 2.2012290067845623,
+          "mean_speed_kmh": 7.924424424424425,
+          "energy_weight": 0.03803493458173823,
+          "normalized_energy_weight": 0.005054253176553272
+        },
+        "e": {
+          "count": 1873,
+          "probability": 0.032395876573958766,
+          "mean_speed_mps": 6.134217239129145,
+          "mean_speed_kmh": 22.083182060864925,
+          "energy_weight": 0.1987233445566779,
+          "normalized_energy_weight": 0.026407251820622892
+        },
+        "se": {
+          "count": 14212,
+          "probability": 0.24581430745814306,
+          "mean_speed_mps": 10.128342245989305,
+          "mean_speed_kmh": 36.4620320855615,
+          "energy_weight": 2.489691434896914,
+          "normalized_energy_weight": 0.3308413957285193
+        },
+        "s": {
+          "count": 6437,
+          "probability": 0.11133596236335962,
+          "mean_speed_mps": 5.552470094764642,
+          "mean_speed_kmh": 19.988892341152713,
+          "energy_weight": 0.618189601494396,
+          "normalized_energy_weight": 0.0821478146715524
+        },
+        "sw": {
+          "count": 4274,
+          "probability": 0.07392417323924173,
+          "mean_speed_mps": 5.360714657099777,
+          "mean_speed_kmh": 19.298572765559197,
+          "energy_weight": 0.3962863989975863,
+          "normalized_energy_weight": 0.05266031907203748
+        },
+        "w": {
+          "count": 4105,
+          "probability": 0.07100110696001107,
+          "mean_speed_mps": 6.445703072134253,
+          "mean_speed_kmh": 23.204531059683312,
+          "energy_weight": 0.45765205325707603,
+          "normalized_energy_weight": 0.06081486321370697
+        },
+        "nw": {
+          "count": 7061,
+          "probability": 0.12212882247128823,
+          "mean_speed_mps": 7.121221419691892,
+          "mean_speed_kmh": 25.63639711089081,
+          "energy_weight": 0.8697063865442862,
+          "normalized_energy_weight": 0.11557049631342464
+        },
+        "cape_doctor": {
+          "count": 9814,
+          "probability": 0.169745399197454,
+          "mean_speed_mps": 8.251177456241649,
+          "mean_speed_kmh": 29.704238842469938,
+          "energy_weight": 1.4005994111587716,
+          "normalized_energy_weight": 0.18611794921626357
+        }
+      }
+    },
+    "summer": {
+      "observation_count": 14424,
+      "mean_speed_mps": 8.402577494299623,
+      "mean_speed_kmh": 30.249278979478643,
+      "directions": {
+        "n": {
+          "count": 639,
+          "probability": 0.04430116472545757,
+          "mean_speed_mps": 5.744218396800557,
+          "mean_speed_kmh": 20.679186228482006,
+          "energy_weight": 0.2544755654156653,
+          "normalized_energy_weight": 0.03028541725301594
+        },
+        "ne": {
+          "count": 108,
+          "probability": 0.0074875207986688855,
+          "mean_speed_mps": 2.2080761316872426,
+          "mean_speed_kmh": 7.9490740740740735,
+          "energy_weight": 0.016533015961052566,
+          "normalized_energy_weight": 0.0019676124346688496
+        },
+        "e": {
+          "count": 318,
+          "probability": 0.02204658901830283,
+          "mean_speed_mps": 8.279088050314465,
+          "mean_speed_kmh": 29.804716981132074,
+          "energy_weight": 0.18252565169162507,
+          "normalized_energy_weight": 0.021722578793882227
+        },
+        "se": {
+          "count": 4515,
+          "probability": 0.3130199667221298,
+          "mean_speed_mps": 11.384176202780854,
+          "mean_speed_kmh": 40.98303433001107,
+          "energy_weight": 3.5634744561533247,
+          "normalized_energy_weight": 0.4240930189064979
+        },
+        "s": {
+          "count": 2155,
+          "probability": 0.14940377149195785,
+          "mean_speed_mps": 5.961678267594741,
+          "mean_speed_kmh": 21.46204176334107,
+          "energy_weight": 0.8906972176002959,
+          "normalized_energy_weight": 0.10600285664780265
+        },
+        "sw": {
+          "count": 1265,
+          "probability": 0.08770105379922352,
+          "mean_speed_mps": 4.871256038647343,
+          "mean_speed_kmh": 17.536521739130436,
+          "energy_weight": 0.42721428791520305,
+          "normalized_energy_weight": 0.0508432428269812
+        },
+        "w": {
+          "count": 875,
+          "probability": 0.060662784248474766,
+          "mean_speed_mps": 5.257873015873016,
+          "mean_speed_kmh": 18.92834285714286,
+          "energy_weight": 0.31895721636778207,
+          "normalized_energy_weight": 0.03795944953606976
+        },
+        "nw": {
+          "count": 949,
+          "probability": 0.06579312257348863,
+          "mean_speed_mps": 6.386547242711626,
+          "mean_speed_kmh": 22.991570073761853,
+          "energy_weight": 0.42019088556110185,
+          "normalized_energy_weight": 0.05000737997907936
+        },
+        "cape_doctor": {
+          "count": 3600,
+          "probability": 0.24958402662229617,
+          "mean_speed_mps": 9.329560185185185,
+          "mean_speed_kmh": 33.586416666666665,
+          "energy_weight": 2.328509197633574,
+          "normalized_energy_weight": 0.27711844362200205
+        }
+      }
+    },
+    "autumn": {
+      "observation_count": 15456,
+      "mean_speed_mps": 6.8977869076374505,
+      "mean_speed_kmh": 24.83203286749482,
+      "directions": {
+        "n": {
+          "count": 2578,
+          "probability": 0.166796066252588,
+          "mean_speed_mps": 6.035546504611672,
+          "mean_speed_kmh": 21.72796741660202,
+          "energy_weight": 1.0067054146537844,
+          "normalized_energy_weight": 0.1459461459354634
+        },
+        "ne": {
+          "count": 347,
+          "probability": 0.022450828157349896,
+          "mean_speed_mps": 2.205171309638168,
+          "mean_speed_kmh": 7.938616714697405,
+          "energy_weight": 0.049507922130204725,
+          "normalized_energy_weight": 0.007177363231587796
+        },
+        "e": {
+          "count": 540,
+          "probability": 0.03493788819875776,
+          "mean_speed_mps": 5.6461934156378595,
+          "mean_speed_kmh": 20.326296296296295,
+          "energy_weight": 0.19726607430411774,
+          "normalized_energy_weight": 0.028598458744165958
+        },
+        "se": {
+          "count": 4301,
+          "probability": 0.27827380952380953,
+          "mean_speed_mps": 9.51976930429616,
+          "mean_speed_kmh": 34.271169495466175,
+          "energy_weight": 2.649102470094318,
+          "normalized_energy_weight": 0.3840510739989875
+        },
+        "s": {
+          "count": 1687,
+          "probability": 0.10914855072463768,
+          "mean_speed_mps": 4.876885332279523,
+          "mean_speed_kmh": 17.556787196206283,
+          "energy_weight": 0.5323049660685529,
+          "normalized_energy_weight": 0.07717039873748024
+        },
+        "sw": {
+          "count": 805,
+          "probability": 0.052083333333333336,
+          "mean_speed_mps": 4.309627329192546,
+          "mean_speed_kmh": 15.514658385093165,
+          "energy_weight": 0.22445975672877844,
+          "normalized_energy_weight": 0.03254083660952897
+        },
+        "w": {
+          "count": 749,
+          "probability": 0.04846014492753623,
+          "mean_speed_mps": 4.921710428719774,
+          "mean_speed_kmh": 17.71815754339119,
+          "energy_weight": 0.23850680066712676,
+          "normalized_energy_weight": 0.03457729324793208
+        },
+        "nw": {
+          "count": 1651,
+          "probability": 0.10681935817805382,
+          "mean_speed_mps": 5.9943468604885926,
+          "mean_speed_kmh": 21.579648697758934,
+          "energy_weight": 0.6403122843340234,
+          "normalized_energy_weight": 0.09282865546702365
+        },
+        "cape_doctor": {
+          "count": 2798,
+          "probability": 0.18103002070393376,
+          "mean_speed_mps": 7.510473751092049,
+          "mean_speed_kmh": 27.037705503931377,
+          "energy_weight": 1.3596212186565446,
+          "normalized_energy_weight": 0.19710977402783034
+        }
+      }
+    },
+    "winter": {
+      "observation_count": 14832,
+      "mean_speed_mps": 6.996735661632506,
+      "mean_speed_kmh": 25.188248381877024,
+      "directions": {
+        "n": {
+          "count": 4641,
+          "probability": 0.31290453074433655,
+          "mean_speed_mps": 7.309350235820824,
+          "mean_speed_kmh": 26.313660848954967,
+          "energy_weight": 2.2871288055855206,
+          "normalized_energy_weight": 0.3268851241768763
+        },
+        "ne": {
+          "count": 386,
+          "probability": 0.026024811218985977,
+          "mean_speed_mps": 2.238126079447323,
+          "mean_speed_kmh": 8.057253886010363,
+          "energy_weight": 0.05824680870190579,
+          "normalized_energy_weight": 0.008324854834992497
+        },
+        "e": {
+          "count": 554,
+          "probability": 0.03735167206040992,
+          "mean_speed_mps": 4.269905736060971,
+          "mean_speed_kmh": 15.371660649819496,
+          "energy_weight": 0.15948811878221264,
+          "normalized_energy_weight": 0.022794646888946533
+        },
+        "se": {
+          "count": 1906,
+          "probability": 0.1285059331175836,
+          "mean_speed_mps": 7.646773347324238,
+          "mean_speed_kmh": 27.528384050367258,
+          "energy_weight": 0.9826557443365694,
+          "normalized_energy_weight": 0.1404448862810536
+        },
+        "s": {
+          "count": 946,
+          "probability": 0.06378101402373247,
+          "mean_speed_mps": 5.256753582334977,
+          "mean_speed_kmh": 18.92431289640592,
+          "energy_weight": 0.3352810739542131,
+          "normalized_energy_weight": 0.04791964284041338
+        },
+        "sw": {
+          "count": 1029,
+          "probability": 0.06937702265372168,
+          "mean_speed_mps": 6.795783392722169,
+          "mean_speed_kmh": 24.464820213799808,
+          "energy_weight": 0.4714712183866715,
+          "normalized_energy_weight": 0.06738445486400811
+        },
+        "w": {
+          "count": 1377,
+          "probability": 0.09283980582524272,
+          "mean_speed_mps": 7.799241507302509,
+          "mean_speed_kmh": 28.077269426289032,
+          "energy_weight": 0.7240800671221382,
+          "normalized_energy_weight": 0.103488269693069
+        },
+        "nw": {
+          "count": 2876,
+          "probability": 0.19390507011866234,
+          "mean_speed_mps": 7.9207811775614285,
+          "mean_speed_kmh": 28.514812239221143,
+          "energy_weight": 1.5358796296296298,
+          "normalized_energy_weight": 0.21951374239444577
+        },
+        "cape_doctor": {
+          "count": 1117,
+          "probability": 0.0753101402373247,
+          "mean_speed_mps": 5.875758480055705,
+          "mean_speed_kmh": 21.15273052820054,
+          "energy_weight": 0.442504195133645,
+          "normalized_energy_weight": 0.06324437802619488
+        }
+      }
+    },
+    "spring": {
+      "observation_count": 13104,
+      "mean_speed_mps": 7.898203262786596,
+      "mean_speed_kmh": 28.433531746031743,
+      "directions": {
+        "n": {
+          "count": 1183,
+          "probability": 0.09027777777777778,
+          "mean_speed_mps": 6.700549450549451,
+          "mean_speed_kmh": 24.121978021978023,
+          "energy_weight": 0.6049107142857143,
+          "normalized_energy_weight": 0.07658839538048219
+        },
+        "ne": {
+          "count": 158,
+          "probability": 0.012057387057387058,
+          "mean_speed_mps": 2.0977496483825595,
+          "mean_speed_kmh": 7.551898734177215,
+          "energy_weight": 0.025293379460046124,
+          "normalized_energy_weight": 0.003202421945661888
+        },
+        "e": {
+          "count": 461,
+          "probability": 0.03518009768009768,
+          "mean_speed_mps": 7.466738973246566,
+          "mean_speed_kmh": 26.88026030368764,
+          "energy_weight": 0.2626806064306065,
+          "normalized_energy_weight": 0.0332582737732593
+        },
+        "se": {
+          "count": 3490,
+          "probability": 0.26633089133089133,
+          "mean_speed_mps": 10.608930276981852,
+          "mean_speed_kmh": 38.192148997134666,
+          "energy_weight": 2.8254858567358565,
+          "normalized_energy_weight": 0.35773779969027864
+        },
+        "s": {
+          "count": 1649,
+          "probability": 0.12583943833943834,
+          "mean_speed_mps": 5.878495384408058,
+          "mean_speed_kmh": 21.16258338386901,
+          "energy_weight": 0.7397465574548907,
+          "normalized_energy_weight": 0.09366010633586781
+        },
+        "sw": {
+          "count": 1175,
+          "probability": 0.08966727716727717,
+          "mean_speed_mps": 5.351016548463357,
+          "mean_speed_kmh": 19.263659574468086,
+          "energy_weight": 0.47981108397775063,
+          "normalized_energy_weight": 0.06074939679489416
+        },
+        "w": {
+          "count": 1104,
+          "probability": 0.08424908424908426,
+          "mean_speed_mps": 6.732840177133655,
+          "mean_speed_kmh": 24.238224637681157,
+          "energy_weight": 0.5672356193189526,
+          "normalized_energy_weight": 0.07181831113305939
+        },
+        "nw": {
+          "count": 1585,
+          "probability": 0.12095543345543346,
+          "mean_speed_mps": 7.284086926042762,
+          "mean_speed_kmh": 26.222712933753943,
+          "energy_weight": 0.8810498914665581,
+          "normalized_energy_weight": 0.11155067325473103
+        },
+        "cape_doctor": {
+          "count": 2299,
+          "probability": 0.17544261294261293,
+          "mean_speed_mps": 8.61814315402832,
+          "mean_speed_kmh": 31.025315354501956,
+          "energy_weight": 1.51198955365622,
+          "normalized_energy_weight": 0.1914346216917655
+        }
+      }
+    }
+  }
+}

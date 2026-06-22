@@ -9,10 +9,31 @@ import { dirname, join } from 'path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const roadSegmentsPath = join(__dirname, '..', 'data', 'roads', 'segments.geojson')
 const ccidBoundaryPath = join(__dirname, '..', 'data', 'DEM', 'CCID_boundary.geojson')
+const windRoseSummaryPath = join(__dirname, '..', 'data', 'wind', 'wind_rose_summary.json')
+const ventilationIndexPath = join(__dirname, '..', 'data', 'wind', 'ventilation_index.json')
 const SERVICE_REQUEST_SNAP_DISTANCE_M = 55
 let roadSegmentsGeojson = null
 let roadSegmentIndex = null
 let ccidBoundaryGeometryJson = null
+let windRoseSummaryCache = null
+let ventilationIndexCache = null
+
+const WIND_DIRECTIONS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']
+const WIND_DIRECTION_LABELS = {
+  n: 'Northerly',
+  ne: 'North-easterly',
+  e: 'Easterly',
+  se: 'South-easterly',
+  s: 'Southerly',
+  sw: 'South-westerly',
+  w: 'Westerly',
+  nw: 'North-westerly'
+}
+const WIND_PRESET_CONFIG = {
+  annual: { id: 'annual', label: 'Annual', direction: 'se' },
+  summer: { id: 'summer', label: 'Summer south-easter', direction: 'se' },
+  winter: { id: 'winter', label: 'Winter north-wester', direction: 'nw' }
+}
 
 function getCcidBoundaryGeometryJson() {
   if (!ccidBoundaryGeometryJson) {
@@ -33,6 +54,65 @@ function getRoadSegmentsGeojson() {
     roadSegmentsGeojson = JSON.parse(readFileSync(roadSegmentsPath, 'utf-8'))
   }
   return roadSegmentsGeojson
+}
+
+function getWindRoseSummary() {
+  if (!windRoseSummaryCache) {
+    windRoseSummaryCache = JSON.parse(readFileSync(windRoseSummaryPath, 'utf-8'))
+  }
+  return windRoseSummaryCache
+}
+
+function getVentilationIndex() {
+  if (!ventilationIndexCache) {
+    ventilationIndexCache = JSON.parse(readFileSync(ventilationIndexPath, 'utf-8'))
+  }
+  return ventilationIndexCache
+}
+
+function normalizeWindDirection(value, { allowNull = false } = {}) {
+  if (value == null && allowNull) return null
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'cape_doctor') return 'se'
+  return WIND_DIRECTIONS.includes(normalized) ? normalized : null
+}
+
+function toTitleCaseWords(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+}
+
+function buildWindDirectionNarrative({
+  direction,
+  speedKmh,
+  annualProbability,
+  energyWeight,
+  dominantClass,
+  referenceSpeedKmh
+}) {
+  const label = WIND_DIRECTION_LABELS[direction] || 'Wind'
+  const parts = [
+    `${label} ${Number.isFinite(speedKmh) ? `${Math.round(speedKmh)} km/h` : ''}`.trim()
+  ]
+
+  if (Number.isFinite(annualProbability)) {
+    parts.push(`${Math.round(annualProbability * 100)}% annual share`)
+  }
+  if (Number.isFinite(energyWeight)) {
+    parts.push(`${Math.round(energyWeight * 100)}% energy weight`)
+  }
+  if (dominantClass) {
+    parts.push(`${dominantClass.toLowerCase()} regime`)
+  }
+  if (Number.isFinite(referenceSpeedKmh)) {
+    parts.push(`ref ${Math.round(referenceSpeedKmh)} km/h`)
+  }
+
+  return parts.join(' · ')
 }
 
 function getRoadSegmentIndex() {
@@ -468,6 +548,216 @@ function getParcelValueChangeGroup(previousValue, currentValue) {
   if (pctChange <= -35) return 'Dropping fast'
   if (pctChange <= -8) return 'Dropping'
   return 'Stable'
+}
+
+function buildWindSummaryResponse() {
+  const roseSummary = getWindRoseSummary()
+  const ventilationIndex = getVentilationIndex()
+  const annualDirections = roseSummary?.seasons?.annual?.directions || {}
+  const ventilationByDirection = new Map(
+    ventilationIndex
+      .map((entry) => [normalizeWindDirection(entry.direction), entry])
+      .filter(([direction]) => direction)
+  )
+
+  const seasons = Object.entries(roseSummary?.seasons || {}).reduce((acc, [seasonId, seasonData]) => {
+    const normalizedDirections = WIND_DIRECTIONS.reduce((dirAcc, direction) => {
+      const sourceDirection = seasonData?.directions?.[direction] || null
+      dirAcc[direction] = sourceDirection
+        ? {
+            count: Number(sourceDirection.count || 0),
+            probability: Number(sourceDirection.probability || 0),
+            mean_speed_mps: Number(sourceDirection.mean_speed_mps || 0),
+            mean_speed_kmh: Number(sourceDirection.mean_speed_kmh || 0),
+            energy_weight: Number(sourceDirection.energy_weight || 0),
+            normalized_energy_weight: Number(sourceDirection.normalized_energy_weight || 0)
+          }
+        : null
+      return dirAcc
+    }, {})
+
+    if (seasonId === 'annual' && seasonData?.directions?.cape_doctor && normalizedDirections.se) {
+      const capeDoctor = seasonData.directions.cape_doctor
+      normalizedDirections.se = {
+        ...normalizedDirections.se,
+        cape_doctor_alias: {
+          count: Number(capeDoctor.count || 0),
+          probability: Number(capeDoctor.probability || 0),
+          mean_speed_kmh: Number(capeDoctor.mean_speed_kmh || 0)
+        }
+      }
+    }
+
+    acc[seasonId] = {
+      observation_count: Number(seasonData?.observation_count || 0),
+      mean_speed_mps: Number(seasonData?.mean_speed_mps || 0),
+      mean_speed_kmh: Number(seasonData?.mean_speed_kmh || 0),
+      directions: normalizedDirections
+    }
+    return acc
+  }, {})
+
+  const directions = WIND_DIRECTIONS.map((direction) => {
+    const ventilationEntry = ventilationByDirection.get(direction)
+    const annualData = annualDirections[direction] || {}
+    const classPixelCounts = ventilationEntry?.class_pixel_counts || {}
+    const dominantClass = Object.entries(classPixelCounts)
+      .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))[0]?.[0] || null
+
+    return {
+      id: direction,
+      label: WIND_DIRECTION_LABELS[direction],
+      azimuth_deg: Number(ventilationEntry?.azimuth_deg ?? annualData?.azimuth_deg ?? 0),
+      reference_speed_kmh: Number(ventilationEntry?.reference_speed_kmh ?? annualData?.mean_speed_kmh ?? 0),
+      annual_probability: Number(annualData?.probability || 0),
+      annual_energy_weight: Number(annualData?.normalized_energy_weight || 0),
+      feature_count: Number(ventilationEntry?.feature_count || 0),
+      mean_factor: Number(ventilationEntry?.mean_factor || 0),
+      class_pixel_counts: classPixelCounts,
+      dominant_class: dominantClass
+    }
+  })
+
+  const presets = Object.values(WIND_PRESET_CONFIG).map((preset) => {
+    const seasonSummary = seasons[preset.id]
+    const directionSummary = seasonSummary?.directions?.[preset.direction]
+    const directionMeta = directions.find((direction) => direction.id === preset.direction)
+    return {
+      id: preset.id,
+      label: preset.label,
+      direction: preset.direction,
+      direction_label: WIND_DIRECTION_LABELS[preset.direction],
+      speed_kmh: Number(directionSummary?.mean_speed_kmh ?? directionMeta?.reference_speed_kmh ?? 0),
+      probability: Number(directionSummary?.probability || 0),
+      energy_weight: Number(directionSummary?.normalized_energy_weight || 0)
+    }
+  })
+
+  return {
+    directions,
+    seasons,
+    presets,
+    metadata: {
+      fetchedAt: new Date().toISOString(),
+      source: 'data/wind/wind_rose_summary.json + data/wind/ventilation_index.json',
+      cape_doctor_alias: 'se',
+      available_directions: WIND_DIRECTIONS
+    }
+  }
+}
+
+async function buildWindVentilationFeatureCollection(direction, scenarioSpeedKmh) {
+  const normalizedDirection = normalizeWindDirection(direction)
+  if (!normalizedDirection) {
+    const error = new Error('Invalid wind direction')
+    error.statusCode = 400
+    throw error
+  }
+
+  const tableName = `ventilation_${normalizedDirection}`
+  const schemaName = 'wind'
+  const geometryColumn = await getGeometryColumn(schemaName, tableName)
+  if (!geometryColumn) {
+    throw new Error(`No geometry column found for wind.${tableName}`)
+  }
+
+  const propertyColumns = await getTableColumns(schemaName, tableName, [geometryColumn])
+  const speedKmh = Number(scenarioSpeedKmh)
+  const hasScenarioSpeed = Number.isFinite(speedKmh)
+
+  const selectedPropertyExpressions = propertyColumns.map((column) => {
+    if (column === 'estimated_speed_kmh' && hasScenarioSpeed && propertyColumns.includes('wind_speed_factor')) {
+      return `round((${quoteIdentifier('wind_speed_factor')} * ${speedKmh})::numeric, 2) AS ${quoteIdentifier('estimated_speed_kmh')}`
+    }
+    if (column === 'reference_speed_kmh' && hasScenarioSpeed) {
+      return `${speedKmh}::double precision AS ${quoteIdentifier('reference_speed_kmh')}`
+    }
+    return quoteIdentifier(column)
+  })
+
+  const geometryExpression = `ST_AsGeoJSON(ST_SimplifyPreserveTopology(${quoteIdentifier(geometryColumn)}, 0.00001))::json AS geometry`
+  const { rows } = await pool.query(`
+    SELECT
+      ${selectedPropertyExpressions.join(', ')},
+      ${geometryExpression}
+    FROM ${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}
+    WHERE ${quoteIdentifier(geometryColumn)} IS NOT NULL
+    ORDER BY ${quoteIdentifier('estimated_speed_kmh')} DESC NULLS LAST, ${quoteIdentifier('class_value')} DESC NULLS LAST, ${quoteIdentifier('ogc_fid')} ASC
+  `)
+
+  const classCounts = {}
+  let totalAreaM2 = 0
+  let speedSum = 0
+  let speedCount = 0
+  let factorSum = 0
+  let factorCount = 0
+
+  const features = rows.map((row) => {
+    const estimatedSpeed = Number(row.estimated_speed_kmh)
+    const factor = Number(row.wind_speed_factor)
+    const areaM2 = Number(row.area_m2)
+    const ventilationClass = row.ventilation_class || 'Unknown'
+
+    classCounts[ventilationClass] = (classCounts[ventilationClass] || 0) + 1
+    if (Number.isFinite(areaM2)) totalAreaM2 += areaM2
+    if (Number.isFinite(estimatedSpeed)) {
+      speedSum += estimatedSpeed
+      speedCount += 1
+    }
+    if (Number.isFinite(factor)) {
+      factorSum += factor
+      factorCount += 1
+    }
+
+    const properties = { ...row }
+    delete properties.geometry
+
+    return {
+      type: 'Feature',
+      properties: {
+        ...properties,
+        source: 'climate-wind',
+        direction_label: WIND_DIRECTION_LABELS[normalizedDirection]
+      },
+      geometry: row.geometry
+    }
+  })
+
+  const summarySeed = buildWindSummaryResponse()
+  const directionSummary = summarySeed.directions.find((item) => item.id === normalizedDirection)
+  const annualSummary = summarySeed.seasons?.annual?.directions?.[normalizedDirection]
+  const dominantClass = Object.entries(classCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+
+  return {
+    type: 'FeatureCollection',
+    features,
+    metadata: {
+      totalRows: rows.length,
+      totalFeatures: features.length,
+      fetchedAt: new Date().toISOString(),
+      source: `wind.${tableName}`,
+      direction: normalizedDirection,
+      direction_label: WIND_DIRECTION_LABELS[normalizedDirection],
+      azimuth_deg: Number(directionSummary?.azimuth_deg || 0),
+      scenario_speed_kmh: hasScenarioSpeed ? speedKmh : Number(directionSummary?.reference_speed_kmh || 0),
+      reference_speed_kmh: Number(directionSummary?.reference_speed_kmh || 0),
+      annual_probability: Number(annualSummary?.probability || 0),
+      annual_energy_weight: Number(annualSummary?.normalized_energy_weight || 0),
+      dominant_class: dominantClass,
+      class_counts: classCounts,
+      avg_estimated_speed_kmh: speedCount ? Math.round((speedSum / speedCount) * 100) / 100 : null,
+      avg_wind_speed_factor: factorCount ? Math.round((factorSum / factorCount) * 1000) / 1000 : null,
+      avg_area_m2: rows.length ? Math.round((totalAreaM2 / rows.length) * 100) / 100 : null,
+      narrative: buildWindDirectionNarrative({
+        direction: normalizedDirection,
+        speedKmh: hasScenarioSpeed ? speedKmh : Number(directionSummary?.reference_speed_kmh || 0),
+        annualProbability: Number(annualSummary?.probability || 0),
+        energyWeight: Number(annualSummary?.normalized_energy_weight || 0),
+        dominantClass,
+        referenceSpeedKmh: Number(directionSummary?.reference_speed_kmh || 0)
+      })
+    }
+  }
 }
 
 function parseLooseNumber(value) {
@@ -1331,6 +1621,26 @@ app.get('/api/climate/est-wind', async (req, res) => {
   } catch (err) {
     console.error('[API] /climate/est-wind error:', err.message)
     res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/wind/summary', async (_req, res) => {
+  try {
+    res.json(buildWindSummaryResponse())
+  } catch (err) {
+    console.error('[API] /wind/summary error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/wind/ventilation', async (req, res) => {
+  try {
+    const direction = typeof req.query.direction === 'string' ? req.query.direction : 'se'
+    const speedKmh = typeof req.query.speedKmh === 'string' ? req.query.speedKmh : null
+    res.json(await buildWindVentilationFeatureCollection(direction, speedKmh))
+  } catch (err) {
+    console.error('[API] /wind/ventilation error:', err.message)
+    res.status(err.statusCode || 500).json({ error: err.message })
   }
 })
 

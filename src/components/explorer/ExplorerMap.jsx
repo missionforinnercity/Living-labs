@@ -18,19 +18,22 @@ const ECOLOGY_SELECTION_MAX_SEGMENTS = 25
 const ECOLOGY_EXTREME_HEAT_SCORE = 75
 const ECOLOGY_EXTREME_COOL_ISLAND_SCORE = 50
 const EVENT_COORD_PRECISION = 6
-const WIND_FILL_COLOR = [
-  'case',
-  ['>=', ['coalesce', ['get', 'class_value'], 1], 3], '#fb7185',
-  ['>=', ['coalesce', ['get', 'class_value'], 1], 2], '#facc15',
-  '#67e8f9'
+const WIND_POWER_VALUE = [
+  '*',
+  ['coalesce', ['get', 'wind_speed_factor'], 0],
+  ['coalesce', ['get', 'wind_speed_factor'], 0],
+  ['coalesce', ['get', 'wind_speed_factor'], 0]
 ]
-const WIND_FILL_OPACITY = [
-  'case',
-  ['>=', ['coalesce', ['get', 'class_value'], 1], 3], 0.52,
-  ['>=', ['coalesce', ['get', 'class_value'], 1], 2], 0.32,
-  0.14
-]
-const WIND_TUNNEL_FILTER = ['>=', ['coalesce', ['get', 'class_value'], 1], 3]
+const WIND_DIRECTION_SHORT = {
+  n: 'N',
+  ne: 'NE',
+  e: 'E',
+  se: 'SE',
+  s: 'S',
+  sw: 'SW',
+  w: 'W',
+  nw: 'NW'
+}
 const PARCEL_ZONING_COLOR_EXPRESSION = [
   'match',
   ['coalesce', ['get', 'zoning_group'], 'Unknown'],
@@ -539,7 +542,11 @@ const ExplorerMap = ({
   heatGridData,
   shadeData,
   estimatedWindData,
+  windSummaryData,
   windSpeedKmh = 18,
+  windDirection = 'se',
+  windSeasonPreset = 'summer',
+  windOverlayOpacity = 0.78,
   season,
   greeneryAndSkyview,
   treeCanopyData,
@@ -692,6 +699,25 @@ const ExplorerMap = ({
     if (vals.length === 0) return null
     return { min: Math.min(...vals), max: Math.max(...vals), field: metric.field, label: metric.label, unit: metric.unit }
   }, [envIndex, envCurrentData])
+
+  const windMapSummary = useMemo(() => {
+    const metadata = estimatedWindData?.metadata || {}
+    const directionMeta = windSummaryData?.directions?.find((item) => item.id === metadata.direction || item.id === windDirection) || null
+    const classCounts = metadata.class_counts || {}
+    const total = Math.max(1, Number(metadata.totalFeatures || estimatedWindData?.features?.length || 0))
+    return {
+      direction: metadata.direction || windDirection,
+      directionLabel: metadata.direction_label || directionMeta?.label || 'Wind',
+      azimuthDeg: Number(metadata.azimuth_deg ?? directionMeta?.azimuth_deg ?? 0),
+      scenarioSpeedKmh: Number(metadata.scenario_speed_kmh ?? windSpeedKmh),
+      narrative: metadata.narrative || null,
+      dominantClass: metadata.dominant_class || directionMeta?.dominant_class || null,
+      dominantShare: Number(classCounts[metadata.dominant_class] || 0) / total,
+      windTunnelShare: Number(classCounts['Wind Tunnel'] || 0) / total,
+      annualProbability: Number(metadata.annual_probability ?? directionMeta?.annual_probability ?? 0),
+      annualEnergyWeight: Number(metadata.annual_energy_weight ?? directionMeta?.annual_energy_weight ?? 0)
+    }
+  }, [estimatedWindData, windDirection, windSpeedKmh, windSummaryData])
 
   const ecologyHeatPolygonData = useMemo(() => {
     if (!ecologyHeatData?.features?.length) return null
@@ -2817,26 +2843,46 @@ const ExplorerMap = ({
               id="climate-wind-fill"
               type="fill"
               paint={{
-                'fill-color': WIND_FILL_COLOR,
-                'fill-opacity': WIND_FILL_OPACITY,
+                'fill-color': [
+                  'interpolate',
+                  ['linear'],
+                  WIND_POWER_VALUE,
+                  0.001, '#7dd3fc',
+                  0.027, '#67e8f9',
+                  0.125, '#86efac',
+                  0.343, '#bef264',
+                  1, '#fde047',
+                  1.728, '#fb923c',
+                  3.375, '#ef4444',
+                  5.832, '#7f1d1d'
+                ],
+                'fill-opacity': [
+                  '*',
+                  windOverlayOpacity,
+                  ['interpolate', ['linear'], WIND_POWER_VALUE, 0.001, 0.58, 0.343, 0.66, 1, 0.74, 3.375, 0.84]
+                ],
                 'fill-outline-color': 'rgba(255,255,255,0)',
-                'fill-antialias': false
+                'fill-antialias': true
               }}
             />
             <Layer
-              id="climate-wind-outline"
-              type="line"
-              filter={WIND_TUNNEL_FILTER}
+              id="climate-wind-surface-wash"
+              type="fill"
               paint={{
-                'line-color': '#fecdd3',
-                'line-width': [
+                'fill-color': [
                   'interpolate',
                   ['linear'],
-                  ['zoom'],
-                  13, 0.15,
-                  16, 0.45
+                  WIND_POWER_VALUE,
+                  0.001, '#bae6fd',
+                  0.125, '#bbf7d0',
+                  0.343, '#d9f99d',
+                  1, '#fef08a',
+                  1.728, '#fed7aa',
+                  3.375, '#fecaca'
                 ],
-                'line-opacity': 0.2
+                'fill-opacity': ['*', windOverlayOpacity, 0.18],
+                'fill-outline-color': 'rgba(255,255,255,0)',
+                'fill-antialias': true
               }}
             />
           </Source>
@@ -3454,6 +3500,23 @@ const ExplorerMap = ({
               }}
             />
           </Source>
+        )}
+
+        {dashboardMode === 'climate' && shouldRenderCategory('estimatedWind') && estimatedWindData && (
+          <div className="wind-map-status">
+            <span className="wind-map-status__kicker">Wind Scenario</span>
+            <strong>
+              {(WIND_DIRECTION_SHORT[windMapSummary.direction] || 'SE')} {Math.round(windMapSummary.azimuthDeg)}°
+              {' · '}
+              {Math.round(windMapSummary.scenarioSpeedKmh)} km/h
+            </strong>
+            <p>{windMapSummary.narrative || `${windMapSummary.directionLabel} airflow scenario`}</p>
+            <div className="wind-map-status__chips">
+              <span>{String(windSeasonPreset || 'annual').replace(/^\w/, (match) => match.toUpperCase())}</span>
+              <span>{windMapSummary.dominantClass || 'Ventilation'} {Math.round(windMapSummary.dominantShare * 100)}%</span>
+              <span>tunnels {Math.round(windMapSummary.windTunnelShare * 100)}%</span>
+            </div>
+          </div>
         )}
         {/* Popup */}
         {popupInfo && (
@@ -4128,15 +4191,17 @@ const ExplorerMap = ({
                 const props = popupInfo.feature.properties
                 const windFactor = Number(props.wind_speed_factor)
                 const simulatedWindSpeed = Number(windSpeedKmh)
-                const estimatedSpeed = Number.isFinite(windFactor) && Number.isFinite(simulatedWindSpeed)
-                  ? windFactor * simulatedWindSpeed
-                  : null
+                const estimatedSpeed = Number(props.estimated_speed_kmh)
                 return (
                   <>
                     <h3>{props.ventilation_class || 'Estimated Wind'}</h3>
                     <p><strong>Simulated Wind:</strong> {Number.isFinite(simulatedWindSpeed) ? simulatedWindSpeed.toFixed(0) : '—'} km/h</p>
-                    <p><strong>Estimated Speed:</strong> {estimatedSpeed !== null ? estimatedSpeed.toFixed(1) : '—'} km/h</p>
-                    <p><strong>Direction:</strong> {props.direction || '—'}</p>
+                    <p><strong>Estimated Speed:</strong> {Number.isFinite(estimatedSpeed) ? estimatedSpeed.toFixed(1) : '—'} km/h</p>
+                    <p><strong>Wind Factor:</strong> {Number.isFinite(windFactor) ? `${windFactor.toFixed(2)}x` : '—'}</p>
+                    <p><strong>Reference Speed:</strong> {Number.isFinite(Number(props.reference_speed_kmh)) ? `${Number(props.reference_speed_kmh).toFixed(1)} km/h` : '—'}</p>
+                    <p><strong>Frequency Weight:</strong> {Number.isFinite(Number(props.frequency_weight)) ? `${(Number(props.frequency_weight) * 100).toFixed(1)}%` : '—'}</p>
+                    <p><strong>Area:</strong> {Number.isFinite(Number(props.area_m2)) ? `${Number(props.area_m2).toFixed(1)} m²` : '—'}</p>
+                    <p><strong>Direction:</strong> {props.direction_label || props.direction || '—'}</p>
                   </>
                 )
               })()}

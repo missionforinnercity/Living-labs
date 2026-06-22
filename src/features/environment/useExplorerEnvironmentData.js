@@ -3,6 +3,7 @@ import {
   loadExplorerAirQualityData,
   loadExplorerGreeneryData,
   loadExplorerEstimatedWindData,
+  loadExplorerWindSummaryData,
   loadExplorerShadeData,
   loadExplorerTemperatureData
 } from './data'
@@ -22,6 +23,7 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
   const [heatGridData, setHeatGridData] = useState(null)
   const [shadeData, setShadeData] = useState(null)
   const [estimatedWindData, setEstimatedWindData] = useState(null)
+  const [windSummaryData, setWindSummaryData] = useState(null)
   const [greeneryAndSkyview, setGreeneryAndSkyview] = useState(null)
   const [treeCanopyData, setTreeCanopyData] = useState(null)
   const [parksData, setParksData] = useState(null)
@@ -55,10 +57,15 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
   useEffect(() => {
     const loadWindExplorerState = async () => {
       try {
-        const data = await loadExplorerEstimatedWindData(windDirection)
+        const [summaryData, data] = await Promise.all([
+          loadExplorerWindSummaryData(),
+          loadExplorerEstimatedWindData(windDirection, windSpeedKmh)
+        ])
+        setWindSummaryData(summaryData)
         setEstimatedWindData(data)
         console.log('Loaded wind direction:', {
           direction: windDirection,
+          speedKmh: windSpeedKmh,
           features: data.features?.length
         })
       } catch (error) {
@@ -71,7 +78,7 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
     if (shouldLoadWind || hasLockedWindLayer) {
       loadWindExplorerState()
     }
-  }, [activeCategory, dashboardMode, lockedLayers, windDirection])
+  }, [activeCategory, dashboardMode, lockedLayers, windDirection, windSpeedKmh])
 
   useEffect(() => {
     const isShadeActive = activeCategory === 'climateShade'
@@ -153,6 +160,7 @@ export function useExplorerEnvironmentData({ dashboardMode, activeCategory, lock
     heatGridData,
     shadeData,
     estimatedWindData,
+    windSummaryData,
     greeneryAndSkyview,
     treeCanopyData,
     parksData,

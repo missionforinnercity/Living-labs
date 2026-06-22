@@ -382,6 +382,76 @@
   color: #082f49;
 }
 
+.wind-map-status {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  max-width: min(460px, calc(100% - 36px));
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: rgba(72, 72, 72, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.28);
+  color: #e2e8f0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.wind-map-status__kicker {
+  display: block;
+  color: #7dd3fc;
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.wind-map-status strong {
+  display: block;
+  margin-top: 0.4rem;
+  color: #f8fafc;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem;
+}
+
+.wind-map-status p {
+  margin: 0.38rem 0 0;
+  color: rgba(226, 232, 240, 0.76);
+  font-size: 0.77rem;
+  line-height: 1.45;
+}
+
+.wind-map-status__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  margin-top: 0.65rem;
+}
+
+.wind-map-status__chips span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.56rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .wind-map-status {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
+    padding: 12px 13px;
+  }
+}
+
 /* ── Bbox draw overlay ──────────────────────────────────── */
 .bbox-draw-overlay {
   position: absolute;

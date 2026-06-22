@@ -12,28 +12,6 @@ const SHADE_TIME_MAX = 1800
 const SHADE_TIME_DEFAULT = 1400
 const SHADE_TIME_MARKS = ['08:00', '11:00', '14:00', '18:00']
 
-const WIND_DIRECTIONS = [
-  ['se', 'South easterly'],
-  ['n', 'Northerly'],
-  ['ne', 'North easterly'],
-  ['e', 'Easterly'],
-  ['s', 'Southerly'],
-  ['sw', 'South westerly'],
-  ['w', 'Westerly'],
-  ['nw', 'North westerly']
-]
-
-const WIND_BEARINGS = {
-  n: 0,
-  ne: 45,
-  e: 90,
-  se: 135,
-  s: 180,
-  sw: 225,
-  w: 270,
-  nw: 315
-}
-
 const HEAT_METRIC_OPTIONS = [
   ['predicted_lst_c_fusion', 'LST'],
   ['urban_heat_score', 'Urban'],
@@ -172,26 +150,17 @@ const metricBandCounts = (features, legend) => {
   return { total, rows }
 }
 
-const windDirectionLabel = (direction) => (
-  WIND_DIRECTIONS.find(([value]) => value === direction)?.[1] || 'South easterly'
-)
-
 const MicroclimateControlPanel = ({
   activeCategory,
   onCategorySelect,
   heatGridData,
   ecologyCurrentData,
   shadeData,
-  estimatedWindData,
   temperatureData,
   ecologyMetric,
   onEcologyMetricChange,
   timeOfDay,
   onTimeOfDayChange,
-  windDirection,
-  onWindDirectionChange,
-  windSpeedKmh,
-  onWindSpeedKmhChange,
   selectedFeature,
   comparisonFeature
 }) => {
@@ -238,13 +207,6 @@ const MicroclimateControlPanel = ({
 
   const shadeTimeValue = clampShadeTime(timeOfDay)
   const shadeTimeLabel = String(shadeTimeValue).padStart(4, '0').replace(/(\d{2})(\d{2})/, '$1:$2')
-
-  const windSummary = useMemo(() => {
-    const features = estimatedWindData?.features || []
-    return {
-      count: features.length
-    }
-  }, [estimatedWindData])
 
   return (
     <aside className="microclimate-panel">
@@ -335,52 +297,6 @@ const MicroclimateControlPanel = ({
         <div className="microclimate-control-meta">
           <span>{shadeSummary.count.toLocaleString()} shade polygons</span>
           <span>{formatValue(shadeSummary.avgArea, ' m²')} avg patch</span>
-        </div>
-      </div>
-
-      <div className="microclimate-section">
-        <div className="microclimate-section-head">
-          <span>Wind</span>
-          <strong>{windDirectionLabel(windDirection)} · {windSpeedKmh} km/h</strong>
-        </div>
-        <div className="microclimate-wind-row">
-          <div className="microclimate-wind-rose">
-            <span>N</span><span>E</span><span>S</span><span>W</span>
-            <i style={{ transform: `rotate(${WIND_BEARINGS[windDirection] ?? 135}deg)` }} />
-          </div>
-          <div className="microclimate-wind-controls">
-            <select
-              value={windDirection}
-              onChange={(event) => {
-                onWindDirectionChange?.(event.target.value)
-                onCategorySelect?.('estimatedWind')
-              }}
-            >
-              {WIND_DIRECTIONS.map(([direction, label]) => <option key={direction} value={direction}>{label}</option>)}
-            </select>
-            <input
-              type="range"
-              min={0}
-              max={35}
-              step={1}
-              value={windSpeedKmh}
-              onChange={(event) => {
-                onWindSpeedKmhChange?.(Number(event.target.value))
-                onCategorySelect?.('estimatedWind')
-              }}
-            />
-          </div>
-        </div>
-        <div className="microclimate-wind-scale">
-          <i />
-        </div>
-        <div className="microclimate-legend-labels">
-          <span>Sheltered</span>
-          <span>Wind tunnel</span>
-        </div>
-        <div className="microclimate-control-meta">
-          <span>{windSummary.count.toLocaleString()} wind polygons</span>
-          <span>{windSpeedKmh} km/h scenario</span>
         </div>
       </div>
 

@@ -1,0 +1,200 @@
+[
+  {
+    "direction": "n",
+    "azimuth_deg": 0.0,
+    "output": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/ventilation_n.geojson",
+    "feature_count": 2055,
+    "class_pixel_counts": {
+      "Stagnant": 1055001,
+      "Sheltered": 55919,
+      "Wind Tunnel": 23590
+    },
+    "dashboard_resolution_m": 10.0,
+    "reference_speed_kmh": 24.321059617298975,
+    "annual_probability": 0.15637539781375398,
+    "annual_energy_weight": 0.1403856567873197,
+    "mean_fetch_m": 39.07219696044922,
+    "mean_factor": 0.19544139504432678,
+    "mean_wake_index": 1.709747076034546,
+    "mean_shelter_index": 0.3703993260860443,
+    "mean_terrain_blockage_index": 0.05439157038927078,
+    "mean_terrain_exposure_index": 0.055521562695503235,
+    "mean_terrain_relief_index": 0.3424869477748871
+  },
+  {
+    "direction": "ne",
+    "azimuth_deg": 45.0,
+    "output": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/ventilation_ne.geojson",
+    "feature_count": 4616,
+    "class_pixel_counts": {
+      "Stagnant": 902714,
+      "Sheltered": 119009,
+      "Wind Tunnel": 112787
+    },
+    "dashboard_resolution_m": 10.0,
+    "reference_speed_kmh": 7.924424424424425,
+    "annual_probability": 0.01727895392278954,
+    "annual_energy_weight": 0.005054253176553272,
+    "mean_fetch_m": 61.04446029663086,
+    "mean_factor": 0.3455531597137451,
+    "mean_wake_index": 1.2922793626785278,
+    "mean_shelter_index": 0.27767041325569153,
+    "mean_terrain_blockage_index": 0.038642238825559616,
+    "mean_terrain_exposure_index": 0.06183524802327156,
+    "mean_terrain_relief_index": 0.1165790855884552
+  },
+  {
+    "direction": "e",
+    "azimuth_deg": 90.0,
+    "output": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/ventilation_e.geojson",
+    "feature_count": 2312,
+    "class_pixel_counts": {
+      "Stagnant": 1023934,
+      "Sheltered": 57347,
+      "Wind Tunnel": 53229
+    },
+    "dashboard_resolution_m": 10.0,
+    "reference_speed_kmh": 22.083182060864925,
+    "annual_probability": 0.032395876573958766,
+    "annual_energy_weight": 0.026407251820622892,
+    "mean_fetch_m": 42.677127838134766,
+    "mean_factor": 0.2323581427335739,
+    "mean_wake_index": 1.5437144041061401,
+    "mean_shelter_index": 0.3573644459247589,
+    "mean_terrain_blockage_index": 0.04284919053316116,
+    "mean_terrain_exposure_index": 0.07166903465986252,
+    "mean_terrain_relief_index": 0.22525347769260406
+  },
+  {
+    "direction": "se",
+    "azimuth_deg": 135.0,
+    "output": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/ventilation_se.geojson",
+    "feature_count": 3264,
+    "class_pixel_counts": {
+      "Stagnant": 959417,
+      "Sheltered": 74739,
+      "Wind Tunnel": 100354
+    },
+    "dashboard_resolution_m": 10.0,
+    "reference_speed_kmh": 36.4620320855615,
+    "annual_probability": 0.24581430745814306,
+    "annual_energy_weight": 0.3308413957285193,
+    "mean_fetch_m": 62.875709533691406,
+    "mean_factor": 0.2735191285610199,
+    "mean_wake_index": 1.1997677087783813,
+    "mean_shelter_index": 0.2602695822715759,
+    "mean_terrain_blockage_index": 0.1161005049943924,
+    "mean_terrain_exposure_index": 0.05300585553050041,
+    "mean_terrain_relief_index": 4.899264335632324
+  },
+  {
+    "direction": "s",
+    "azimuth_deg": 180.0,
+    "output": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/ventilation_s.geojson",
+    "feature_count": 1264,
+    "class_pixel_counts": {
+      "Stagnant": 1088552,
+      "Sheltered": 32479,
+      "Wind Tunnel": 13479
+    },
+    "dashboard_resolution_m": 10.0,
+    "reference_speed_kmh": 19.988892341152713,
+    "annual_probability": 0.11133596236335962,
+    "annual_energy_weight": 0.0821478146715524,
+    "mean_fetch_m": 39.07270431518555,
+    "mean_factor": 0.1562560796737671,
+    "mean_wake_index": 1.5042577981948853,
+    "mean_shelter_index": 0.34944483637809753,
+    "mean_terrain_blockage_index": 0.22898206114768982,
+    "mean_terrain_exposure_index": 0.047282226383686066,
+    "mean_terrain_relief_index": 16.954925537109375
+  },
+  {
+    "direction": "sw",
+    "azimuth_deg": 225.0,
+    "output": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/ventilation_sw.geojson",
+    "feature_count": 3656,
+    "class_pixel_counts": {
+      "Stagnant": 983444,
+      "Sheltered": 78881,
+      "Wind Tunnel": 72185
+    },
+    "dashboard_resolution_m": 10.0,
+    "reference_speed_kmh": 19.298572765559197,
+    "annual_probability": 0.07392417323924173,
+    "annual_energy_weight": 0.05266031907203748,
+    "mean_fetch_m": 61.04594421386719,
+    "mean_factor": 0.24991531670093536,
+    "mean_wake_index": 1.2690192461013794,
+    "mean_shelter_index": 0.27012184262275696,
+    "mean_terrain_blockage_index": 0.1311025321483612,
+    "mean_terrain_exposure_index": 0.03435588255524635,
+    "mean_terrain_relief_index": 6.177948474884033
+  },
+  {
+    "direction": "w",
+    "azimuth_deg": 270.0,
+    "output": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/ventilation_w.geojson",
+    "feature_count": 1321,
+    "class_pixel_counts": {
+      "Stagnant": 1062888,
+      "Sheltered": 36948,
+      "Wind Tunnel": 34674
+    },
+    "dashboard_resolution_m": 10.0,
+    "reference_speed_kmh": 23.204531059683312,
+    "annual_probability": 0.07100110696001107,
+    "annual_energy_weight": 0.06081486321370697,
+    "mean_fetch_m": 42.67554473876953,
+    "mean_factor": 0.17605893313884735,
+    "mean_wake_index": 1.5959656238555908,
+    "mean_shelter_index": 0.3593474328517914,
+    "mean_terrain_blockage_index": 0.14277096092700958,
+    "mean_terrain_exposure_index": 0.03863121196627617,
+    "mean_terrain_relief_index": 6.845412254333496
+  },
+  {
+    "direction": "nw",
+    "azimuth_deg": 315.0,
+    "output": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/ventilation_nw.geojson",
+    "feature_count": 3586,
+    "class_pixel_counts": {
+      "Stagnant": 941453,
+      "Sheltered": 94404,
+      "Wind Tunnel": 98653
+    },
+    "dashboard_resolution_m": 10.0,
+    "reference_speed_kmh": 25.63639711089081,
+    "annual_probability": 0.12212882247128823,
+    "annual_energy_weight": 0.11557049631342464,
+    "mean_fetch_m": 62.877662658691406,
+    "mean_factor": 0.29118168354034424,
+    "mean_wake_index": 1.3754805326461792,
+    "mean_shelter_index": 0.27431002259254456,
+    "mean_terrain_blockage_index": 0.09312547743320465,
+    "mean_terrain_exposure_index": 0.038386810570955276,
+    "mean_terrain_relief_index": 1.4631811380386353
+  },
+  {
+    "direction": "cape_doctor",
+    "azimuth_deg": 150.0,
+    "output": "/home/anees/mission_projects/shadow_and_wind/data/processed/ventilation/ventilation_cape_doctor.geojson",
+    "feature_count": 1872,
+    "class_pixel_counts": {
+      "Stagnant": 1051298,
+      "Sheltered": 51521,
+      "Wind Tunnel": 31691
+    },
+    "dashboard_resolution_m": 10.0,
+    "reference_speed_kmh": 29.704238842469938,
+    "annual_probability": 0.169745399197454,
+    "annual_energy_weight": 0.18611794921626357,
+    "mean_fetch_m": 45.4493293762207,
+    "mean_factor": 0.1858348250389099,
+    "mean_wake_index": 1.4120612144470215,
+    "mean_shelter_index": 0.3164816200733185,
+    "mean_terrain_blockage_index": 0.20116814970970154,
+    "mean_terrain_exposure_index": 0.052489470690488815,
+    "mean_terrain_relief_index": 10.463729858398438
+  }
+]

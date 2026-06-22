@@ -280,11 +280,22 @@ export async function loadExplorerTemperatureData() {
   return enrichHeatStreetData(await fetchJson('/api/climate/heat-streets', 'Heat streets data load failed'))
 }
 
-export async function loadExplorerEstimatedWindData(windDirection) {
+export async function loadExplorerWindSummaryData() {
+  return fetchJson('/api/wind/summary', 'Wind summary data load failed')
+}
+
+export async function loadExplorerEstimatedWindData(windDirection, windSpeedKmh) {
   const params = new URLSearchParams()
   if (windDirection) params.set('direction', windDirection)
+  if (windSpeedKmh != null) params.set('speedKmh', String(windSpeedKmh))
   const query = params.toString()
-  return fetchJson(`/api/climate/est-wind${query ? `?${query}` : ''}`, 'Estimated wind data load failed')
+
+  try {
+    return await fetchJson(`/api/wind/ventilation${query ? `?${query}` : ''}`, 'Estimated wind data load failed')
+  } catch (error) {
+    console.warn('Falling back to legacy climate wind endpoint:', error)
+    return fetchJson(`/api/climate/est-wind${query ? `?${query}` : ''}`, 'Estimated wind fallback load failed')
+  }
 }
 
 export async function loadExplorerAirQualityData() {

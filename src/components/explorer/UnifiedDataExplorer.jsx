@@ -37,6 +37,7 @@ const BusinessAnalytics = lazy(() => import('./BusinessAnalytics'))
 const WalkabilityAnalytics = lazy(() => import('./WalkabilityAnalytics'))
 const LightingAnalytics = lazy(() => import('./LightingAnalytics'))
 const MicroclimateControlPanel = lazy(() => import('./MicroclimateControlPanel'))
+const WindExplorerPanel = lazy(() => import('./WindExplorerPanel'))
 const GreeneryAnalytics = lazy(() => import('./GreeneryAnalytics'))
 const EcologyHeatAnalytics = lazy(() => import('./EcologyHeatAnalytics'))
 const EcologyHeatDetailPanel = lazy(() => import('./EcologyHeatDetailPanel'))
@@ -883,6 +884,9 @@ const UnifiedDataExplorer = () => {
   const [timeOfDay, setTimeOfDay] = useState('1400')
   const [windDirection, setWindDirection] = useState('se')
   const [windSpeedKmh, setWindSpeedKmh] = useState(18)
+  const [windSeasonPreset, setWindSeasonPreset] = useState('summer')
+  const [windOverlayOpacity, setWindOverlayOpacity] = useState(0.78)
+  const windPresetInitialized = useRef(false)
   
   // New greenery data layers
   const [ecologyYear, setEcologyYear] = useState(2026)
@@ -1000,6 +1004,7 @@ const UnifiedDataExplorer = () => {
     heatGridData,
     shadeData,
     estimatedWindData,
+    windSummaryData,
     greeneryAndSkyview,
     treeCanopyData,
     parksData,
@@ -1016,6 +1021,15 @@ const UnifiedDataExplorer = () => {
     windDirection,
     windSpeedKmh
   })
+
+  useEffect(() => {
+    if (windPresetInitialized.current || !windSummaryData?.presets?.length) return
+    const preset = windSummaryData.presets.find((entry) => entry.id === windSeasonPreset)
+    if (!preset) return
+    if (preset.direction) setWindDirection(preset.direction)
+    if (Number.isFinite(Number(preset.speed_kmh))) setWindSpeedKmh(Math.round(Number(preset.speed_kmh)))
+    windPresetInitialized.current = true
+  }, [windSeasonPreset, windSummaryData])
 
   const { trafficData } = useExplorerTrafficData({ dashboardMode, activeCategory, lockedLayers })
 
@@ -2928,25 +2942,37 @@ const UnifiedDataExplorer = () => {
           
             {dashboardMode === 'climate' && (
               <>
-                <MicroclimateControlPanel
-                  activeCategory={activeCategory}
-                  onCategorySelect={selectCategory}
-                  heatGridData={heatGridData}
-                  ecologyCurrentData={ecologyCurrentData}
-                  shadeData={shadeData}
-                  estimatedWindData={estimatedWindData}
-                  temperatureData={temperatureData}
-                  ecologyMetric={ecologyMetric}
-                  onEcologyMetricChange={setEcologyMetric}
-                  timeOfDay={timeOfDay}
-                  onTimeOfDayChange={setTimeOfDay}
-                  windDirection={windDirection}
-                  onWindDirectionChange={setWindDirection}
-                  windSpeedKmh={windSpeedKmh}
-                  onWindSpeedKmhChange={setWindSpeedKmh}
-                  selectedFeature={selectedEcologyFeature}
-                  comparisonFeature={null}
-                />
+                {activeCategory === 'estimatedWind' ? (
+                  <WindExplorerPanel
+                    activeCategory={activeCategory}
+                    onCategorySelect={selectCategory}
+                    windSummaryData={windSummaryData}
+                    estimatedWindData={estimatedWindData}
+                    windDirection={windDirection}
+                    onWindDirectionChange={setWindDirection}
+                    windSpeedKmh={windSpeedKmh}
+                    onWindSpeedKmhChange={setWindSpeedKmh}
+                    windSeasonPreset={windSeasonPreset}
+                    onWindSeasonPresetChange={setWindSeasonPreset}
+                    windOverlayOpacity={windOverlayOpacity}
+                    onWindOverlayOpacityChange={setWindOverlayOpacity}
+                  />
+                ) : (
+                  <MicroclimateControlPanel
+                    activeCategory={activeCategory}
+                    onCategorySelect={selectCategory}
+                    heatGridData={heatGridData}
+                    ecologyCurrentData={ecologyCurrentData}
+                    shadeData={shadeData}
+                    temperatureData={temperatureData}
+                    ecologyMetric={ecologyMetric}
+                    onEcologyMetricChange={setEcologyMetric}
+                    timeOfDay={timeOfDay}
+                    onTimeOfDayChange={setTimeOfDay}
+                    selectedFeature={selectedEcologyFeature}
+                    comparisonFeature={null}
+                  />
+                )}
                 {activeCategory === 'urbanHeatConcrete' && selectedEcologyFeature && (
                   <EcologyHeatAnalytics
                     currentData={ecologyCurrentData}
@@ -3233,7 +3259,11 @@ const UnifiedDataExplorer = () => {
               heatGridData={heatGridData}
               shadeData={shadeData}
               estimatedWindData={estimatedWindData}
+              windSummaryData={windSummaryData}
               windSpeedKmh={windSpeedKmh}
+              windDirection={windDirection}
+              windSeasonPreset={windSeasonPreset}
+              windOverlayOpacity={windOverlayOpacity}
               season={season}
               greeneryAndSkyview={greeneryAndSkyview}
               treeCanopyData={treeCanopyData}

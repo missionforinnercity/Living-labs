@@ -677,6 +677,346 @@
   line-height: 1.35;
 }
 
+.wind-explorer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.78rem;
+  padding: 0.9rem;
+  color: rgba(248, 250, 252, 0.94);
+}
+
+.wind-explorer-layer-card,
+.wind-explorer-card {
+  padding: 0.9rem;
+  border-radius: 16px;
+  background: #525252;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.wind-explorer-hero {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 1rem;
+  border-radius: 18px;
+  background: #585858;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.wind-explorer-kicker {
+  display: inline-block;
+  color: #7dd3fc;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.wind-explorer-hero h2 {
+  margin: 0.3rem 0 0;
+  font-size: 1.28rem;
+  color: #f8fafc;
+}
+
+.wind-explorer-hero p {
+  margin: 0.45rem 0 0;
+  color: rgba(226, 232, 240, 0.74);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.wind-explorer-hero-badge {
+  min-width: 118px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.32rem;
+  padding: 0.8rem;
+  border-radius: 14px;
+  background: #4a4a4a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wind-explorer-hero-badge strong {
+  color: #f8fafc;
+  font-size: 1rem;
+}
+
+.wind-explorer-hero-badge span {
+  color: rgba(191, 219, 254, 0.82);
+  font-size: 0.68rem;
+  text-align: right;
+}
+
+.wind-explorer-chip-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.wind-chip {
+  min-height: 70px;
+  padding: 0.7rem 0.75rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: #585858;
+  color: #e2e8f0;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.wind-chip:hover,
+.wind-rose-spoke:hover {
+  transform: translateY(-1px);
+}
+
+.wind-chip strong,
+.wind-chip span {
+  display: block;
+}
+
+.wind-chip strong {
+  font-size: 0.73rem;
+  color: #f8fafc;
+}
+
+.wind-chip span {
+  margin-top: 0.28rem;
+  color: rgba(191, 219, 254, 0.8);
+  font-size: 0.65rem;
+}
+
+.wind-chip.active {
+  border-color: rgba(125, 211, 252, 0.42);
+  background: #4b535c;
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.08);
+}
+
+.wind-rose {
+  position: relative;
+  height: 252px;
+  margin-top: 0.4rem;
+  border-radius: 22px;
+  background: #4b4b4b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.wind-rose-svg {
+  display: block;
+  width: min(100%, 252px);
+  height: 100%;
+  margin: 0 auto;
+}
+
+.wind-rose-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+
+.wind-rose-ring.middle {
+  stroke: rgba(255, 255, 255, 0.09);
+}
+
+.wind-rose-ring.inner {
+  stroke: rgba(125, 211, 252, 0.2);
+}
+
+.wind-rose-axis {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 1;
+}
+
+.wind-rose-cardinal {
+  fill: rgba(248, 250, 252, 0.92);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.wind-rose-spoke {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.wind-rose-spoke line {
+  stroke-width: 13;
+  stroke-linecap: round;
+  opacity: 0.72;
+}
+
+.wind-rose-spoke circle {
+  opacity: 0.94;
+}
+
+.wind-rose-spoke text {
+  fill: rgba(226, 232, 240, 0.82);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.wind-rose-spoke:hover line,
+.wind-rose-spoke.active line {
+  stroke-width: 17;
+  opacity: 1;
+}
+
+.wind-rose-spoke.active text {
+  fill: #ffffff;
+  font-size: 9px;
+}
+
+.wind-rose-core-disc {
+  fill: #3f3f3f;
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 1;
+}
+
+.wind-rose-core-direction {
+  fill: #f8fafc;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.wind-rose-core-speed {
+  fill: rgba(191, 219, 254, 0.9);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.wind-rose-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-top: 0.55rem;
+  color: rgba(203, 213, 225, 0.66);
+  font-size: 0.65rem;
+}
+
+.wind-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.wind-summary-card {
+  padding: 0.75rem 0.8rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: #4d4d4d;
+}
+
+.wind-summary-card span,
+.wind-summary-card small {
+  display: block;
+}
+
+.wind-summary-card span {
+  color: rgba(148, 163, 184, 0.92);
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wind-summary-card strong {
+  display: block;
+  margin-top: 0.26rem;
+  color: #f8fafc;
+  font-size: 1rem;
+}
+
+.wind-summary-card small {
+  margin-top: 0.24rem;
+  color: rgba(191, 219, 254, 0.8);
+  font-size: 0.66rem;
+}
+
+.wind-ramp-bar {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #3f3f3f;
+}
+
+.wind-ramp-bar span {
+  display: block;
+  min-width: 0;
+}
+
+.wind-ramp-labels,
+.wind-ramp-ticks {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.wind-ramp-labels {
+  margin-top: 0.42rem;
+  color: rgba(226, 232, 240, 0.74);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.wind-ramp-ticks {
+  margin-top: 0.28rem;
+  color: rgba(203, 213, 225, 0.62);
+  font-size: 0.66rem;
+}
+
+.wind-legend-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.42rem 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.wind-legend-rows span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-width: 0;
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 0.68rem;
+}
+
+.wind-legend-rows i {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16);
+}
+
+@media (max-width: 900px) {
+  .wind-explorer-chip-row,
+  .wind-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wind-explorer-hero {
+    flex-direction: column;
+  }
+
+  .wind-explorer-hero-badge {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
 /* Bottom panel for seasonal charts */
 .bottom-panel {
   background: var(--bg-surface);
