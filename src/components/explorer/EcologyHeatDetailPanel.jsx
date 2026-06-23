@@ -121,9 +121,9 @@ const metricDefs = [
 const scoreMetrics = metricDefs.filter((metric) => ['urbanHeat', 'pedHeat', 'priority', 'canopy', 'coolIsland', 'health'].includes(metric.id))
 
 const chartTooltipStyle = {
-  backgroundColor: '#101826',
-  border: '1px solid #233047',
-  borderRadius: 10,
+  backgroundColor: '#4f4f4f',
+  border: '1px solid rgba(255,255,255,0.14)',
+  borderRadius: 8,
   fontSize: 11,
   color: '#e2e8f0'
 }
@@ -461,7 +461,7 @@ const EcologyHeatDetailPanel = ({
     <div
       ref={panelRef}
       className={`bottom-panel env-bottom-panel ecology-bottom-panel ${minimized ? 'env-minimized' : ''}`}
-      style={{ right: sidebarWidth + 32 }}
+      style={{ right: sidebarWidth + 16 }}
     >
       <div className="panel-header ecology-panel-header">
         <div className="ecology-panel-headline">
@@ -483,19 +483,19 @@ const EcologyHeatDetailPanel = ({
       {!minimized && (
         <div className="charts-container ecology-charts-container">
           <div className="env-detail-summary-row ecology-summary-row">
-            <div className="env-detail-stat">
+            <div className="env-detail-stat ecology-stat-card ecology-stat-card--heat">
               <span className="env-detail-stat-label">Modelled LST</span>
               <strong>{formatValue(numberOrNull(valueFrom(currentPrimary, ['predicted_lst_c_fusion', 'heat_model_lst_c', 'mean_lst_c'])), '°C')}</strong>
             </div>
-            <div className="env-detail-stat">
+            <div className="env-detail-stat ecology-stat-card ecology-stat-card--hot">
               <span className="env-detail-stat-label">City Heat Delta</span>
               <strong>{formatSigned(metricDiff(currentPrimary, ['urban_heat_score'], cityMetricValue('urbanHeat')))}</strong>
             </div>
-            <div className="env-detail-stat">
+            <div className="env-detail-stat ecology-stat-card ecology-stat-card--cool">
               <span className="env-detail-stat-label">Cool Island Delta</span>
               <strong>{formatSigned(metricDiff(currentPrimary, ['cool_island_score'], cityMetricValue('coolIsland')))}</strong>
             </div>
-            <div className="env-detail-stat">
+            <div className="env-detail-stat ecology-stat-card ecology-stat-card--priority">
               <span className="env-detail-stat-label">Priority</span>
               <strong>{formatText(currentPrimary.priority_class)} {currentPrimary.priority_score != null ? formatValue(numberOrNull(currentPrimary.priority_score)) : ''}</strong>
             </div>
@@ -533,7 +533,7 @@ const EcologyHeatDetailPanel = ({
                   const selected = numberOrNull(valueFrom(currentPrimary, metric.keys))
                   const city = cityMetricValue(metric.id, 'average')
                   return (
-                    <div key={metric.id} className="ecology-driver-card">
+                    <div key={metric.id} className="ecology-driver-card" style={{ '--metric-color': metric.color }}>
                       <span>{metric.label}</span>
                       <strong>{formatValue(selected, metric.suffix || '')}</strong>
                       <small>City avg {formatValue(city, metric.suffix || '')}</small>
@@ -639,22 +639,22 @@ const EcologyHeatDetailPanel = ({
               </div>
 
               <div className="ecology-rank-grid">
-                <div className="ecology-rank-card">
+                <div className="ecology-rank-card ecology-rank-card--heat">
                   <span>Heat Standing</span>
                   <strong>{rankSummary?.heat ? `Rank ${rankSummary.heat.rank} / ${rankSummary.heat.total}` : '-'}</strong>
                   <p>Hotter than {formatValue(rankSummary?.heat?.percentile, '%', 0)} of city sections.</p>
                 </div>
-                <div className="ecology-rank-card cool">
+                <div className="ecology-rank-card ecology-rank-card--cool">
                   <span>Cooling Standing</span>
                   <strong>{rankSummary?.coolIsland ? `Rank ${rankSummary.coolIsland.rank} / ${rankSummary.coolIsland.total}` : '-'}</strong>
                   <p>Cool-island score is {formatSigned(metricDiff(currentPrimary, ['cool_island_score'], cityMetricValue('coolIsland')))} versus average.</p>
                 </div>
-                <div className="ecology-rank-card">
+                <div className="ecology-rank-card ecology-rank-card--pedestrian">
                   <span>Pedestrian Heat</span>
                   <strong>{rankSummary?.pedestrian ? `Rank ${rankSummary.pedestrian.rank} / ${rankSummary.pedestrian.total}` : '-'}</strong>
                   <p>Street-level exposure compared with the mapped city section set.</p>
                 </div>
-                <div className="ecology-rank-card cool">
+                <div className="ecology-rank-card ecology-rank-card--timeline">
                   <span>{changeSummary ? `${changeSummary.startYear}-${changeSummary.endYear}` : 'Timeline'}</span>
                   <strong>{changeSummary ? formatSigned(changeSummary.heat) : '-'}</strong>
                   <p>Heat change over the available series. Cool island {changeSummary ? formatSigned(changeSummary.cool) : '-'}, canopy {changeSummary ? formatSigned(changeSummary.canopy, '%') : '-'}.</p>

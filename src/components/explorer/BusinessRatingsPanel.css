@@ -6,7 +6,7 @@
   z-index: 92;
   display: flex;
   flex-direction: column;
-  max-height: min(290px, calc(100vh - 220px));
+  max-height: min(248px, calc(100vh - 240px));
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-top: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 18px;
@@ -22,7 +22,7 @@
 }
 
 .business-ratings-panel.business-ratings-panel--expanded {
-  max-height: min(620px, calc(100vh - 220px));
+  max-height: min(540px, calc(100vh - 220px));
 }
 
 .business-ratings-panel__topbar {
@@ -152,7 +152,7 @@
   grid-template-columns: auto 1fr auto;
   align-items: stretch;
   gap: 0.55rem;
-  padding: 0.75rem 0.9rem;
+  padding: 0.65rem 0.82rem;
 }
 
 .business-ratings-carousel__arrow {
@@ -167,12 +167,12 @@
 .business-ratings-carousel__track {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.65rem;
+  gap: 0.55rem;
 }
 
 .business-ratings-card {
   min-width: 0;
-  padding: 0.72rem;
+  padding: 0.62rem;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background:
@@ -185,7 +185,7 @@
 .business-ratings-card h4 {
   margin: 0;
   color: #f8fafc;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   line-height: 1.25;
 }
 
@@ -198,7 +198,7 @@
 
 .business-ratings-card__type {
   margin: 0.22rem 0 0;
-  font-size: 0.64rem;
+  font-size: 0.6rem;
   text-transform: capitalize;
 }
 
@@ -206,9 +206,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem 0.55rem;
-  margin-top: 0.55rem;
+  margin-top: 0.45rem;
   color: rgba(226, 232, 240, 0.74);
-  font-size: 0.64rem;
+  font-size: 0.6rem;
 }
 
 .business-ratings-card__meta .rating {
@@ -218,10 +218,10 @@
 
 .business-ratings-card__status {
   display: inline-flex;
-  margin-top: 0.55rem;
-  padding: 0.22rem 0.5rem;
+  margin-top: 0.45rem;
+  padding: 0.2rem 0.46rem;
   border-radius: 999px;
-  font-size: 0.63rem;
+  font-size: 0.6rem;
   font-weight: 700;
 }
 
@@ -238,8 +238,8 @@
 }
 
 .business-ratings-card__address {
-  margin: 0.55rem 0 0;
-  font-size: 0.63rem;
+  margin: 0.45rem 0 0;
+  font-size: 0.6rem;
   line-height: 1.35;
 }
 

@@ -212,10 +212,6 @@ const WindExplorerPanel = ({
             <circle className="wind-rose-ring inner" cx="116" cy="116" r="38" />
             <line className="wind-rose-axis" x1="116" y1="20" x2="116" y2="212" />
             <line className="wind-rose-axis" x1="20" y1="116" x2="212" y2="116" />
-            <text className="wind-rose-cardinal" x="116" y="18" textAnchor="middle">N</text>
-            <text className="wind-rose-cardinal" x="216" y="120" textAnchor="middle">E</text>
-            <text className="wind-rose-cardinal" x="116" y="225" textAnchor="middle">S</text>
-            <text className="wind-rose-cardinal" x="16" y="120" textAnchor="middle">W</text>
             {roseItems.map((direction) => (
               <g
                 key={direction.id}
